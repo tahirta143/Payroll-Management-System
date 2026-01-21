@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:payroll_app/provider/Auth_provider/Auth_provider.dart';
+import 'package:payroll_app/provider/attendance_provider/attendance_provider.dart';
+import 'package:payroll_app/provider/leave_approve_provider/leave_approve.dart';
+import 'package:payroll_app/provider/permissions_provider/permissions.dart';
 import 'package:payroll_app/screen/Auth/login_screen.dart';
+import 'package:payroll_app/screen/Dashboard_screen/dashboard_screen.dart';
+import 'package:provider/provider.dart';
+import 'theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -8,19 +15,35 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
-      theme: ThemeData(
-
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => PermissionProvider()),
+        ChangeNotifierProvider(create: (_) => LeaveProvider()),
+        ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Afaq MIS',
+        theme: appTheme,
+        // Use home with conditional logic
+        home: Consumer<AuthProvider>(
+          builder: (context, auth, child) {
+            if (auth.token != null) {
+              return const DashboardScreen();
+            } else {
+              return const LoginScreen();
+            }
+          },
+        ),
+        // Define routes for navigation
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/dashboard': (context) => const DashboardScreen(),
+        },
       ),
-      home: const LoginScreen(),
     );
   }
 }
-
-
