@@ -164,6 +164,8 @@ class AuthProvider with ChangeNotifier {
       return false;
     }
   }
+  // users
+
   // Add this method to AuthProvider for testing
   Future<bool> debugTestLogin() async {
     print('=== DEBUG LOGIN TEST ===');

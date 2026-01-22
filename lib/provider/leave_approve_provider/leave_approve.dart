@@ -336,7 +336,7 @@ class LeaveProvider extends ChangeNotifier {
       print('Leave ID to approve: $leaveId');
 
       // Try PATCH method with just status (common for partial updates)
-      final apiUrl = 'https://api.afaqmis.com/api/leaves/$leaveId';
+      final apiUrl = 'https://api.afaqmis.com/api/leaves/$leaveId/status';
       print('Trying PATCH to: $apiUrl');
 
       final response = await http.patch(
@@ -492,7 +492,7 @@ class LeaveProvider extends ChangeNotifier {
       print('Leave ID to reject: $leaveId');
 
       // Try PATCH method with just status
-      final apiUrl = 'https://api.afaqmis.com/api/leaves/$leaveId';
+      final apiUrl = 'https://api.afaqmis.com/api/leaves/$leaveId/status';
       print('Trying PATCH to: $apiUrl');
 
       final response = await http.patch(
