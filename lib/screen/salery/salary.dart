@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../model/employee_salary_model/employee_salary_model.dart';
+import '../../provider/employee_salary_provider/employee_salary_provider.dart';
+
 
 class SalaryScreen extends StatefulWidget {
   const SalaryScreen({super.key});
@@ -10,8 +14,13 @@ class SalaryScreen extends StatefulWidget {
 
 class _SalaryScreenState extends State<SalaryScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _basicSalaryController = TextEditingController();
+  final TextEditingController _employeeCodeController = TextEditingController();
+
   String _selectedMonth = 'January 2024';
   String _selectedStatus = 'All Status';
+  bool _isLoading = false;
 
   final List<String> _months = [
     'January 2024',
@@ -31,6 +40,41 @@ class _SalaryScreenState extends State<SalaryScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Use post frame callback to avoid calling notifyListeners during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSalaries();
+    });
+  }
+
+  Future<void> _loadSalaries() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    final provider = Provider.of<EmployeeSalaryProvider>(context, listen: false);
+    await provider.fetchEmployeeSalaries();
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _nameController.dispose();
+    _basicSalaryController.dispose();
+    _employeeCodeController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -47,54 +91,89 @@ class _SalaryScreenState extends State<SalaryScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Iconsax.document_download),
+            icon: const Icon(Iconsax.add),
             onPressed: () {
-              _showBulkDownloadDialog();
+              _showAddSalaryDialog();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Iconsax.refresh),
+            onPressed: () {
+              _loadSalaries();
             },
           ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF667EEA),
-              Color(0xFF764BA2),
-            ],
-          ),
-        ),
-        child: Column(
-          children: [
-            // Search and Filter Section
-            _buildSearchFilterSection(context),
+      body: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(),
+      )
+          : Consumer<EmployeeSalaryProvider>(
+        builder: (context, provider, child) {
+          if (provider.error.isNotEmpty && provider.salaries.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Error: ${provider.error}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _loadSalaries,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
 
-            // Statistics Cards
-            _buildStatisticsCards(),
+          final filteredSalaries = provider.searchSalaries(_searchController.text);
 
-            const SizedBox(height: 16),
-
-            // Salary List
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 15,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: _buildSalaryList(context),
+          return Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF667EEA),
+                  Color(0xFF764BA2),
+                ],
               ),
             ),
-          ],
-        ),
+            child: Column(
+              children: [
+                // Search and Filter Section
+                _buildSearchFilterSection(context),
+
+                // Statistics Cards
+                _buildStatisticsCards(provider.salaries),
+
+                const SizedBox(height: 16),
+
+                // Salary List
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 15,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: _buildSalaryList(context, filteredSalaries, provider),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -151,194 +230,16 @@ class _SalaryScreenState extends State<SalaryScreen> {
               },
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Filter Row
-          isMobile ? _buildMobileFilters() : _buildDesktopFilters(),
         ],
       ),
     );
   }
 
-  Widget _buildMobileFilters() {
-    return Column(
-      children: [
-        // Month Filter
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: InkWell(
-            onTap: () {
-              _showMonthFilterDialog(context);
-            },
-            child: Row(
-              children: [
-                Icon(Iconsax.calendar_1, size: 18, color: Colors.grey[600]),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _selectedMonth,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-                Icon(Iconsax.arrow_down_1, size: 16, color: Colors.grey[500]),
-              ],
-            ),
-          ),
-        ),
+  Widget _buildStatisticsCards(List<EmployeeSalary> salaries) {
+    final totalSalary = salaries.fold(0.0, (sum, salary) => sum + salary.netSalary);
+    final pendingCount = salaries.where((s) => s.netSalary > 0).length;
+    final avgSalary = salaries.isNotEmpty ? totalSalary / salaries.length : 0;
 
-        const SizedBox(height: 8),
-
-        // Status Filter
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: InkWell(
-            onTap: () {
-              _showStatusFilterDialog(context);
-            },
-            child: Row(
-              children: [
-                Icon(Iconsax.wallet_money, size: 18, color: Colors.grey[600]),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _selectedStatus,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-                Icon(Iconsax.arrow_down_1, size: 16, color: Colors.grey[500]),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDesktopFilters() {
-    return Row(
-      children: [
-        // Month Filter
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: InkWell(
-              onTap: () {
-                _showMonthFilterDialog(context);
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
-                  children: [
-                    Icon(Iconsax.calendar_1, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _selectedMonth,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    Icon(Iconsax.arrow_down_1, size: 14, color: Colors.grey[500]),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 8),
-
-        // Status Filter
-        Container(
-          width: 160,
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: InkWell(
-            onTap: () {
-              _showStatusFilterDialog(context);
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  Icon(Iconsax.wallet_money, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _selectedStatus,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  Icon(Iconsax.arrow_down_1, size: 14, color: Colors.grey[500]),
-                ],
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 8),
-
-        // Filter Button
-        InkWell(
-          onTap: () {
-            _showAdvancedFilterDialog(context);
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF667EEA),
-                  Color(0xFF764BA2),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Iconsax.filter,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatisticsCards() {
     return SizedBox(
       height: 100,
       child: ListView(
@@ -347,29 +248,29 @@ class _SalaryScreenState extends State<SalaryScreen> {
         children: [
           _buildStatCard(
             icon: Iconsax.wallet_money,
-            title: 'Total Paid',
-            value: '₹2,45,000',
+            title: 'Total Salary',
+            value: '₹${totalSalary.toStringAsFixed(0)}',
             color: const Color(0xFF4CAF50),
-          ),
-          const SizedBox(width: 8),
-          _buildStatCard(
-            icon: Iconsax.clock,
-            title: 'Pending',
-            value: '₹45,000',
-            color: const Color(0xFFFF9800),
-          ),
-          const SizedBox(width: 8),
-          _buildStatCard(
-            icon: Iconsax.money_send,
-            title: 'This Month',
-            value: '₹85,000',
-            color: const Color(0xFF2196F3),
           ),
           const SizedBox(width: 8),
           _buildStatCard(
             icon: Iconsax.profile_2user,
             title: 'Employees',
-            value: '24',
+            value: '${salaries.length}',
+            color: const Color(0xFFFF9800),
+          ),
+          const SizedBox(width: 8),
+          _buildStatCard(
+            icon: Iconsax.money_send,
+            title: 'Avg Salary',
+            value: '₹${avgSalary.toStringAsFixed(0)}',
+            color: const Color(0xFF2196F3),
+          ),
+          const SizedBox(width: 8),
+          _buildStatCard(
+            icon: Iconsax.clock,
+            title: 'Active',
+            value: '$pendingCount',
             color: const Color(0xFF9C27B0),
           ),
         ],
@@ -441,7 +342,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
     );
   }
 
-  Widget _buildSalaryList(BuildContext context) {
+  Widget _buildSalaryList(BuildContext context, List<EmployeeSalary> salaries, EmployeeSalaryProvider provider) {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Column(
@@ -478,7 +379,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                 ),
                 Expanded(
                   child: Text(
-                    'Month',
+                    'Employee Code',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -488,7 +389,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                 ),
                 Expanded(
                   child: Text(
-                    'Base Salary',
+                    'Basic Salary',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -498,7 +399,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                 ),
                 Expanded(
                   child: Text(
-                    'Net Pay',
+                    'Net Salary',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -508,7 +409,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                 ),
                 Expanded(
                   child: Text(
-                    'Status',
+                    'Payment Method',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -523,52 +424,65 @@ class _SalaryScreenState extends State<SalaryScreen> {
 
         // Salary List
         Expanded(
-          child: ListView(
+          child: salaries.isEmpty
+              ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Iconsax.document, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No salaries found',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _searchController.text.isNotEmpty
+                      ? 'Try a different search'
+                      : 'Add your first salary record',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          )
+              : ListView.builder(
             padding: const EdgeInsets.all(16),
-            children: [
-              _buildSalaryItem(context, isMobile, 'John Doe', 'EMP001', 'Engineering', 'Paid'),
-              const SizedBox(height: 8),
-              _buildSalaryItem(context, isMobile, 'Sarah Johnson', 'EMP002', 'Marketing', 'Pending'),
-              const SizedBox(height: 8),
-              _buildSalaryItem(context, isMobile, 'Michael Chen', 'EMP003', 'Development', 'Processing'),
-              const SizedBox(height: 8),
-              _buildSalaryItem(context, isMobile, 'Emma Wilson', 'EMP004', 'Design', 'Paid'),
-              const SizedBox(height: 8),
-              _buildSalaryItem(context, isMobile, 'Robert Brown', 'EMP005', 'Sales', 'Cancelled'),
-            ],
+            itemCount: salaries.length,
+            itemBuilder: (context, index) {
+              return _buildSalaryItem(
+                context,
+                isMobile,
+                salaries[index],
+                provider,
+              );
+            },
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSalaryItem(BuildContext context, bool isMobile, String name, String empId, String department, String status) {
+  Widget _buildSalaryItem(
+      BuildContext context,
+      bool isMobile,
+      EmployeeSalary salary,
+      EmployeeSalaryProvider provider,
+      ) {
     return isMobile
-        ? _buildMobileSalaryItem(name, empId, department, status)
-        : _buildDesktopSalaryItem(name, empId, department, status);
+        ? _buildMobileSalaryItem(salary, provider)
+        : _buildDesktopSalaryItem(salary, provider);
   }
 
-  Widget _buildMobileSalaryItem(String name, String empId, String department, String status) {
-    Color statusColor;
-    switch (status) {
-      case 'Paid':
-        statusColor = Colors.green;
-        break;
-      case 'Pending':
-        statusColor = Colors.orange;
-        break;
-      case 'Processing':
-        statusColor = Colors.blue;
-        break;
-      case 'Cancelled':
-        statusColor = Colors.red;
-        break;
-      default:
-        statusColor = Colors.grey;
-    }
-
+  Widget _buildMobileSalaryItem(EmployeeSalary salary, EmployeeSalaryProvider provider) {
     return Container(
       padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -594,7 +508,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    name.split(' ').map((n) => n[0]).join(),
+                    salary.employeeName.split(' ').map((n) => n[0]).join(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -608,35 +522,27 @@ class _SalaryScreenState extends State<SalaryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      salary.employeeName,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
                     Text(
-                      '$empId • $department',
+                      'Code: ${salary.employeeCode}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Text(
+                      'ID: ${salary.employeeId}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
                       ),
                     ),
                   ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
                 ),
               ),
             ],
@@ -652,18 +558,68 @@ class _SalaryScreenState extends State<SalaryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _selectedMonth,
+                      'Basic Salary',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
                       ),
                     ),
-                    const Text(
-                      '₹52,500',
+                    Text(
+                      '₹${salary.basicSalary.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Net Salary',
                       style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Text(
+                      '₹${salary.netSalary.toStringAsFixed(0)}',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF667EEA),
+                        color: Color(0xFF4CAF50),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Allowances & Deductions
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Allowances: ₹${salary.totalAllowances.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.green[600],
+                      ),
+                    ),
+                    Text(
+                      'Tax: ₹${salary.incomeTax.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.red[600],
                       ),
                     ),
                   ],
@@ -674,19 +630,21 @@ class _SalaryScreenState extends State<SalaryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'Base: ₹50,000',
+                      salary.paymentMethod,
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                        fontSize: 11,
+                        color: Colors.blue[600],
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    Text(
-                      'Deductions: ₹4,500',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.red[600],
+                    if (salary.bankName != null)
+                      Text(
+                        salary.bankName!,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -701,7 +659,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    _showSalaryDetailsDialog(name, empId, department, status);
+                    _showSalaryDetailsDialog(salary);
                   },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF667EEA),
@@ -712,25 +670,43 @@ class _SalaryScreenState extends State<SalaryScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Iconsax.eye, size: 16),
-                  label: const Text('View Details'),
+                  label: const Text('View'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    _showPayslipDialog(name, empId, department, status);
+                    _showEditSalaryDialog(salary, provider);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF667EEA),
+                    backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
-                  icon: const Icon(Iconsax.document_download, size: 16),
-                  label: const Text('Payslip'),
+                  icon: const Icon(Iconsax.edit, size: 16),
+                  label: const Text('Edit'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    _showDeleteConfirmDialog(salary.id, provider);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF44336),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  icon: const Icon(Iconsax.trash, size: 16),
+                  label: const Text('Delete'),
                 ),
               ),
             ],
@@ -740,27 +716,11 @@ class _SalaryScreenState extends State<SalaryScreen> {
     );
   }
 
-  Widget _buildDesktopSalaryItem(String name, String empId, String department, String status) {
-    Color statusColor;
-    switch (status) {
-      case 'Paid':
-        statusColor = Colors.green;
-        break;
-      case 'Pending':
-        statusColor = Colors.orange;
-        break;
-      case 'Processing':
-        statusColor = Colors.blue;
-        break;
-      case 'Cancelled':
-        statusColor = Colors.red;
-        break;
-      default:
-        statusColor = Colors.grey;
-    }
 
+  Widget _buildDesktopSalaryItem(EmployeeSalary salary, EmployeeSalaryProvider provider) {
     return Container(
       padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -787,7 +747,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                   ),
                   child: Center(
                     child: Text(
-                      name.split(' ').map((n) => n[0]).join(),
+                      salary.employeeName.split(' ').map((n) => n[0]).join(),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -802,14 +762,14 @@ class _SalaryScreenState extends State<SalaryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        name,
+                        salary.employeeName,
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
                         ),
                       ),
                       Text(
-                        '$empId • $department',
+                        'ID: ${salary.employeeId}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -822,43 +782,31 @@ class _SalaryScreenState extends State<SalaryScreen> {
             ),
           ),
 
-          // Month
+          // Employee Code
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _selectedMonth,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  'Paid: 31 Jan',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: status == 'Paid' ? Colors.green[600] : Colors.grey[600],
-                  ),
-                ),
-              ],
+            child: Text(
+              salary.employeeCode,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
 
-          // Base Salary
+          // Basic Salary
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '₹50,000',
-                  style: TextStyle(
-                    fontSize: 13,
+                Text(
+                  '₹${salary.basicSalary.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
-                  'Bonus: ₹5,000',
+                  'Allowances: ₹${salary.totalAllowances.toStringAsFixed(0)}',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.green[600],
@@ -868,21 +816,21 @@ class _SalaryScreenState extends State<SalaryScreen> {
             ),
           ),
 
-          // Net Pay
+          // Net Salary
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '₹52,500',
-                  style: TextStyle(
-                    fontSize: 14,
+                Text(
+                  '₹${salary.netSalary.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF667EEA),
+                    color: Color(0xFF4CAF50),
                   ),
                 ),
                 Text(
-                  'Deductions: ₹4,500',
+                  'Tax: ₹${salary.incomeTax.toStringAsFixed(0)}',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.red[600],
@@ -892,33 +840,27 @@ class _SalaryScreenState extends State<SalaryScreen> {
             ),
           ),
 
-          // Status
+          // Payment Method
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _getStatusIcon(status),
-                    size: 12,
-                    color: statusColor,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  salary.paymentMethod,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(width: 4),
+                ),
+                if (salary.bankName != null)
                   Text(
-                    status,
+                    salary.bankName!,
                     style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor,
+                      fontSize: 11,
+                      color: Colors.grey[600],
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
 
@@ -926,11 +868,11 @@ class _SalaryScreenState extends State<SalaryScreen> {
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'view') {
-                _showSalaryDetailsDialog(name, empId, department, status);
-              } else if (value == 'payslip') {
-                _showPayslipDialog(name, empId, department, status);
-              } else if (value == 'download') {
-                _downloadPayslip(name);
+                _showSalaryDetailsDialog(salary);
+              } else if (value == 'edit') {
+                _showEditSalaryDialog(salary, provider);
+              } else if (value == 'delete') {
+                _showDeleteConfirmDialog(salary.id, provider);
               }
             },
             itemBuilder: (context) => [
@@ -945,22 +887,22 @@ class _SalaryScreenState extends State<SalaryScreen> {
                 ),
               ),
               const PopupMenuItem(
-                value: 'payslip',
+                value: 'edit',
                 child: Row(
                   children: [
-                    Icon(Iconsax.document_text, size: 16, color: Color(0xFF667EEA)),
+                    Icon(Iconsax.edit, size: 16, color: Color(0xFF4CAF50)),
                     SizedBox(width: 8),
-                    Text('View Payslip'),
+                    Text('Edit'),
                   ],
                 ),
               ),
               const PopupMenuItem(
-                value: 'download',
+                value: 'delete',
                 child: Row(
                   children: [
-                    Icon(Iconsax.document_download, size: 16, color: Color(0xFF667EEA)),
+                    Icon(Iconsax.trash, size: 16, color: Color(0xFFF44336)),
                     SizedBox(width: 8),
-                    Text('Download Payslip'),
+                    Text('Delete'),
                   ],
                 ),
               ),
@@ -984,167 +926,58 @@ class _SalaryScreenState extends State<SalaryScreen> {
     );
   }
 
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'Paid':
-        return Iconsax.tick_circle;
-      case 'Pending':
-        return Iconsax.clock;
-      case 'Processing':
-        return Iconsax.refresh;
-      case 'Cancelled':
-        return Iconsax.close_circle;
-      default:
-        return Iconsax.info_circle;
-    }
-  }
+  // CRUD Dialog Methods
+  void _showAddSalaryDialog() {
+    _nameController.clear();
+    _basicSalaryController.clear();
+    _employeeCodeController.clear();
 
-  // Dialog Methods
-  void _showMonthFilterDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Select Month'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _months.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(_months[index]),
-                  trailing: _selectedMonth == _months[index]
-                      ? const Icon(Iconsax.tick_circle, color: Color(0xFF4CAF50))
-                      : null,
-                  onTap: () {
-                    setState(() {
-                      _selectedMonth = _months[index];
-                    });
-                    Navigator.pop(context);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showStatusFilterDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Select Status'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _statuses.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(_statuses[index]),
-                  trailing: _selectedStatus == _statuses[index]
-                      ? const Icon(Iconsax.tick_circle, color: Color(0xFF4CAF50))
-                      : null,
-                  onTap: () {
-                    setState(() {
-                      _selectedStatus = _statuses[index];
-                    });
-                    Navigator.pop(context);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAdvancedFilterDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Iconsax.filter, color: Color(0xFF667EEA)),
+              Icon(Iconsax.add, color: Color(0xFF667EEA)),
               SizedBox(width: 8),
-              Text('Advanced Filters'),
+              Text('Add New Salary'),
             ],
           ),
           content: SizedBox(
-            width: 300,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Department Filter
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Department',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: ['All', 'Engineering', 'Marketing', 'Development', 'Design', 'Sales']
-                      .map((dept) => FilterChip(
-                    label: Text(dept),
-                    selected: dept == 'All',
-                    onSelected: (selected) {},
-                  ))
-                      .toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // Salary Range
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Salary Range',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Min',
-                          prefixText: '₹',
-                        ),
-                      ),
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Name',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Iconsax.user),
                     ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Max',
-                          prefixText: '₹',
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _employeeCodeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Code',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Iconsax.tag),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _basicSalaryController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Basic Salary',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Iconsax.money),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -1153,20 +986,68 @@ class _SalaryScreenState extends State<SalaryScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Filters applied successfully'),
-                    backgroundColor: Color(0xFF4CAF50),
-                  ),
-                );
+              onPressed: () async {
+                if (_nameController.text.isNotEmpty &&
+                    _basicSalaryController.text.isNotEmpty) {
+                  final provider = Provider.of<EmployeeSalaryProvider>(context, listen: false);
+
+                  final newSalary = EmployeeSalary(
+                    id: 0, // Will be assigned by server
+                    employeeId: 0, // Should get from employee selection
+                    basicSalary: double.parse(_basicSalaryController.text),
+                    medicalAllowance: 0,
+                    mobileAllowance: 0,
+                    conveyanceAllowance: 0,
+                    houseAllowance: 0,
+                    utilityAllowance: 0,
+                    miscellaneousAllowance: 0,
+                    incomeTax: 0,
+                    grossSalary: double.parse(_basicSalaryController.text),
+                    netSalary: double.parse(_basicSalaryController.text),
+                    noTax: false,
+                    salaryByCash: true,
+                    salaryByCheque: false,
+                    salaryByTransfer: false,
+                    accountNumber: null,
+                    allowOvertime: false,
+                    lateComingDeduction: false,
+                    salaryAtAppointment: null,
+                    lastIncrementDate: null,
+                    incrementAmount: null,
+                    createdAt: DateTime.now(),
+                    updatedAt: DateTime.now(),
+                    employeeName: _nameController.text,
+                    employeeCode: _employeeCodeController.text,
+                    bankId: null,
+                    bankAccountNumber: null,
+                    bankName: null,
+                  );
+
+                  final success = await provider.createSalary(newSalary);
+                  Navigator.pop(context);
+
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Salary added successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to add salary: ${provider.error}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF667EEA),
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Apply Filters'),
+              child: const Text('Add Salary'),
             ),
           ],
         );
@@ -1174,7 +1055,185 @@ class _SalaryScreenState extends State<SalaryScreen> {
     );
   }
 
-  void _showSalaryDetailsDialog(String name, String empId, String department, String status) {
+  void _showEditSalaryDialog(EmployeeSalary salary, EmployeeSalaryProvider provider) {
+    _nameController.text = salary.employeeName;
+    _basicSalaryController.text = salary.basicSalary.toString();
+    _employeeCodeController.text = salary.employeeCode;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Iconsax.edit, color: Color(0xFF4CAF50)),
+              SizedBox(width: 8),
+              Text('Edit Salary'),
+            ],
+          ),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Name',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Iconsax.user),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _employeeCodeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Code',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Iconsax.tag),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _basicSalaryController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Basic Salary',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Iconsax.money),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (_nameController.text.isNotEmpty &&
+                    _basicSalaryController.text.isNotEmpty) {
+
+                  final updatedSalary = EmployeeSalary(
+                    id: salary.id,
+                    employeeId: salary.employeeId,
+                    basicSalary: double.parse(_basicSalaryController.text),
+                    medicalAllowance: salary.medicalAllowance,
+                    mobileAllowance: salary.mobileAllowance,
+                    conveyanceAllowance: salary.conveyanceAllowance,
+                    houseAllowance: salary.houseAllowance,
+                    utilityAllowance: salary.utilityAllowance,
+                    miscellaneousAllowance: salary.miscellaneousAllowance,
+                    incomeTax: salary.incomeTax,
+                    grossSalary: double.parse(_basicSalaryController.text),
+                    netSalary: double.parse(_basicSalaryController.text),
+                    noTax: salary.noTax,
+                    salaryByCash: salary.salaryByCash,
+                    salaryByCheque: salary.salaryByCheque,
+                    salaryByTransfer: salary.salaryByTransfer,
+                    accountNumber: salary.accountNumber,
+                    allowOvertime: salary.allowOvertime,
+                    lateComingDeduction: salary.lateComingDeduction,
+                    salaryAtAppointment: salary.salaryAtAppointment,
+                    lastIncrementDate: salary.lastIncrementDate,
+                    incrementAmount: salary.incrementAmount,
+                    createdAt: salary.createdAt,
+                    updatedAt: DateTime.now(),
+                    employeeName: _nameController.text,
+                    employeeCode: _employeeCodeController.text,
+                    bankId: salary.bankId,
+                    bankAccountNumber: salary.bankAccountNumber,
+                    bankName: salary.bankName,
+                  );
+
+                  final success = await provider.updateSalary(updatedSalary);
+                  Navigator.pop(context);
+
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Salary updated successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to update salary: ${provider.error}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4CAF50),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Update'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmDialog(int id, EmployeeSalaryProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Iconsax.warning_2, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Confirm Delete'),
+            ],
+          ),
+          content: const Text('Are you sure you want to delete this salary record? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final success = await provider.deleteSalary(id);
+
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Salary deleted successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete salary: ${provider.error}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF44336),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSalaryDetailsDialog(EmployeeSalary salary) {
     showDialog(
       context: context,
       builder: (context) {
@@ -1183,11 +1242,11 @@ class _SalaryScreenState extends State<SalaryScreen> {
             children: [
               const Icon(Iconsax.wallet_money, color: Color(0xFF667EEA)),
               const SizedBox(width: 8),
-              Text('Salary Details - $name'),
+              Text('Salary Details - ${salary.employeeName}'),
             ],
           ),
           content: SizedBox(
-            width: 400,
+            width: 500,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1215,7 +1274,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              name.split(' ').map((n) => n[0]).join(),
+                              salary.employeeName.split(' ').map((n) => n[0]).join(),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -1230,21 +1289,21 @@ class _SalaryScreenState extends State<SalaryScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                name,
+                                salary.employeeName,
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               Text(
-                                'ID: $empId • $department',
+                                'Code: ${salary.employeeCode} • ID: ${salary.employeeId}',
                                 style: const TextStyle(
                                   color: Colors.grey,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Month: $_selectedMonth',
+                                'Created: ${salary.createdAt.toLocal().toString().split(' ')[0]}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -1271,14 +1330,18 @@ class _SalaryScreenState extends State<SalaryScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  _buildBreakdownRow('Basic Salary', '₹40,000', Colors.blue),
-                  _buildBreakdownRow('House Rent Allowance', '₹8,000', Colors.green),
-                  _buildBreakdownRow('Medical Allowance', '₹2,000', Colors.green),
-                  _buildBreakdownRow('Bonus', '₹5,000', Colors.green),
+                  _buildBreakdownRow('Basic Salary', '₹${salary.basicSalary.toStringAsFixed(2)}', Colors.blue),
+                  _buildBreakdownRow('House Allowance', '₹${salary.houseAllowance.toStringAsFixed(2)}', Colors.green),
+                  _buildBreakdownRow('Medical Allowance', '₹${salary.medicalAllowance.toStringAsFixed(2)}', Colors.green),
+                  _buildBreakdownRow('Mobile Allowance', '₹${salary.mobileAllowance.toStringAsFixed(2)}', Colors.green),
+                  _buildBreakdownRow('Conveyance Allowance', '₹${salary.conveyanceAllowance.toStringAsFixed(2)}', Colors.green),
+                  _buildBreakdownRow('Utility Allowance', '₹${salary.utilityAllowance.toStringAsFixed(2)}', Colors.green),
+                  _buildBreakdownRow('Miscellaneous Allowance', '₹${salary.miscellaneousAllowance.toStringAsFixed(2)}', Colors.green),
 
                   const Divider(),
 
-                  _buildBreakdownRow('Total Earnings', '₹55,000', Colors.green, isBold: true),
+                  _buildBreakdownRow('Total Allowances', '₹${salary.totalAllowances.toStringAsFixed(2)}', Colors.green),
+                  _buildBreakdownRow('Gross Salary', '₹${salary.grossSalary.toStringAsFixed(2)}', Colors.blue, isBold: true),
 
                   const SizedBox(height: 12),
 
@@ -1295,13 +1358,11 @@ class _SalaryScreenState extends State<SalaryScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  _buildBreakdownRow('Provident Fund', '₹2,000', Colors.red),
-                  _buildBreakdownRow('Professional Tax', '₹200', Colors.red),
-                  _buildBreakdownRow('Income Tax', '₹2,300', Colors.red),
+                  _buildBreakdownRow('Income Tax', '₹${salary.incomeTax.toStringAsFixed(2)}', Colors.red),
 
                   const Divider(),
 
-                  _buildBreakdownRow('Total Deductions', '₹4,500', Colors.red, isBold: true),
+                  _buildBreakdownRow('Total Deductions', '₹${salary.incomeTax.toStringAsFixed(2)}', Colors.red, isBold: true),
 
                   const Divider(thickness: 2),
 
@@ -1323,13 +1384,48 @@ class _SalaryScreenState extends State<SalaryScreen> {
                           ),
                         ),
                         Text(
-                          '₹52,500',
+                          '₹${salary.netSalary.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF4CAF50),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Payment Information
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Payment Information',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildInfoRow('Payment Method:', salary.paymentMethod),
+                        if (salary.bankName != null)
+                          _buildInfoRow('Bank:', salary.bankName!),
+                        if (salary.accountNumber != null)
+                          _buildInfoRow('Account Number:', salary.accountNumber!),
+                        _buildInfoRow('Late Coming Deduction:', salary.lateComingDeduction ? 'Yes' : 'No'),
+                        _buildInfoRow('Allow Overtime:', salary.allowOvertime ? 'Yes' : 'No'),
+                        _buildInfoRow('No Tax:', salary.noTax ? 'Yes' : 'No'),
                       ],
                     ),
                   ),
@@ -1341,258 +1437,6 @@ class _SalaryScreenState extends State<SalaryScreen> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                _downloadPayslip(name);
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF667EEA),
-                foregroundColor: Colors.white,
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Iconsax.document_download, size: 16),
-                  SizedBox(width: 8),
-                  Text('Download Payslip'),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showPayslipDialog(String name, String empId, String department, String status) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          child: Container(
-            width: 500,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Payslip Header
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF667EEA),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Column(
-                    children: [
-                      Text(
-                        'PAYSLIP',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Salary Month: January 2024',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Employee Details
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Employee Details', style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text('Name: $name'),
-                        Text('ID: $empId'),
-                        Text('Department: $department'),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text('Company Details', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const Text('Afaq MIS Pvt. Ltd.'),
-                        const Text('HR Management System'),
-                        Text('Status: $status'),
-                      ],
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // Salary Table
-                Table(
-                  border: TableBorder.all(color: Colors.grey[300]!),
-                  children: [
-                    TableRow(
-                      decoration: BoxDecoration(color: Colors.grey[100]),
-                      children: const [
-                        Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Description', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Amount (₹)', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right),
-                        ),
-                      ],
-                    ),
-                    TableRow(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Basic Salary'),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text('40,000', textAlign: TextAlign.right),
-                        ),
-                      ],
-                    ),
-                    TableRow(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Allowances'),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text('15,000', textAlign: TextAlign.right),
-                        ),
-                      ],
-                    ),
-                    TableRow(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Deductions'),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text('-4,500', textAlign: TextAlign.right, style: TextStyle(color: Colors.red)),
-                        ),
-                      ],
-                    ),
-                    TableRow(
-                      decoration: BoxDecoration(color: Colors.grey[50]),
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Net Pay', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text('52,500', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // Footer
-                const Divider(),
-                const Text(
-                  'This is a system generated payslip. No signature required.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Issued on: 01 February 2024',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showBulkDownloadDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Iconsax.document_download, color: Color(0xFF667EEA)),
-              SizedBox(width: 8),
-              Text('Download Multiple Payslips'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Select which payslips to download:'),
-              const SizedBox(height: 16),
-              CheckboxListTile(
-                title: const Text('All Employees'),
-                value: true,
-                onChanged: (value) {},
-              ),
-              CheckboxListTile(
-                title: const Text('Only Paid Employees'),
-                value: false,
-                onChanged: (value) {},
-              ),
-              CheckboxListTile(
-                title: const Text('Current Month Only'),
-                value: true,
-                onChanged: (value) {},
-              ),
-              const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(
-                  labelText: 'Password (if required)',
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Payslips are being downloaded...'),
-                    backgroundColor: Color(0xFF4CAF50),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF667EEA),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Download All'),
             ),
           ],
         );
@@ -1624,17 +1468,25 @@ class _SalaryScreenState extends State<SalaryScreen> {
     );
   }
 
-  void _downloadPayslip(String name) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Downloading payslip for $name...'),
-        backgroundColor: const Color(0xFF4CAF50),
-        action: SnackBarAction(
-          label: 'Open',
-          onPressed: () {
-            // Open the downloaded file
-          },
-        ),
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
