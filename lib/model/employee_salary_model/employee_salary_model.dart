@@ -1,3 +1,7 @@
+
+
+import '../attendance_model/attendance_model.dart';
+
 class EmployeeSalary {
   final int id;
   final int employeeId;
@@ -86,13 +90,13 @@ class EmployeeSalary {
           ? double.tryParse(json['salary_at_appointment'].toString())
           : null,
       lastIncrementDate: json['last_increment_date'] != null
-          ? DateTime.parse(json['last_increment_date'])
+          ? DateTime.tryParse(json['last_increment_date'])
           : null,
       incrementAmount: json['increment_amount'] != null
           ? double.tryParse(json['increment_amount'].toString())
           : null,
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       employeeName: json['employee_name'] ?? '',
       employeeCode: json['employee_code'] ?? '',
       bankId: json['bank_id'],
@@ -125,11 +129,6 @@ class EmployeeSalary {
       'salary_at_appointment': salaryAtAppointment?.toStringAsFixed(2),
       'last_increment_date': lastIncrementDate?.toIso8601String(),
       'increment_amount': incrementAmount?.toStringAsFixed(2),
-      'employee_name': employeeName,
-      'employee_code': employeeCode,
-      'bank_id': bankId,
-      'bank_account_number': bankAccountNumber,
-      'bank_name': bankName,
     };
   }
 
@@ -150,5 +149,50 @@ class EmployeeSalary {
         houseAllowance +
         utilityAllowance +
         miscellaneousAllowance;
+  }
+
+  // Create empty salary for a new employee
+  factory EmployeeSalary.emptyForEmployee(Employee employee) {
+    return EmployeeSalary(
+      id: 0,
+      employeeId: employee.id,
+      basicSalary: 0,
+      medicalAllowance: 0,
+      mobileAllowance: 0,
+      conveyanceAllowance: 0,
+      houseAllowance: 0,
+      utilityAllowance: 0,
+      miscellaneousAllowance: 0,
+      incomeTax: 0,
+      grossSalary: 0,
+      netSalary: 0,
+      noTax: false,
+      salaryByCash: true,
+      salaryByCheque: false,
+      salaryByTransfer: false,
+      accountNumber: null,
+      allowOvertime: false,
+      lateComingDeduction: false,
+      salaryAtAppointment: null,
+      lastIncrementDate: null,
+      incrementAmount: null,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      employeeName: employee.name,
+      employeeCode: employee.empId,
+      bankId: null,
+      bankAccountNumber: null,
+      bankName: null,
+    );
+  }
+
+  // Calculate gross salary
+  double calculateGrossSalary() {
+    return basicSalary + totalAllowances;
+  }
+
+  // Calculate net salary
+  double calculateNetSalary() {
+    return calculateGrossSalary() - incomeTax;
   }
 }

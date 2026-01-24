@@ -449,7 +449,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             // Statistics Cards
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: dashboardProvider.isLoading && !dashboardProvider.isRefreshing
                   ? _buildLoadingCards()
                   : dashboardProvider.error != null
@@ -474,7 +474,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             // Quick Access Cards
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -551,71 +551,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Month Filter Widget
   Widget _buildMonthFilter(DashboardSummaryProvider provider) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFF667EEA).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+    return Padding(
+      padding: const EdgeInsets.all(4.0),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            child: const Icon(
-              Iconsax.calendar_1,
-              color: Color(0xFF667EEA),
-              size: 20,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF667EEA).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Iconsax.calendar_1,
+                color: Color(0xFF667EEA),
+                size: 20,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Statistics Period',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Statistics Period',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  provider.selectedMonth == 'all' ? 'All Time' : 'Month: ${provider.selectedMonth}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                  const SizedBox(height: 2),
+                  Text(
+                    provider.selectedMonth == 'all' ? 'All Time' : 'Month: ${provider.selectedMonth}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(
-              Iconsax.filter,
-              color: Color(0xFF667EEA),
-              size: 20,
+            IconButton(
+              icon: const Icon(
+                Iconsax.filter,
+                color: Color(0xFF667EEA),
+                size: 20,
+              ),
+              onPressed: () {
+                _showMonthSelectionDialog(provider);
+              },
             ),
-            onPressed: () {
-              _showMonthSelectionDialog(provider);
-            },
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -823,7 +826,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         _buildDetailStatCard(
           icon: Iconsax.timer_1,
-          title: 'Late Comers',
+          title: 'Late Come',
           value: '${summary.lateComersCount}',
           percentage: summary.lateComersPercentage,
           color: const Color(0xFF795548),
@@ -851,12 +854,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(13),
+      padding: const EdgeInsets.all(8),
       child: Row(
         children: [
           Container(
-            width: 50,
-            height: 60,
+            width: 40,
+            height: 50,
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
@@ -871,18 +874,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey[700],
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     Text(
                       value,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: Colors.black87,
                       ),
@@ -989,7 +992,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Icon(
               icon,
               color: color,
-              size: 24,
+              size: 20,
             ),
           ),
           const SizedBox(height: 12),
@@ -1029,7 +1032,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildAttendanceChartSection(ChartProvider provider) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 400;
+    final isSmallScreen = screenWidth < 300;
     final isMediumScreen = screenWidth >= 400 && screenWidth < 600;
 
     return Column(
@@ -1086,7 +1089,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
 
               // Second row: Month filter and stats (or actions for small screens)
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
               Row(
                 children: [
@@ -1396,9 +1399,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: const Row(
             children: [
               Icon(Icons.filter_alt, color: Color(0xFF667EEA)),
-              SizedBox(width: 12),
+              SizedBox(width: 10),
               Text(
-                'Filter Attendance Data',
+                'Attendance Data',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
