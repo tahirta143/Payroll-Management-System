@@ -17,6 +17,7 @@ class ApproveLeave {
   final String employeeCode;
   final String departmentName;
   String status;
+  final String payMode; // Add this field
 
   ApproveLeave({
     required this.id,
@@ -37,6 +38,7 @@ class ApproveLeave {
     required this.employeeCode,
     required this.departmentName,
     required this.status,
+    required this.payMode, // Add this
   });
 
   factory ApproveLeave.fromJson(Map<String, dynamic> json) {
@@ -51,6 +53,13 @@ class ApproveLeave {
       if (statusStr == 'rejected' || statusStr == '2') return 'rejected';
 
       return statusStr;
+    }
+
+    // Parse pay mode
+    String parsePayMode(dynamic payMode) {
+      if (payMode == null) return 'with_pay';
+      final payModeStr = payMode.toString().toLowerCase();
+      return payModeStr;
     }
 
     // Helper function to parse DateTime safely
@@ -102,6 +111,7 @@ class ApproveLeave {
       employeeCode: parseString(json['employee_code']),
       departmentName: parseString(json['department_name']),
       status: parseStatus(json['status']),
+      payMode: parsePayMode(json['pay_mode']), // Add this
     );
   }
 
@@ -125,11 +135,13 @@ class ApproveLeave {
       'employee_code': employeeCode,
       'department_name': departmentName,
       'status': status,
+      'pay_mode': payMode, // Add this
     };
   }
 
   ApproveLeave copyWith({
     String? status,
+    String? payMode,
   }) {
     return ApproveLeave(
       id: id,
@@ -150,6 +162,7 @@ class ApproveLeave {
       employeeCode: employeeCode,
       departmentName: departmentName,
       status: status ?? this.status,
+      payMode: payMode ?? this.payMode, // Add this
     );
   }
 }

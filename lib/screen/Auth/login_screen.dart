@@ -431,8 +431,8 @@
 //     );
 //   }
 // }
-
 import 'package:flutter/material.dart';
+import 'package:payroll_app/screen/Auth/create_account.dart';
 import 'package:provider/provider.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../provider/Auth_provider/Auth_provider.dart';
@@ -966,7 +966,7 @@ class _LoginScreenState extends State<LoginScreen>
                           const SizedBox(height: 24),
                           Center(
                             child: TextButton(
-                              onPressed: () {},
+                              onPressed: () {Navigator.push(context, MaterialPageRoute(builder: (context)=>CreateAccount()));},
                               style: TextButton.styleFrom(
                                 foregroundColor: const Color(0xFF667EEA),
                                 padding: const EdgeInsets.symmetric(

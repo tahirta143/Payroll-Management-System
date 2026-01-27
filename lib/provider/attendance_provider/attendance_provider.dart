@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:payroll_app/screen/attendance/attendance_screen.dart';
@@ -85,13 +86,40 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // Initialize user data from SharedPreferences - FIXED VERSION
-  // Initialize user data from SharedPreferences - SIMPLIFIED VERSION
+  // Debug method to print all SharedPreferences
+  Future<void> _debugSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      print('=== SHARED PREFERENCES DEBUG ===');
+
+      final keys = prefs.getKeys();
+      for (var key in keys) {
+        final value = prefs.get(key);
+        print('$key: $value (type: ${value.runtimeType})');
+      }
+
+      // Check specific user-related keys
+      print('\n=== SPECIFIC USER KEYS ===');
+      final specificKeys = ['user_id', 'employee_id', 'emp_id', 'employee_code',
+        'employee_name', 'user_name', 'user_role', 'userData'];
+      for (var key in specificKeys) {
+        final value = prefs.get(key);
+        print('$key: $value');
+      }
+    } catch (e) {
+      print('Error debugging SharedPreferences: $e');
+    }
+  }
+
+  // Initialize user data from SharedPreferences
   Future<void> _initializeUserData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       print('=== INITIALIZING USER DATA ===');
+
+      // Debug SharedPreferences first
+      await _debugSharedPreferences();
 
       // Get basic user info with fallbacks
       _userName = prefs.getString('employee_name') ??
@@ -99,6 +127,11 @@ class AttendanceProvider extends ChangeNotifier {
           '';
       _userId = prefs.getInt('user_id') ?? 0;
       _employeeCode = prefs.getString('employee_code') ?? '';
+
+      print('Loaded user data:');
+      print('  - User Name: $_userName');
+      print('  - User ID: $_userId (type: ${_userId.runtimeType})');
+      print('  - Employee Code: "$_employeeCode"');
 
       // Try multiple sources for role, in order of preference
       String roleString = 'user';
@@ -211,7 +244,7 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // GET - Fetch all attendance - IMPROVED VERSION
+  // GET - Fetch all attendance - FIXED VERSION
   Future<void> fetchAttendance() async {
     try {
       _isLoadingAttendance = true;
@@ -253,38 +286,98 @@ class AttendanceProvider extends ChangeNotifier {
 
         print('Raw attendance records: ${attendanceList.length}');
 
+        // Debug: Print first record structure
+        if (attendanceList.isNotEmpty) {
+          print('=== FIRST RECORD STRUCTURE ===');
+          final firstRecord = attendanceList[0];
+          if (firstRecord is Map) {
+            firstRecord.forEach((key, value) {
+              print('  $key: $value (type: ${value.runtimeType})');
+            });
+          }
+        }
+
         // Parse all attendance
         _attendance = attendanceList
             .map((json) => Attendance.fromJson(json))
             .toList();
 
-        // DEBUG: Print first few records to see structure
+        // DEBUG: Print first few records details
         if (_attendance.isNotEmpty) {
-          print('Sample attendance record:');
-          print('ID: ${_attendance[0].id}');
-          print('Employee ID: ${_attendance[0].employeeId}');
-          print('Employee Name: ${_attendance[0].employeeName}');
-          print('Employee Code: ${_attendance[0].empId}');
+          print('=== PARSED ATTENDANCE RECORDS ===');
+          for (int i = 0; i < min(3, _attendance.length); i++) {
+            final record = _attendance[i];
+            print('Record $i:');
+            print('  - ID: ${record.id}');
+            print('  - Employee ID: ${record.employeeId} (type: ${record.employeeId.runtimeType})');
+            print('  - Employee Name: ${record.employeeName}');
+            print('  - Employee Code: "${record.empId}"');
+            print('  - Department: ${record.departmentName}');
+          }
         }
 
         // If user is not admin, filter to show only their own attendance
         if (!isAdmin && _userId != 0) {
-          print('Filtering attendance for non-admin user...');
-          print('Looking for User ID: $_userId or Employee Code: $_employeeCode');
+          print('=== FILTERING FOR NON-ADMIN USER ===');
+          print('User ID to match: $_userId (type: ${_userId.runtimeType})');
+          print('User Name to match: "$_userName"');
+          print('Employee Code to match: "$_employeeCode"');
 
-          _attendance = _attendance.where((attendance) {
-            final matchesUserId = attendance.employeeId == _userId.toString();
-            final matchesEmployeeCode = _employeeCode.isNotEmpty &&
-                attendance.empId.toLowerCase() == _employeeCode.toLowerCase();
+          final originalCount = _attendance.length;
+          int matchCount = 0;
 
-            if (matchesUserId || matchesEmployeeCode) {
-              print('Found matching record: ${attendance.employeeName} (ID: ${attendance.employeeId}, Code: ${attendance.empId})');
-              return true;
+          // Create a list to store filtered records
+          final List<Attendance> filteredList = [];
+
+          for (final attendance in _attendance) {
+            bool matches = false;
+            String matchReason = '';
+
+            // Method 1: Compare employeeId as int
+            if (attendance.employeeId == _userId) {
+              matches = true;
+              matchReason = 'employeeId match';
             }
-            return false;
-          }).toList();
+            // Method 2: Compare as strings (in case of type mismatch)
+            else if (attendance.employeeId.toString() == _userId.toString()) {
+              matches = true;
+              matchReason = 'employeeId string match';
+            }
+            // Method 3: Compare employee codes
+            else if (_employeeCode.isNotEmpty &&
+                attendance.empId.isNotEmpty &&
+                attendance.empId.toLowerCase() == _employeeCode.toLowerCase()) {
+              matches = true;
+              matchReason = 'employeeCode match';
+            }
+            // Method 4: Compare by name (partial match as fallback)
+            else if (_userName.isNotEmpty &&
+                attendance.employeeName.isNotEmpty &&
+                attendance.employeeName.toLowerCase().contains(_userName.toLowerCase())) {
+              matches = true;
+              matchReason = 'name partial match';
+            }
 
-          print('Filtered to ${_attendance.length} records for user');
+            if (matches) {
+              matchCount++;
+              print('✓ Match $matchCount: ${attendance.employeeName}');
+              print('  - Reason: $matchReason');
+              print('  - Record Employee ID: ${attendance.employeeId}');
+              print('  - Record Employee Code: "${attendance.empId}"');
+              print('  - Record Name: ${attendance.employeeName}');
+              filteredList.add(attendance);
+            }
+          }
+
+          _attendance = filteredList;
+          print('Filtered from $originalCount to ${_attendance.length} records for user');
+          print('Total matches found: $matchCount');
+
+          // If no matches found, try alternative matching strategies
+          if (_attendance.isEmpty) {
+            print('⚠️ No matches found with standard methods, trying alternatives...');
+            await _tryAlternativeMatching();
+          }
         } else if (isAdmin) {
           print('Admin user - showing ALL ${_attendance.length} records');
         }
@@ -313,6 +406,68 @@ class AttendanceProvider extends ChangeNotifier {
     } finally {
       _isLoadingAttendance = false;
       notifyListeners();
+    }
+  }
+
+  // Try alternative matching methods when standard methods fail
+  Future<void> _tryAlternativeMatching() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Try to get additional identifiers
+      final additionalIds = [
+        prefs.getInt('employee_id'),
+        prefs.getInt('emp_id'),
+      ].whereType<int>().toList();
+
+      final additionalCodes = [
+        prefs.getString('emp_code'),
+        prefs.getString('employee_id'), // Sometimes stored as string
+        prefs.getString('staff_id'),
+      ].whereType<String>().where((code) => code.isNotEmpty).toList();
+
+      print('=== TRYING ALTERNATIVE MATCHING ===');
+      print('Additional IDs to try: $additionalIds');
+      print('Additional codes to try: $additionalCodes');
+
+      if (additionalIds.isNotEmpty || additionalCodes.isNotEmpty) {
+        final List<Attendance> filteredList = [];
+
+        for (final attendance in _attendance) {
+          bool matches = false;
+
+          // Try additional IDs
+          for (var id in additionalIds) {
+            if (attendance.employeeId == id) {
+              matches = true;
+              print('✓ Alternative match by ID $id: ${attendance.employeeName}');
+              break;
+            }
+          }
+
+          // Try additional codes
+          if (!matches && attendance.empId.isNotEmpty) {
+            for (var code in additionalCodes) {
+              if (attendance.empId.toLowerCase() == code.toLowerCase()) {
+                matches = true;
+                print('✓ Alternative match by code $code: ${attendance.employeeName}');
+                break;
+              }
+            }
+          }
+
+          if (matches) {
+            filteredList.add(attendance);
+          }
+        }
+
+        if (filteredList.isNotEmpty) {
+          _attendance = filteredList;
+          print('Found ${filteredList.length} records with alternative matching');
+        }
+      }
+    } catch (e) {
+      print('Error in alternative matching: $e');
     }
   }
 
@@ -1010,5 +1165,12 @@ class AttendanceProvider extends ChangeNotifier {
     print('User ID: $_userId');
     print('User Name: $_userName');
     print('Employee Code: $_employeeCode');
+  }
+
+  // Method to manually test attendance filtering
+  void testAttendanceFiltering() async {
+    print('=== TESTING ATTENDANCE FILTERING ===');
+    await _initializeUserData();
+    print('Test Complete');
   }
 }

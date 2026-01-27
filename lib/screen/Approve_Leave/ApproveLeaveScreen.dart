@@ -77,26 +77,39 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           // Debug button
-          IconButton(
-            onPressed: () {
-              print('=== DEBUG INFO ===');
-              print('isAdmin: ${leaveProvider.isAdmin}');
-              print('currentUserId: ${leaveProvider.currentUserId}');
-              print('Total leaves: ${leaveProvider.leaves.length}');
-              print('Pending leaves: ${leaveProvider.pendingCount}');
-              if (leaveProvider.leaves.isNotEmpty) {
-                for (var i = 0; i < min(3, leaveProvider.leaves.length); i++) {
-                  print('Leave $i: ${leaveProvider.leaves[i].status} - ${leaveProvider.leaves[i].employeeName}');
-                }
-              }
-              _showSnackBar('Admin: ${leaveProvider.isAdmin}, Leaves: ${leaveProvider.leaves.length}');
-            },
-            icon: const Icon(Iconsax.info_circle, color: Colors.white),
-            tooltip: 'Debug Info',
-          ),
+          // IconButton(
+          //   onPressed: () {
+          //     print('=== DEBUG INFO ===');
+          //     print('isAdmin: ${leaveProvider.isAdmin}');
+          //     print('currentUserId: ${leaveProvider.currentUserId}');
+          //     print('Total leaves: ${leaveProvider.leaves.length}');
+          //     print('Pending leaves: ${leaveProvider.pendingCount}');
+          //     if (leaveProvider.leaves.isNotEmpty) {
+          //       for (var i = 0; i < min(3, leaveProvider.leaves.length); i++) {
+          //         print('Leave $i: ${leaveProvider.leaves[i].status} - ${leaveProvider.leaves[i].employeeName}');
+          //       }
+          //     }
+          //     _showSnackBar('Admin: ${leaveProvider.isAdmin}, Leaves: ${leaveProvider.leaves.length}');
+          //   },
+          //   icon: const Icon(Iconsax.info_circle, color: Colors.white),
+          //   tooltip: 'Debug Info',
+          // ),
           // New Leave Button
           IconButton(
-            onPressed: () => _showNewLeaveDialog(context, leaveProvider),
+            onPressed: () {
+              print('=== NEW LEAVE BUTTON PRESSED ===');
+              print('isAdmin: ${leaveProvider.isAdmin}');
+              print('isLoading: ${leaveProvider.isLoading}');
+
+              // Wrap in try-catch to see any errors
+              try {
+                _showNewLeaveDialog(context, leaveProvider);
+              } catch (e, stackTrace) {
+                print('Error showing dialog: $e');
+                print('Stack trace: $stackTrace');
+                _showSnackBar('Error: $e', isError: true);
+              }
+            },
             icon: const Icon(Iconsax.add, color: Colors.white),
             tooltip: 'New Leave Request',
           ),
@@ -796,13 +809,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     final isWideScreen = MediaQuery.of(context).size.width > 600;
     final statusColor = _getStatusColor(leave.status);
 
-    // Debug info for each card
-    print('=== BUILDING CARD ===');
-    print('isAdmin: ${provider.isAdmin}');
-    print('leave status: "${leave.status}"');
-    print('status lowercase: "${leave.status.toLowerCase()}"');
-    print('is pending: ${_isPendingStatus(leave.status)}');
-
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -825,8 +831,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
   Widget _buildWideCard(ApproveLeave leave, Color statusColor, LeaveProvider provider) {
     final isPending = leave.status.toLowerCase() == 'pending';
     final shouldShowButtons = provider.isAdmin && isPending;
-
-    print('Wide card - Admin: ${provider.isAdmin}, Status: ${leave.status}, Pending: $isPending, ShowButtons: $shouldShowButtons');
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -1029,11 +1033,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       ),
     );
   }
+
   Widget _buildCompactCard(ApproveLeave leave, Color statusColor, LeaveProvider provider) {
     final shouldShowButtons = provider.isAdmin && _isPendingStatus(leave.status);
-
-    print('Compact card - shouldShowButtons: $shouldShowButtons');
-    print('Leave ID: ${leave.id}');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1053,32 +1055,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Admin indicator
-            if (provider.isAdmin)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // const Icon(Iconsax.shield_tick, size: 10, color: Colors.green),
-                    // const SizedBox(width: 4),
-                    // Text(
-                    //   'ADMIN',
-                    //   style: TextStyle(
-                    //     fontSize: 10,
-                    //     color: Colors.green,
-                    //     fontWeight: FontWeight.bold,
-                    //   ),
-                    // ),
-                  ],
-                ),
-              ),
-            if (provider.isAdmin) const SizedBox(height: 4),
-
             // Employee info
             Row(
               children: [
@@ -1133,6 +1109,37 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+
+            // Pay mode indicator
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: leave.payMode == 'with_pay'
+                    ? Colors.green.withOpacity(0.1)
+                    : Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    leave.payMode == 'with_pay' ? Iconsax.money_add : Iconsax.money_remove,
+                    size: 12,
+                    color: leave.payMode == 'with_pay' ? Colors.green : Colors.orange,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatPayMode(leave.payMode),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: leave.payMode == 'with_pay' ? Colors.green : Colors.orange,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
 
@@ -1215,9 +1222,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
             const SizedBox(height: 8),
 
             // Action Buttons - Only show if admin and leave is pending
-            // In _buildCompactCard method, replace the action buttons section with this:
-
-// Action Buttons - Only show if admin and leave is pending
             if (shouldShowButtons && leave.id != null)
               Column(
                 children: [
@@ -1234,10 +1238,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          icon: const Icon(Iconsax.tick_circle, size: 16),
+                          icon: const Icon(Iconsax.tick_circle, size: 16,color: Colors.white,),
                           label: const Text(
                             'Approve',
-                            style: TextStyle(fontSize: 12),
+                            style: TextStyle(fontSize: 12,color: Colors.white),
                           ),
                         ),
                       ),
@@ -1252,10 +1256,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          icon: const Icon(Iconsax.close_circle, size: 16),
+                          icon: const Icon(Iconsax.close_circle, size: 16,color: Colors.white,),
                           label: const Text(
                             'Reject',
-                            style: TextStyle(fontSize: 12),
+                            style: TextStyle(fontSize: 12,color: Colors.white),
                           ),
                         ),
                       ),
@@ -1263,43 +1267,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   ),
                 ],
               ),
-            // Debug info - Remove this in production
-            if (kDebugMode)
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Debug:',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'ID: ${leave.id}',
-                      style: const TextStyle(fontSize: 9, color: Colors.grey),
-                    ),
-                    Text(
-                      'Admin: ${provider.isAdmin}, Pending: ${_isPendingStatus(leave.status)}',
-                      style: const TextStyle(fontSize: 9, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
     );
   }
-  // Helper method to check if status is pending (more flexible)
+
   bool _isPendingStatus(String status) {
     final lowerStatus = status.toLowerCase();
     return lowerStatus.contains('pending') ||
@@ -1351,6 +1324,19 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       'casual_leave': 'Casual Leave',
     };
     return typeMap[type] ?? type.replaceAll('_', ' ').toTitleCase();
+  }
+
+  String _formatPayMode(String payMode) {
+    switch (payMode.toLowerCase()) {
+      case 'with_pay':
+      case 'with pay':
+        return 'With Pay';
+      case 'without_pay':
+      case 'without pay':
+        return 'Without Pay';
+      default:
+        return payMode.replaceAll('_', ' ').toTitleCase();
+    }
   }
 
   String _capitalizeStatus(String status) {
@@ -1446,17 +1432,60 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     }
   }
 
+  // FIXED: New Leave Dialog with all features
   Future<void> _showNewLeaveDialog(BuildContext context, LeaveProvider provider) async {
-    final formKey = GlobalKey<FormState>();
+    print('=== SHOW NEW LEAVE DIALOG START ===');
+
+    // For admin users, fetch employees first
+    if (provider.isAdmin) {
+      try {
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Loading employees...'),
+              ],
+            ),
+          ),
+        );
+
+        await provider.fetchAllEmployees();
+
+        // Close loading dialog
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+
+        // Check if we have employees
+        if (provider.allEmployees.isEmpty) {
+          _showSnackBar('No employees found. Please try again.', isError: true);
+          return;
+        }
+
+      } catch (e) {
+        print('Error fetching employees: $e');
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context); // Close loading dialog
+        }
+        _showSnackBar('Failed to load employees: $e', isError: true);
+        return;
+      }
+    }
+
+    // Variables for form
+    int? selectedEmployeeId;
     String? selectedLeaveType;
+    String? selectedPayMode;
     DateTime? fromDate;
     DateTime? toDate;
     int days = 0;
     String reason = '';
-
-    final fromDateController = TextEditingController();
-    final toDateController = TextEditingController();
-    final reasonController = TextEditingController();
 
     void calculateDays() {
       if (fromDate != null && toDate != null) {
@@ -1466,209 +1495,556 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
 
     await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: const Text('New Leave Request'),
-            content: SingleChildScrollView(
-              child: Form(
-                key: formKey,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Leave Type Dropdown
-                    DropdownButtonFormField<String>(
-                      decoration: InputDecoration(
-                        labelText: 'Leave Type *',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF667EEA),
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
                         ),
                       ),
-                      value: selectedLeaveType,
-                      items: const [
-                        DropdownMenuItem(value: 'sick_leave', child: Text('Sick Leave')),
-                        DropdownMenuItem(value: 'annual_leave', child: Text('Annual Leave')),
-                        DropdownMenuItem(value: 'casual_leave', child: Text('Casual Leave')),
-                        DropdownMenuItem(value: 'emergency_leave', child: Text('Emergency Leave')),
-                        DropdownMenuItem(value: 'maternity_leave', child: Text('Maternity Leave')),
-                        DropdownMenuItem(value: 'urgent_work', child: Text('Urgent Work')),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          selectedLeaveType = value;
-                        });
-                      },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please select leave type';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    // From Date
-                    TextFormField(
-                      controller: fromDateController,
-                      decoration: InputDecoration(
-                        labelText: 'From Date *',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Iconsax.calendar),
-                          onPressed: () async {
-                            final selectedDate = await showDatePicker(
-                              context: context,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (selectedDate != null) {
-                              setState(() {
-                                fromDate = selectedDate;
-                                fromDateController.text = _formatDate(selectedDate);
-                                calculateDays();
-                              });
-                            }
-                          },
-                        ),
+                      child: Row(
+                        children: [
+                          const Icon(Iconsax.note_add, color: Colors.white, size: 24),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'New Leave Request',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
                       ),
-                      readOnly: true,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please select from date';
-                        }
-                        return null;
-                      },
                     ),
-                    const SizedBox(height: 16),
-                    // To Date
-                    TextFormField(
-                      controller: toDateController,
-                      decoration: InputDecoration(
-                        labelText: 'To Date *',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Iconsax.calendar),
-                          onPressed: () async {
-                            final selectedDate = await showDatePicker(
-                              context: context,
-                              initialDate: fromDate ?? DateTime.now(),
-                              firstDate: fromDate ?? DateTime.now(),
-                              lastDate: DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (selectedDate != null) {
-                              setState(() {
-                                toDate = selectedDate;
-                                toDateController.text = _formatDate(selectedDate);
-                                calculateDays();
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                      readOnly: true,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please select to date';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    // Days display
-                    if (days > 0)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF667EEA).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                    // Form Content
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            // Employee Dropdown - Only for admin
+                            if (provider.isAdmin) ...[
+                              const Text(
+                                'Select Employee *',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<int>(
+                                    value: selectedEmployeeId,
+                                    isExpanded: true,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    icon: const Icon(Iconsax.arrow_down_1),
+                                    elevation: 2,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                    ),
+                                    hint: const Text('Select Employee'),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedEmployeeId = value;
+                                      });
+                                    },
+                                    items: provider.allEmployees.map((employee) {
+                                      return DropdownMenuItem<int>(
+                                        value: employee['id'],
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: const BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Color(0xFF667EEA),
+                                                    Color(0xFF764BA2),
+                                                  ],
+                                                ),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  employee['name'].toString().substring(0, 1),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    employee['name'].toString(),
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  Text(
+                                                    'ID: ${employee['employee_code']}',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // Leave Type Dropdown
                             const Text(
-                              'Total Days:',
+                              'Leave Type *',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF667EEA),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
                               ),
                             ),
-                            Text(
-                              '$days ${days == 1 ? 'Day' : 'Days'}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: Color(0xFF667EEA),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: selectedLeaveType,
+                                  isExpanded: true,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  icon: const Icon(Iconsax.arrow_down_1),
+                                  elevation: 2,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                  ),
+                                  hint: const Text('Select Leave Type'),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedLeaveType = value;
+                                    });
+                                  },
+                                  items: provider.leaveTypes.map((type) {
+                                    String displayName = type.replaceAll('_', ' ').toTitleCase();
+                                    return DropdownMenuItem<String>(
+                                      value: type,
+                                      child: Text(displayName),
+                                    );
+                                  }).toList(),
+                                ),
                               ),
                             ),
+                            const SizedBox(height: 16),
+
+                            // Date Range
+                            const Text(
+                              'Date Range *',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'From Date',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      GestureDetector(
+                                        onTap: () async {
+                                          final selectedDate = await showDatePicker(
+                                            context: context,
+                                            initialDate: DateTime.now(),
+                                            firstDate: DateTime.now(),
+                                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                                          );
+                                          if (selectedDate != null) {
+                                            setState(() {
+                                              fromDate = selectedDate;
+                                              calculateDays();
+                                            });
+                                          }
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey[300]!),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Iconsax.calendar_1, size: 18, color: Colors.grey),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                fromDate == null ? 'Select Date' : _formatDate(fromDate!),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: fromDate == null ? Colors.grey : Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'To Date',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      GestureDetector(
+                                        onTap: () async {
+                                          final selectedDate = await showDatePicker(
+                                            context: context,
+                                            initialDate: fromDate ?? DateTime.now(),
+                                            firstDate: fromDate ?? DateTime.now(),
+                                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                                          );
+                                          if (selectedDate != null) {
+                                            setState(() {
+                                              toDate = selectedDate;
+                                              calculateDays();
+                                            });
+                                          }
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey[300]!),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Iconsax.calendar_1, size: 18, color: Colors.grey),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                toDate == null ? 'Select Date' : _formatDate(toDate!),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: toDate == null ? Colors.grey : Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Days Counter
+                            if (days > 0)
+                              Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF667EEA).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: const Color(0xFF667EEA).withOpacity(0.3),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Total Days:',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF667EEA),
+                                          ),
+                                        ),
+                                        Text(
+                                          '$days ${days == 1 ? 'Day' : 'Days'}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                            color: Color(0xFF667EEA),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
+                              ),
+
+                            // Pay Mode Dropdown
+                            const Text(
+                              'Pay Mode *',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: selectedPayMode,
+                                  isExpanded: true,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  icon: const Icon(Iconsax.arrow_down_1),
+                                  elevation: 2,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                  ),
+                                  hint: const Text('Select Pay Mode'),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedPayMode = value;
+                                    });
+                                  },
+                                  items: provider.payModes.map((mode) {
+                                    return DropdownMenuItem<String>(
+                                      value: mode,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            mode == 'With Pay' ? Iconsax.money_add : Iconsax.money_remove,
+                                            color: mode == 'With Pay' ? Colors.green : Colors.orange,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(mode),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Reason TextField
+                            const Text(
+                              'Reason (Optional)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: TextField(
+                                maxLines: 3,
+                                decoration: const InputDecoration(
+                                  contentPadding: EdgeInsets.all(12),
+                                  border: InputBorder.none,
+                                  hintText: 'Enter reason for leave...',
+                                ),
+                                onChanged: (value) {
+                                  reason = value;
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 24),
                           ],
                         ),
                       ),
-                    const SizedBox(height: 16),
-                    // Reason
-                    TextFormField(
-                      controller: reasonController,
-                      decoration: InputDecoration(
-                        labelText: 'Reason (Optional)',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    ),
+
+                    // Action Buttons
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        border: Border(
+                          top: BorderSide(color: Colors.grey[200]!),
                         ),
                       ),
-                      maxLines: 3,
-                      onChanged: (value) {
-                        reason = value;
-                      },
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                // Validation
+                                if (provider.isAdmin && selectedEmployeeId == null) {
+                                  _showSnackBar('Please select an employee', isError: true);
+                                  return;
+                                }
+                                if (selectedLeaveType == null) {
+                                  _showSnackBar('Please select leave type', isError: true);
+                                  return;
+                                }
+                                if (selectedPayMode == null) {
+                                  _showSnackBar('Please select pay mode', isError: true);
+                                  return;
+                                }
+                                if (fromDate == null) {
+                                  _showSnackBar('Please select from date', isError: true);
+                                  return;
+                                }
+                                if (toDate == null) {
+                                  _showSnackBar('Please select to date', isError: true);
+                                  return;
+                                }
+                                if (toDate!.isBefore(fromDate!)) {
+                                  _showSnackBar('To date cannot be before from date', isError: true);
+                                  return;
+                                }
+                                if (days <= 0) {
+                                  _showSnackBar('Please select valid dates', isError: true);
+                                  return;
+                                }
+
+                                bool success;
+
+                                // Call appropriate method based on user role
+                                if (provider.isAdmin) {
+                                  success = await provider.submitLeave(
+                                    selectedEmployeeId: selectedEmployeeId!,
+                                    natureOfLeave: selectedLeaveType!,
+                                    fromDate: fromDate!,
+                                    toDate: toDate!,
+                                    days: days,
+                                    payMode: selectedPayMode!,
+                                    reason: reason.isNotEmpty ? reason : null,
+                                  );
+                                } else {
+                                  success = await provider.submitLeaveForSelf(
+                                    natureOfLeave: selectedLeaveType!,
+                                    fromDate: fromDate!,
+                                    toDate: toDate!,
+                                    days: days,
+                                    payMode: selectedPayMode!,
+                                    reason: reason.isNotEmpty ? reason : null,
+                                  );
+                                }
+
+                                if (success && mounted) {
+                                  _showSnackBar('Leave request submitted successfully!');
+                                  Navigator.pop(context);
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF667EEA),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text('Submit Request'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF667EEA),
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () async {
-                  if (formKey.currentState!.validate()) {
-                    if (fromDate == null || toDate == null || selectedLeaveType == null) {
-                      _showSnackBar('Please fill all required fields', isError: true);
-                      return;
-                    }
-
-                    if (toDate!.isBefore(fromDate!)) {
-                      _showSnackBar('To date cannot be before from date', isError: true);
-                      return;
-                    }
-
-                    final success = await provider.submitLeave(
-                      natureOfLeave: selectedLeaveType!,
-                      fromDate: fromDate!,
-                      toDate: toDate!,
-                      days: days,
-                      reason: reason.isNotEmpty ? reason : null,
-                    );
-
-                    if (success && mounted) {
-                      _showSnackBar('Leave request submitted successfully!');
-                      Navigator.pop(context);
-                    }
-                  }
-                },
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
+
+    print('=== SHOW NEW LEAVE DIALOG END ===');
   }
 }
 
