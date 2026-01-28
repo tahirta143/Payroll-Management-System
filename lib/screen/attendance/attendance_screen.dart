@@ -2062,9 +2062,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   final attendance = provider.attendance[index];
                   final serialNo = index + 1;
                   return GestureDetector(
-                    onTap: () {
-                      provider.navigateToViewScreen(context, attendance);
-                    },
+                    // onTap: () {
+                    //   provider.navigateToViewScreen(context, attendance);
+                    // },
                     child: _buildTableRow(attendance, provider.isAdmin, serialNo),
                   );
                 },
