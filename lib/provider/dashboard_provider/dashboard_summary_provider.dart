@@ -6,8 +6,8 @@ import '../../model/dashboar_model/dashboard_summary.dart';
 
 class DashboardSummaryProvider with ChangeNotifier {
   DashboardSummary? _dashboardSummary;
-  DashboardSummary? _monthlySummary;
-  String _selectedMonth = 'all';
+  DashboardSummary? _dailySummary;
+  String _selectedDate = 'all';
   bool _isLoading = false;
   String? _error;
   bool _isRefreshing = false;
@@ -19,21 +19,21 @@ class DashboardSummaryProvider with ChangeNotifier {
   // Base URL
   static const String _baseUrl = 'https://api.afaqmis.com';
 
-  // SharedPreferences - NO LATE KEYWORD
+  // SharedPreferences
   static SharedPreferences? _prefs;
   static const String _tokenKey = 'token';
 
   // Getters
   DashboardSummary? get dashboardSummary => _dashboardSummary;
-  DashboardSummary? get monthlySummary => _monthlySummary;
+  DashboardSummary? get dailySummary => _dailySummary;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isRefreshing => _isRefreshing;
-  String get selectedMonth => _selectedMonth;
+  String get selectedDate => _selectedDate;
   bool get dataWasFixed => _dataWasFixed;
   String? get dataFixExplanation => _dataFixExplanation;
 
-  // **CRITICAL FIX**: Static initialization method
+  // Static initialization method
   static Future<void> initializeSharedPreferences() async {
     if (_prefs == null) {
       _prefs = await SharedPreferences.getInstance();
@@ -43,7 +43,6 @@ class DashboardSummaryProvider with ChangeNotifier {
   // Get token from SharedPreferences
   Future<String> _getToken() async {
     try {
-      // Initialize if not already done
       if (_prefs == null) {
         await initializeSharedPreferences();
       }
@@ -80,7 +79,7 @@ class DashboardSummaryProvider with ChangeNotifier {
     }
   }
 
-  // **NEW: Data sanitization and fixing method**
+  // Data sanitization and fixing method
   DashboardSummary _sanitizeAndFixData(DashboardSummary original, Map<String, dynamic> rawData) {
     debugPrint('=== DATA SANITIZATION STARTED ===');
     debugPrint('Original data:');
@@ -212,8 +211,8 @@ class DashboardSummaryProvider with ChangeNotifier {
     return fixedSummary;
   }
 
-  // Fetch dashboard summary (with optional month filter)
-  Future<void> fetchDashboardSummary({String? month}) async {
+  // Fetch dashboard summary (with optional date filter)
+  Future<void> fetchDashboardSummary({String? date}) async {
     try {
       _isLoading = true;
       _error = null;
@@ -225,17 +224,6 @@ class DashboardSummaryProvider with ChangeNotifier {
       if (_prefs == null) {
         await initializeSharedPreferences();
       }
-
-      // Build URL
-      String url = '$_baseUrl/api/dashboard-summary';
-      if (month != null && month.isNotEmpty && month != 'all') {
-        url += '?month=$month';
-        _selectedMonth = month;
-      } else {
-        _selectedMonth = 'all';
-      }
-
-      debugPrint('\n🔄 Fetching dashboard data from: $url');
 
       // Get token
       final token = await _getToken();
@@ -253,6 +241,18 @@ class DashboardSummaryProvider with ChangeNotifier {
         'Content-Type': 'application/json',
       };
 
+      // Build URL with date parameter
+      String url = '$_baseUrl/api/dashboard-summary';
+      if (date != null && date.isNotEmpty && date != 'all') {
+        url += '?date=$date';
+        _selectedDate = date;
+        debugPrint('🔄 Fetching DAILY summary for date: $date');
+      } else {
+        url += '?date=all';
+        _selectedDate = 'all';
+        debugPrint('🔄 Fetching ALL-TIME dashboard summary');
+      }
+
       final response = await http.get(
         Uri.parse(url),
         headers: headers,
@@ -263,70 +263,90 @@ class DashboardSummaryProvider with ChangeNotifier {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        // **Log raw data for debugging**
-        debugPrint('📊 Raw API Data:');
-        debugPrint('total_employees: ${data['total_employees']}');
-        debugPrint('present_count: ${data['present_count']}');
-        debugPrint('leave_count: ${data['leave_count']}');
-        debugPrint('absent_count: ${data['absent_count']}');
-        debugPrint('short_leave_count: ${data['short_leave_count']}');
-        debugPrint('late_comers_count: ${data['late_comers_count']}');
+        // Check if response has expected structure
+        if (data['data'] != null) {
+          // Handle nested data structure
+          final summaryData = data['data'];
+          debugPrint('📊 API returned nested data structure');
 
-        // Calculate and log the issue
-        final total = data['total_employees'] ?? 0;
-        final present = data['present_count'] ?? 0;
-        final leave = data['leave_count'] ?? 0;
-        final absent = data['absent_count'] ?? 0;
-        final sum = present + leave + absent;
+          // Log raw data for debugging
+          debugPrint('📊 Raw API Data:');
+          debugPrint('total_employees: ${summaryData['total_employees']}');
+          debugPrint('present_count: ${summaryData['present_count']}');
+          debugPrint('leave_count: ${summaryData['leave_count']}');
+          debugPrint('absent_count: ${summaryData['absent_count']}');
+          debugPrint('short_leave_count: ${summaryData['short_leave_count']}');
+          debugPrint('late_comers_count: ${summaryData['late_comers_count']}');
 
-        debugPrint('🔢 Data Validation Check:');
-        debugPrint('Present($present) + Leave($leave) + Absent($absent) = $sum');
-        debugPrint('Total Employees = $total');
-        debugPrint('Difference = ${sum - total}');
+          final originalSummary = DashboardSummary.fromJson(summaryData);
+          final sanitizedSummary = _sanitizeAndFixData(originalSummary, summaryData);
 
-        if (sum != total) {
-          debugPrint('⚠️ WARNING: Data inconsistency detected!');
-          debugPrint('   This suggests either:');
-          debugPrint('   1. Test/mock data from server');
-          debugPrint('   2. Bug in backend API logic');
-          debugPrint('   3. Different calculation logic');
-        }
+          if (date != null && date.isNotEmpty && date != 'all') {
+            _dailySummary = sanitizedSummary;
+            debugPrint('✅ Daily summary saved for date: $date');
+          } else {
+            _dashboardSummary = sanitizedSummary;
+            debugPrint('✅ All-time dashboard summary saved');
+          }
 
-        final originalSummary = DashboardSummary.fromJson(data);
+          _error = null;
 
-        // **Sanitize and fix the data**
-        final sanitizedSummary = _sanitizeAndFixData(originalSummary, data);
+        } else if (data['total_employees'] != null) {
+          // Handle flat structure
+          debugPrint('📊 API returned flat data structure');
 
-        if (_dataWasFixed) {
-          debugPrint('🛠️ Data was automatically fixed');
-          debugPrint('Fix explanation: $_dataFixExplanation');
-        }
+          // Log raw data for debugging
+          debugPrint('📊 Raw API Data:');
+          debugPrint('total_employees: ${data['total_employees']}');
+          debugPrint('present_count: ${data['present_count']}');
+          debugPrint('leave_count: ${data['leave_count']}');
+          debugPrint('absent_count: ${data['absent_count']}');
+          debugPrint('short_leave_count: ${data['short_leave_count']}');
+          debugPrint('late_comers_count: ${data['late_comers_count']}');
 
-        if (month != null && month.isNotEmpty && month != 'all') {
-          _monthlySummary = sanitizedSummary;
+          final originalSummary = DashboardSummary.fromJson(data);
+          final sanitizedSummary = _sanitizeAndFixData(originalSummary, data);
+
+          if (date != null && date.isNotEmpty && date != 'all') {
+            _dailySummary = sanitizedSummary;
+            debugPrint('✅ Daily summary saved for date: $date');
+          } else {
+            _dashboardSummary = sanitizedSummary;
+            debugPrint('✅ All-time dashboard summary saved');
+          }
+
+          _error = null;
+
         } else {
-          _dashboardSummary = sanitizedSummary;
+          // No data found
+          if (date != null && date.isNotEmpty && date != 'all') {
+            _error = 'No data available for selected date';
+            _dailySummary = null;
+          } else {
+            _error = 'No dashboard data available';
+            _dashboardSummary = null;
+          }
         }
-
-        _error = null;
-
-        // Log final percentages
-        debugPrint('📈 Final Statistics:');
-        debugPrint('Present: ${sanitizedSummary.presentCount} (${sanitizedSummary.presentPercentage.toStringAsFixed(1)}%)');
-        debugPrint('Leave: ${sanitizedSummary.leaveCount} (${sanitizedSummary.leavePercentage.toStringAsFixed(1)}%)');
-        debugPrint('Absent: ${sanitizedSummary.absentCount} (${sanitizedSummary.absentPercentage.toStringAsFixed(1)}%)');
-        debugPrint('Short Leave: ${sanitizedSummary.shortLeaveCount} (${sanitizedSummary.shortLeavePercentage.toStringAsFixed(1)}%)');
-        debugPrint('Late Comers: ${sanitizedSummary.lateComersCount} (${sanitizedSummary.lateComersPercentage.toStringAsFixed(1)}%)');
 
       } else if (response.statusCode == 401) {
         _error = 'Session expired. Please login again.';
         await _clearToken();
       } else if (response.statusCode == 404) {
-        _error = 'Dashboard data not found.';
+        if (date != null && date.isNotEmpty && date != 'all') {
+          _error = 'No attendance data found for $date';
+          _dailySummary = null;
+        } else {
+          _error = 'Dashboard data not found.';
+        }
       } else if (response.statusCode >= 500) {
         _error = 'Server error. Please try again later.';
       } else {
-        _error = 'Failed to load dashboard data: ${response.statusCode}';
+        try {
+          final errorData = json.decode(response.body);
+          _error = errorData['message'] ?? 'Failed to load dashboard data';
+        } catch (e) {
+          _error = 'Failed to load dashboard data: ${response.statusCode}';
+        }
         debugPrint('Error response: ${response.body}');
       }
     } catch (e) {
@@ -338,45 +358,224 @@ class DashboardSummaryProvider with ChangeNotifier {
     }
   }
 
-  // Method to set token from AuthProvider
-  Future<void> setToken(String token) async {
-    await _saveToken(token);
+  // Alternative: Try different endpoints for date-based data
+  Future<void> fetchDateWiseData(String date) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      final token = await _getToken();
+
+      if (token.isEmpty) {
+        _error = 'Authentication required. Please login again.';
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      };
+
+      // Try different possible endpoints for date-wise data
+      final possibleEndpoints = [
+        '$_baseUrl/api/attendance/daily-summary?date=$date',
+        '$_baseUrl/api/attendance/summary?date=$date',
+        '$_baseUrl/api/daily-attendance?date=$date',
+        '$_baseUrl/api/attendances/summary?date=$date',
+      ];
+
+      bool success = false;
+
+      for (final url in possibleEndpoints) {
+        debugPrint('🔄 Trying date endpoint: $url');
+
+        final response = await http.get(
+          Uri.parse(url),
+          headers: headers,
+        );
+
+        debugPrint('📥 Response for $url: ${response.statusCode}');
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+
+          // Try to parse the data
+          try {
+            Map<String, dynamic> summaryData;
+
+            if (data['data'] != null) {
+              summaryData = data['data'];
+            } else if (data['summary'] != null) {
+              summaryData = data['summary'];
+            } else {
+              summaryData = data;
+            }
+
+            // Check if we have the required fields
+            if (summaryData['total_employees'] == null && summaryData['present_count'] == null) {
+              debugPrint('❌ Incomplete data from $url');
+              continue;
+            }
+
+            // Create summary from data
+            final summary = DashboardSummary(
+              totalEmployees: summaryData['total_employees'] ?? summaryData['totalEmployees'] ?? 0,
+              presentCount: summaryData['present_count'] ?? summaryData['presentCount'] ?? 0,
+              leaveCount: summaryData['leave_count'] ?? summaryData['leaveCount'] ?? 0,
+              absentCount: summaryData['absent_count'] ?? summaryData['absentCount'] ?? 0,
+              shortLeaveCount: summaryData['short_leave_count'] ?? summaryData['shortLeaveCount'] ?? 0,
+              lateComersCount: summaryData['late_comers_count'] ?? summaryData['lateComersCount'] ?? 0,
+              month: date,
+            );
+
+            _dailySummary = _sanitizeAndFixData(summary, summaryData);
+            _selectedDate = date;
+            _error = null;
+            success = true;
+            debugPrint('✅ Successfully fetched date-wise data from: $url');
+            break;
+          } catch (e) {
+            debugPrint('❌ Failed to parse response from $url: $e');
+            continue;
+          }
+        }
+      }
+
+      if (!success) {
+        _error = 'No attendance data found for $date';
+        _dailySummary = null;
+        debugPrint('⚠️ Could not fetch date-wise data from any endpoint');
+
+        // Fallback: Try to get data from staff attendance endpoint
+        await _fetchStaffAttendanceData(date);
+      }
+
+    } catch (e) {
+      _error = 'Network error: ${e.toString()}';
+      debugPrint('Date-wise data error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  // Method to check if user is authenticated
-  Future<bool> isAuthenticated() async {
-    final token = await _getToken();
-    return token.isNotEmpty;
+  // Fallback method: Get data from staff attendance list
+  Future<void> _fetchStaffAttendanceData(String date) async {
+    try {
+      final token = await _getToken();
+
+      if (token.isEmpty) return;
+
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      };
+
+      // Get staff attendance for the date
+      final url = '$_baseUrl/api/attendances?date=$date';
+      final response = await http.get(Uri.parse(url), headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data['data'] is List) {
+          final List<dynamic> attendanceList = data['data'];
+
+          // Calculate summary from attendance list
+          int presentCount = 0;
+          int leaveCount = 0;
+          int absentCount = 0;
+          int lateCount = 0;
+          int shortLeaveCount = 0;
+
+          for (var attendance in attendanceList) {
+            final status = attendance['status']?.toString().toLowerCase() ?? '';
+
+            switch (status) {
+              case 'present':
+                presentCount++;
+                break;
+              case 'leave':
+                leaveCount++;
+                break;
+              case 'absent':
+                absentCount++;
+                break;
+              case 'late':
+                lateCount++;
+                break;
+              case 'short_leave':
+                shortLeaveCount++;
+                break;
+            }
+          }
+
+          final totalEmployees = attendanceList.length;
+
+          final summary = DashboardSummary(
+            totalEmployees: totalEmployees,
+            presentCount: presentCount,
+            leaveCount: leaveCount,
+            absentCount: absentCount,
+            shortLeaveCount: shortLeaveCount,
+            lateComersCount: lateCount,
+            month: date,
+          );
+
+          _dailySummary = _sanitizeAndFixData(summary, {});
+          _selectedDate = date;
+          _error = null;
+          debugPrint('✅ Calculated summary from attendance list: $totalEmployees employees');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching attendance list: $e');
+    }
   }
 
-  // Refresh dashboard data
-  Future<void> refreshDashboardData() async {
+  // Main method to fetch data
+  Future<void> fetchData({String? date}) async {
+    if (date != null && date.isNotEmpty && date != 'all') {
+      // First try the main dashboard endpoint
+      await fetchDashboardSummary(date: date);
+
+      // If no data found, try alternative endpoints
+      if (_dailySummary == null && (_error?.contains('No data') == true || _error?.contains('404') == true)) {
+        debugPrint('🔄 No data from main endpoint, trying date-wise endpoints');
+        await fetchDateWiseData(date);
+      }
+    } else {
+      // For all-time data
+      await fetchDashboardSummary(date: null);
+    }
+  }
+
+  // Refresh dashboard data with date parameter
+  Future<void> refreshDashboardData({String? date}) async {
     _isRefreshing = true;
     notifyListeners();
 
-    await fetchDashboardSummary();
+    await fetchData(date: date);
 
     _isRefreshing = false;
     notifyListeners();
   }
 
-  // Set month filter
-  void setMonthFilter(String month) {
-    _selectedMonth = month;
+  // Clear daily summary
+  void clearDailySummary() {
+    _dailySummary = null;
+    _selectedDate = 'all';
     notifyListeners();
   }
 
-  // Clear monthly summary
-  void clearMonthlySummary() {
-    _monthlySummary = null;
-    _selectedMonth = 'all';
-    notifyListeners();
-  }
-
-  // Get current summary (monthly if available, otherwise all-time)
+  // Get current summary (daily if available, otherwise all-time)
   DashboardSummary? get currentSummary {
-    return _selectedMonth != 'all' && _monthlySummary != null
-        ? _monthlySummary
+    return _selectedDate != 'all' && _dailySummary != null
+        ? _dailySummary
         : _dashboardSummary;
   }
 
@@ -415,17 +614,27 @@ class DashboardSummaryProvider with ChangeNotifier {
       'presentPercentage': presentPercentage,
       'leavePercentage': leavePercentage,
       'absentPercentage': absentPercentage,
-      'month': summary.month,
       'dataWasFixed': _dataWasFixed,
       'dataFixExplanation': _dataFixExplanation,
     };
   }
 
+  // Method to set token from AuthProvider
+  Future<void> setToken(String token) async {
+    await _saveToken(token);
+  }
+
+  // Method to check if user is authenticated
+  Future<bool> isAuthenticated() async {
+    final token = await _getToken();
+    return token.isNotEmpty;
+  }
+
   // Clear all data
   void clearData() {
     _dashboardSummary = null;
-    _monthlySummary = null;
-    _selectedMonth = 'all';
+    _dailySummary = null;
+    _selectedDate = 'all';
     _error = null;
     _dataWasFixed = false;
     _dataFixExplanation = null;

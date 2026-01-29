@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:payroll_app/screen/attendance/attendance_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -31,8 +32,10 @@ class AttendanceProvider extends ChangeNotifier {
   String _searchQuery = '';
   String _selectedDepartmentFilter = 'All';
   String _selectedEmployeeFilter = 'All';
+  String _selectedMonthFilter = 'All';
   List<String> _departmentNames = ['All'];
   List<String> _employeeNames = ['All'];
+  List<String> _availableMonths = ['All'];
 
   // User Data
   UserRole _userRole = UserRole.user;
@@ -55,8 +58,10 @@ class AttendanceProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   String get selectedDepartmentFilter => _selectedDepartmentFilter;
   String get selectedEmployeeFilter => _selectedEmployeeFilter;
+  String get selectedMonthFilter => _selectedMonthFilter;
   List<String> get departmentNames => _departmentNames;
   List<String> get employeeNames => _employeeNames;
+  List<String> get availableMonths => _availableMonths;
 
   // User Role Getters
   UserRole get userRole => _userRole;
@@ -86,40 +91,10 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // Debug method to print all SharedPreferences
-  Future<void> _debugSharedPreferences() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      print('=== SHARED PREFERENCES DEBUG ===');
-
-      final keys = prefs.getKeys();
-      for (var key in keys) {
-        final value = prefs.get(key);
-        print('$key: $value (type: ${value.runtimeType})');
-      }
-
-      // Check specific user-related keys
-      print('\n=== SPECIFIC USER KEYS ===');
-      final specificKeys = ['user_id', 'employee_id', 'emp_id', 'employee_code',
-        'employee_name', 'user_name', 'user_role', 'userData'];
-      for (var key in specificKeys) {
-        final value = prefs.get(key);
-        print('$key: $value');
-      }
-    } catch (e) {
-      print('Error debugging SharedPreferences: $e');
-    }
-  }
-
   // Initialize user data from SharedPreferences
   Future<void> _initializeUserData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
-      print('=== INITIALIZING USER DATA ===');
-
-      // Debug SharedPreferences first
-      await _debugSharedPreferences();
 
       // Get basic user info with fallbacks
       _userName = prefs.getString('employee_name') ??
@@ -128,19 +103,13 @@ class AttendanceProvider extends ChangeNotifier {
       _userId = prefs.getInt('user_id') ?? 0;
       _employeeCode = prefs.getString('employee_code') ?? '';
 
-      print('Loaded user data:');
-      print('  - User Name: $_userName');
-      print('  - User ID: $_userId (type: ${_userId.runtimeType})');
-      print('  - Employee Code: "$_employeeCode"');
-
-      // Try multiple sources for role, in order of preference
+      // Try multiple sources for role
       String roleString = 'user';
 
-      // 1. Direct user_role field (most reliable)
+      // 1. Direct user_role field
       final directRole = prefs.getString('user_role');
       if (directRole != null && directRole.isNotEmpty) {
         roleString = directRole;
-        print('Found role from user_role: "$roleString"');
       }
       // 2. Check userData JSON
       else {
@@ -148,7 +117,6 @@ class AttendanceProvider extends ChangeNotifier {
         if (userDataString != null && userDataString.isNotEmpty) {
           try {
             final userData = json.decode(userDataString) as Map<String, dynamic>;
-            // Check multiple possible role field names
             final possibleRoleFields = [
               'role_label',
               'role',
@@ -161,7 +129,6 @@ class AttendanceProvider extends ChangeNotifier {
             for (var field in possibleRoleFields) {
               if (userData[field] != null && userData[field].toString().isNotEmpty) {
                 roleString = userData[field].toString();
-                print('Found role from userData[$field]: "$roleString"');
                 break;
               }
             }
@@ -173,7 +140,6 @@ class AttendanceProvider extends ChangeNotifier {
 
       // Convert to lowercase for comparison
       roleString = roleString.toLowerCase();
-      print('Final role string: "$roleString"');
 
       // Check if user is admin
       final adminKeywords = [
@@ -191,17 +157,9 @@ class AttendanceProvider extends ChangeNotifier {
 
       if (isAdminUser) {
         _userRole = UserRole.admin;
-        print('User role: ADMIN');
       } else {
         _userRole = UserRole.user;
-        print('User role: USER');
       }
-
-      print('=== USER DATA LOADED ===');
-      print('Name: $_userName');
-      print('ID: $_userId');
-      print('Employee Code: $_employeeCode');
-      print('Final UserRole: $_userRole');
 
     } catch (e) {
       print('Error initializing user data: $e');
@@ -219,11 +177,6 @@ class AttendanceProvider extends ChangeNotifier {
       // Initialize user data first
       await _initializeUserData();
 
-      // DEBUG: Print current state
-      print('=== FETCHING DATA WITH ROLE: $_userRole ===');
-      print('Is Admin: $isAdmin');
-      print('User ID: $_userId');
-
       // Fetch all data in parallel
       await Future.wait([
         fetchAttendance(),
@@ -232,9 +185,6 @@ class AttendanceProvider extends ChangeNotifier {
         fetchDutyShifts(),
       ]);
 
-      print('=== ALL DATA FETCHED SUCCESSFULLY ===');
-      print('Final Status - Is Admin: $isAdmin');
-      print('Attendance records: ${_attendance.length}');
     } catch (e) {
       _error = 'Failed to load data: $e';
       print('Error fetching all data: $e');
@@ -244,18 +194,12 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // GET - Fetch all attendance - FIXED VERSION
+  // GET - Fetch all attendance
   Future<void> fetchAttendance() async {
     try {
       _isLoadingAttendance = true;
       _error = '';
       notifyListeners();
-
-      print('=== FETCHING ATTENDANCE ===');
-      print('Current User Role: $_userRole');
-      print('Is Admin: $isAdmin');
-      print('User ID: $_userId');
-      print('Employee Code: $_employeeCode');
 
       final token = await _getToken();
 
@@ -267,8 +211,6 @@ class AttendanceProvider extends ChangeNotifier {
           'Accept': 'application/json',
         },
       );
-
-      print('Attendance API Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final dynamic data = json.decode(response.body);
@@ -284,102 +226,64 @@ class AttendanceProvider extends ChangeNotifier {
           attendanceList = data;
         }
 
-        print('Raw attendance records: ${attendanceList.length}');
-
-        // Debug: Print first record structure
-        if (attendanceList.isNotEmpty) {
-          print('=== FIRST RECORD STRUCTURE ===');
-          final firstRecord = attendanceList[0];
-          if (firstRecord is Map) {
-            firstRecord.forEach((key, value) {
-              print('  $key: $value (type: ${value.runtimeType})');
-            });
-          }
-        }
-
         // Parse all attendance
         _attendance = attendanceList
             .map((json) => Attendance.fromJson(json))
             .toList();
 
-        // DEBUG: Print first few records details
+        // DEBUG: Print date information
+        print('=== ATTENDANCE DATES DEBUG ===');
         if (_attendance.isNotEmpty) {
-          print('=== PARSED ATTENDANCE RECORDS ===');
-          for (int i = 0; i < min(3, _attendance.length); i++) {
+          print('Total attendance records: ${_attendance.length}');
+          for (int i = 0; i < min(5, _attendance.length); i++) {
             final record = _attendance[i];
-            print('Record $i:');
-            print('  - ID: ${record.id}');
-            print('  - Employee ID: ${record.employeeId} (type: ${record.employeeId.runtimeType})');
-            print('  - Employee Name: ${record.employeeName}');
-            print('  - Employee Code: "${record.empId}"');
-            print('  - Department: ${record.departmentName}');
+            print('Record $i: Date = ${record.date}');
+            print('  Formatted: ${_formatMonthForFilter(record.date)}');
           }
         }
 
+        // Extract unique months for filtering
+        _extractMonthsFromData();
+
         // If user is not admin, filter to show only their own attendance
         if (!isAdmin && _userId != 0) {
-          print('=== FILTERING FOR NON-ADMIN USER ===');
-          print('User ID to match: $_userId (type: ${_userId.runtimeType})');
-          print('User Name to match: "$_userName"');
-          print('Employee Code to match: "$_employeeCode"');
-
-          final originalCount = _attendance.length;
-          int matchCount = 0;
-
-          // Create a list to store filtered records
           final List<Attendance> filteredList = [];
 
           for (final attendance in _attendance) {
             bool matches = false;
-            String matchReason = '';
 
             // Method 1: Compare employeeId as int
             if (attendance.employeeId == _userId) {
               matches = true;
-              matchReason = 'employeeId match';
             }
             // Method 2: Compare as strings (in case of type mismatch)
             else if (attendance.employeeId.toString() == _userId.toString()) {
               matches = true;
-              matchReason = 'employeeId string match';
             }
             // Method 3: Compare employee codes
             else if (_employeeCode.isNotEmpty &&
                 attendance.empId.isNotEmpty &&
                 attendance.empId.toLowerCase() == _employeeCode.toLowerCase()) {
               matches = true;
-              matchReason = 'employeeCode match';
             }
             // Method 4: Compare by name (partial match as fallback)
             else if (_userName.isNotEmpty &&
                 attendance.employeeName.isNotEmpty &&
                 attendance.employeeName.toLowerCase().contains(_userName.toLowerCase())) {
               matches = true;
-              matchReason = 'name partial match';
             }
 
             if (matches) {
-              matchCount++;
-              print('✓ Match $matchCount: ${attendance.employeeName}');
-              print('  - Reason: $matchReason');
-              print('  - Record Employee ID: ${attendance.employeeId}');
-              print('  - Record Employee Code: "${attendance.empId}"');
-              print('  - Record Name: ${attendance.employeeName}');
               filteredList.add(attendance);
             }
           }
 
           _attendance = filteredList;
-          print('Filtered from $originalCount to ${_attendance.length} records for user');
-          print('Total matches found: $matchCount');
 
           // If no matches found, try alternative matching strategies
           if (_attendance.isEmpty) {
-            print('⚠️ No matches found with standard methods, trying alternatives...');
             await _tryAlternativeMatching();
           }
-        } else if (isAdmin) {
-          print('Admin user - showing ALL ${_attendance.length} records');
         }
 
         // Extract unique departments and employees
@@ -390,12 +294,15 @@ class AttendanceProvider extends ChangeNotifier {
 
         print('=== ATTENDANCE FETCH COMPLETE ===');
         print('Total filtered records: ${_filteredAttendance.length}');
+        print('Available months: ${_availableMonths.length}');
+        if (_availableMonths.length > 1) {
+          print('Month list: ${_availableMonths.sublist(1)}');
+        }
       } else if (response.statusCode == 401) {
         throw Exception('Unauthorized - Please login again');
       } else if (response.statusCode == 403) {
         throw Exception('Forbidden - You don\'t have permission to view attendance');
       } else {
-        print('Response body: ${response.body}');
         throw Exception('Failed to load attendance: ${response.statusCode}');
       }
     } catch (e) {
@@ -403,9 +310,132 @@ class AttendanceProvider extends ChangeNotifier {
       _error = e.toString();
       _attendance = [];
       _filteredAttendance = [];
+      _availableMonths = ['All'];
     } finally {
       _isLoadingAttendance = false;
       notifyListeners();
+    }
+  }
+
+  // Method to extract months from attendance data - FIXED
+  void _extractMonthsFromData() {
+    try {
+      final monthsSet = <String>{};
+
+      print('=== EXTRACTING MONTHS ===');
+      print('Total attendance records: ${_attendance.length}');
+
+      for (final attendance in _attendance) {
+        final monthName = _formatMonthForFilter(attendance.date);
+        if (monthName.isNotEmpty) {
+          monthsSet.add(monthName);
+          print('Added month: $monthName from date: ${attendance.date}');
+        }
+      }
+
+      print('Unique months found: ${monthsSet.length}');
+
+      // Sort months chronologically (most recent first)
+      final sortedMonths = monthsSet.toList()
+        ..sort((a, b) {
+          try {
+            final dateA = _parseMonthFromFilter(a);
+            final dateB = _parseMonthFromFilter(b);
+            return dateB.compareTo(dateA); // Most recent first
+          } catch (e) {
+            print('Error sorting months: $e');
+            return 0;
+          }
+        });
+
+      _availableMonths = ['All', ...sortedMonths];
+
+      print('Extracted ${_availableMonths.length} months for filter');
+      if (_availableMonths.length > 1) {
+        print('Available months: ${_availableMonths.sublist(1)}');
+      }
+    } catch (e) {
+      print('Error extracting months: $e');
+      _availableMonths = ['All'];
+    }
+  }
+
+  // Helper method to format date for month filter - FIXED
+  String _formatMonthForFilter(DateTime date) {
+    try {
+      // Format as "January 2024"
+      return DateFormat('MMMM yyyy').format(date);
+    } catch (e) {
+      print('Error formatting month: $e for date: $date');
+      return '';
+    }
+  }
+
+  // Helper method to parse month from filter string
+  DateTime _parseMonthFromFilter(String monthFilter) {
+    try {
+      return DateFormat('MMMM yyyy').parse(monthFilter);
+    } catch (e) {
+      print('Error parsing month: $e for input: $monthFilter');
+      return DateTime.now();
+    }
+  }
+
+  // Month Filter Setter
+  void setMonthFilter(String month) {
+    if (isAdmin) {
+      _selectedMonthFilter = month;
+      _applyFilters();
+      notifyListeners();
+    }
+  }
+
+  // Update the _applyFilters method to include month filtering
+  void _applyFilters() {
+    print('=== APPLYING FILTERS ===');
+    print('Selected month: $_selectedMonthFilter');
+    print('Total records before filtering: ${_attendance.length}');
+
+    _filteredAttendance = _attendance.where((attendance) {
+      // Search filter
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+              attendance.employeeName.toLowerCase().contains(
+                _searchQuery.toLowerCase(),
+              ) ||
+              attendance.empId.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              attendance.departmentName.toLowerCase().contains(
+                _searchQuery.toLowerCase(),
+              );
+
+      // Department filter (only for admin)
+      final matchesDepartment =
+          !isAdmin || // If not admin, always true
+              _selectedDepartmentFilter == 'All' ||
+              attendance.departmentName == _selectedDepartmentFilter;
+
+      // Employee filter (only for admin)
+      final matchesEmployee =
+          !isAdmin || // If not admin, always true
+              _selectedEmployeeFilter == 'All' ||
+              attendance.employeeName == _selectedEmployeeFilter;
+
+      // Month filter (only for admin)
+      bool matchesMonth = true;
+      if (isAdmin && _selectedMonthFilter != 'All') {
+        final recordMonth = _formatMonthForFilter(attendance.date);
+        matchesMonth = recordMonth == _selectedMonthFilter;
+        if (!matchesMonth) {
+          print('Record month ($recordMonth) does NOT match selected month ($_selectedMonthFilter)');
+        }
+      }
+
+      return matchesSearch && matchesDepartment && matchesEmployee && matchesMonth;
+    }).toList();
+
+    print('Filtered to ${_filteredAttendance.length} records');
+    if (isAdmin && _selectedMonthFilter != 'All') {
+      print('Current month filter: $_selectedMonthFilter');
     }
   }
 
@@ -426,10 +456,6 @@ class AttendanceProvider extends ChangeNotifier {
         prefs.getString('staff_id'),
       ].whereType<String>().where((code) => code.isNotEmpty).toList();
 
-      print('=== TRYING ALTERNATIVE MATCHING ===');
-      print('Additional IDs to try: $additionalIds');
-      print('Additional codes to try: $additionalCodes');
-
       if (additionalIds.isNotEmpty || additionalCodes.isNotEmpty) {
         final List<Attendance> filteredList = [];
 
@@ -440,7 +466,6 @@ class AttendanceProvider extends ChangeNotifier {
           for (var id in additionalIds) {
             if (attendance.employeeId == id) {
               matches = true;
-              print('✓ Alternative match by ID $id: ${attendance.employeeName}');
               break;
             }
           }
@@ -450,7 +475,6 @@ class AttendanceProvider extends ChangeNotifier {
             for (var code in additionalCodes) {
               if (attendance.empId.toLowerCase() == code.toLowerCase()) {
                 matches = true;
-                print('✓ Alternative match by code $code: ${attendance.employeeName}');
                 break;
               }
             }
@@ -463,7 +487,6 @@ class AttendanceProvider extends ChangeNotifier {
 
         if (filteredList.isNotEmpty) {
           _attendance = filteredList;
-          print('Found ${filteredList.length} records with alternative matching');
         }
       }
     } catch (e) {
@@ -477,7 +500,6 @@ class AttendanceProvider extends ChangeNotifier {
       _isLoadingEmployees = true;
       notifyListeners();
 
-      print('=== FETCHING EMPLOYEES ===');
       final token = await _getToken();
 
       final response = await http.get(
@@ -487,8 +509,6 @@ class AttendanceProvider extends ChangeNotifier {
           'Accept': 'application/json',
         },
       );
-
-      print('Employees API Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final dynamic data = json.decode(response.body);
@@ -517,20 +537,15 @@ class AttendanceProvider extends ChangeNotifier {
           }
         }
 
-        print('Successfully parsed ${_employees.length} employees');
-
         // If no employees were parsed, use fallback
         if (_employees.isEmpty) {
-          print('No employees parsed, using fallback data');
           _employees = [
             Employee(id: 1, name: 'John Doe', empId: 'EMP001', department: 'IT'),
             Employee(id: 2, name: 'Jane Smith', empId: 'EMP002', department: 'HR'),
           ];
         }
 
-        print('=== EMPLOYEES FETCH SUCCESSFUL ===');
       } else {
-        print('Employees API Error ${response.statusCode}: ${response.body}');
         _employees = [
           Employee(id: 1, name: 'John Doe', empId: 'EMP001', department: 'IT'),
           Employee(id: 2, name: 'Jane Smith', empId: 'EMP002', department: 'HR'),
@@ -604,7 +619,6 @@ class AttendanceProvider extends ChangeNotifier {
       _isLoadingDepartments = true;
       notifyListeners();
 
-      print('=== FETCHING DEPARTMENTS ===');
       final token = await _getToken();
 
       final response = await http.get(
@@ -614,8 +628,6 @@ class AttendanceProvider extends ChangeNotifier {
           'Accept': 'application/json',
         },
       );
-
-      print('Departments API Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final dynamic data = json.decode(response.body);
@@ -631,14 +643,11 @@ class AttendanceProvider extends ChangeNotifier {
           departmentsList = data;
         }
 
-        print('Number of departments: ${departmentsList.length}');
-
         _departments = departmentsList
             .map((d) => Department.fromJson(d))
             .toList();
 
         if (_departments.isEmpty) {
-          print('No departments from API, using fallback data');
           _departments = [
             Department(id: 1, name: 'IT', description: 'Information Technology'),
             Department(id: 2, name: 'HR', description: 'Human Resources'),
@@ -647,11 +656,13 @@ class AttendanceProvider extends ChangeNotifier {
           ];
         }
 
-        print('Fetched ${_departments.length} departments');
-        print('=== DEPARTMENTS FETCH SUCCESSFUL ===');
       } else {
-        print('Departments response body: ${response.body}');
-        throw Exception('Failed to fetch departments: ${response.statusCode}');
+        _departments = [
+          Department(id: 1, name: 'IT'),
+          Department(id: 2, name: 'HR'),
+          Department(id: 3, name: 'Finance'),
+          Department(id: 4, name: 'Operations'),
+        ];
       }
     } catch (e) {
       print('Error fetching departments: $e');
@@ -673,7 +684,6 @@ class AttendanceProvider extends ChangeNotifier {
       _isLoadingDutyShifts = true;
       notifyListeners();
 
-      print('=== FETCHING DUTY SHIFTS ===');
       final token = await _getToken();
 
       final response = await http.get(
@@ -683,8 +693,6 @@ class AttendanceProvider extends ChangeNotifier {
           'Accept': 'application/json',
         },
       );
-
-      print('Duty Shifts API Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final dynamic data = json.decode(response.body);
@@ -700,12 +708,9 @@ class AttendanceProvider extends ChangeNotifier {
           dutyShiftsList = data;
         }
 
-        print('Number of duty shifts: ${dutyShiftsList.length}');
-
         _dutyShifts = dutyShiftsList.map((s) => DutyShift.fromJson(s)).toList();
 
         if (_dutyShifts.isEmpty) {
-          print('No duty shifts from API, using fallback data');
           _dutyShifts = [
             DutyShift(
               id: 1,
@@ -731,11 +736,12 @@ class AttendanceProvider extends ChangeNotifier {
           ];
         }
 
-        print('Fetched ${_dutyShifts.length} duty shifts');
-        print('=== DUTY SHIFTS FETCH SUCCESSFUL ===');
       } else {
-        print('Duty Shifts response body: ${response.body}');
-        throw Exception('Failed to fetch duty shifts: ${response.statusCode}');
+        _dutyShifts = [
+          DutyShift(id: 1, name: 'Morning Shift', startTime: '09:00', endTime: '17:00'),
+          DutyShift(id: 2, name: 'Evening Shift', startTime: '14:00', endTime: '22:00'),
+          DutyShift(id: 3, name: 'Night Shift', startTime: '22:00', endTime: '06:00'),
+        ];
       }
     } catch (e) {
       print('Error fetching duty shifts: $e');
@@ -762,7 +768,6 @@ class AttendanceProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      print('=== CREATING ATTENDANCE ===');
       final token = await _getToken();
 
       final response = await http.post(
@@ -775,17 +780,15 @@ class AttendanceProvider extends ChangeNotifier {
         body: json.encode(dto.toJson()),
       );
 
-      print('Create Attendance Status: ${response.statusCode}');
-
       if (response.statusCode == 201 || response.statusCode == 200) {
         final responseData = json.decode(response.body);
         final newAttendance = Attendance.fromJson(
           responseData['attendance'] ?? responseData['data'] ?? {},
         );
         _attendance.insert(0, newAttendance);
+        _extractMonthsFromData(); // Update months list
         _applyFilters();
 
-        print('Attendance created successfully');
         return true;
       } else {
         final errorData = json.decode(response.body);
@@ -814,7 +817,6 @@ class AttendanceProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      print('=== UPDATING ATTENDANCE ID: $id ===');
       final token = await _getToken();
 
       final response = await http.put(
@@ -827,8 +829,6 @@ class AttendanceProvider extends ChangeNotifier {
         body: json.encode(dto.toJson()),
       );
 
-      print('Update Attendance Status: ${response.statusCode}');
-
       if (response.statusCode == 200) {
         final index = _attendance.indexWhere((a) => a.id == id);
         if (index != -1) {
@@ -837,10 +837,10 @@ class AttendanceProvider extends ChangeNotifier {
             responseData['attendance'] ?? responseData['data'] ?? {},
           );
           _attendance[index] = updatedAttendance;
+          _extractMonthsFromData(); // Update months list
           _applyFilters();
         }
 
-        print('Attendance updated successfully');
         return true;
       } else {
         final errorData = json.decode(response.body);
@@ -869,7 +869,6 @@ class AttendanceProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      print('=== DELETING ATTENDANCE ID: $id ===');
       final token = await _getToken();
 
       final response = await http.delete(
@@ -880,13 +879,11 @@ class AttendanceProvider extends ChangeNotifier {
         },
       );
 
-      print('Delete Attendance Status: ${response.statusCode}');
-
       if (response.statusCode == 200 || response.statusCode == 204) {
         _attendance.removeWhere((attendance) => attendance.id == id);
+        _extractMonthsFromData(); // Update months list
         _applyFilters();
 
-        print('Attendance deleted successfully');
         return true;
       } else {
         final errorData = json.decode(response.body);
@@ -929,37 +926,6 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  void _applyFilters() {
-    _filteredAttendance = _attendance.where((attendance) {
-      // Search filter
-      final matchesSearch =
-          _searchQuery.isEmpty ||
-              attendance.employeeName.toLowerCase().contains(
-                _searchQuery.toLowerCase(),
-              ) ||
-              attendance.empId.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              attendance.departmentName.toLowerCase().contains(
-                _searchQuery.toLowerCase(),
-              );
-
-      // Department filter (only for admin)
-      final matchesDepartment =
-          !isAdmin || // If not admin, always true
-              _selectedDepartmentFilter == 'All' ||
-              attendance.departmentName == _selectedDepartmentFilter;
-
-      // Employee filter (only for admin)
-      final matchesEmployee =
-          !isAdmin || // If not admin, always true
-              _selectedEmployeeFilter == 'All' ||
-              attendance.employeeName == _selectedEmployeeFilter;
-
-      return matchesSearch && matchesDepartment && matchesEmployee;
-    }).toList();
-
-    print('Filtered attendance: ${_filteredAttendance.length} records');
-  }
-
   void setSearchQuery(String query) {
     _searchQuery = query;
     _applyFilters();
@@ -987,6 +953,7 @@ class AttendanceProvider extends ChangeNotifier {
     if (isAdmin) {
       _selectedDepartmentFilter = 'All';
       _selectedEmployeeFilter = 'All';
+      _selectedMonthFilter = 'All';
     }
     _applyFilters();
     notifyListeners();
@@ -1155,22 +1122,5 @@ class AttendanceProvider extends ChangeNotifier {
         duration: const Duration(seconds: 2),
       ),
     );
-  }
-
-  // DEBUG: Add a method to manually check admin status
-  void checkAdminStatus() {
-    print('=== CHECKING ADMIN STATUS ===');
-    print('Current userRole: $_userRole');
-    print('isAdmin getter: $isAdmin');
-    print('User ID: $_userId');
-    print('User Name: $_userName');
-    print('Employee Code: $_employeeCode');
-  }
-
-  // Method to manually test attendance filtering
-  void testAttendanceFiltering() async {
-    print('=== TESTING ATTENDANCE FILTERING ===');
-    await _initializeUserData();
-    print('Test Complete');
   }
 }

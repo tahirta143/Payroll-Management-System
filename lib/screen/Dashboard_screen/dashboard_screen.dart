@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:payroll_app/screen/Dashboard_screen/today_attandance/today_attandnace.dart';
+import 'package:payroll_app/screen/Dashboard_screen/tottal_staff/staff_details_screen.dart';
 import 'package:payroll_app/screen/attendance/attendance_screen.dart';
 import 'package:payroll_app/screen/salery/salary.dart';
 import 'package:payroll_app/screen/settings/settings.dart';
 import 'package:provider/provider.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import 'package:intl/intl.dart';
+import '../../model/dashboar_model/dashboard_summary.dart';
 import '../../provider/Auth_provider/Auth_provider.dart';
 import '../../provider/chart_provider/chart_provider.dart';
 import '../../provider/dashboard_provider/dashboard_summary_provider.dart';
 import '../../provider/permissions_provider/permissions.dart';
 import '../../widget/dashboard_chart/dashborad_chart.dart';
 import '../Approve_Leave/ApproveLeaveScreen.dart';
-// import '../../widgets/chart_widget.dart'; // Added import
+// import 'staff_details_screen.dart'; // Import the new screen
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,10 +27,15 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
   bool _isInitialized = false;
+  late DashboardSummaryProvider _dashboardProvider;
+  DateTime? _selectedDate;
+  final TextEditingController _dateController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _selectedDate = DateTime.now();
+    _dateController.text = DateFormat('yyyy-MM-dd').format(_selectedDate!);
     _initializeApp();
   }
 
@@ -42,14 +51,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final dashboardProvider = context.read<DashboardSummaryProvider>();
       final authProvider = context.read<AuthProvider>();
-      final chartProvider = context.read<ChartProvider>(); // Fixed: Use ChartProvider
+      final chartProvider = context.read<ChartProvider>();
+
+      // Store provider reference
+      _dashboardProvider = dashboardProvider;
 
       // Only fetch if user is authenticated
       if (authProvider.token != null) {
-        dashboardProvider.fetchDashboardSummary();
-        chartProvider.fetchAttendanceData(); // Fetch attendance chart data
+        dashboardProvider.fetchDashboardSummary(date: _dateController.text);
+        chartProvider.fetchAttendanceData();
       }
     });
+  }
+
+  // Format date for API (yyyy-MM-dd)
+  String _formatDateForApi(DateTime date) {
+    return DateFormat('yyyy-MM-dd').format(date);
+  }
+
+  // Format date for display
+  String _formatDateForDisplay(String dateString) {
+    if (dateString == 'all' || dateString == 'All Time') return 'All Time';
+
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  // Show date picker
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF667EEA),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text = _formatDateForApi(picked);
+      });
+
+      // Fetch data for selected date
+      final dashboardProvider = context.read<DashboardSummaryProvider>();
+      dashboardProvider.fetchDashboardSummary(date: _dateController.text);
+    }
+  }
+
+  void _showAllTimeData() {
+    setState(() {
+      _selectedDate = null;
+      _dateController.text = 'All Time';
+    });
+
+    final dashboardProvider = context.read<DashboardSummaryProvider>();
+    dashboardProvider.fetchDashboardSummary(date: null);
+  }
+
+  @override
+  void dispose() {
+    _dateController.dispose();
+    super.dispose();
   }
 
   @override
@@ -88,9 +168,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: const Icon(Iconsax.refresh, color: Colors.white),
               onPressed: () {
                 final dashboardProvider = context.read<DashboardSummaryProvider>();
-                final chartProvider = context.read<ChartProvider>(); // Fixed: Use ChartProvider
-                dashboardProvider.refreshDashboardData();
-                chartProvider.fetchAttendanceData(month: chartProvider.selectedMonth);
+                final chartProvider = context.read<ChartProvider>();
+                dashboardProvider.refreshDashboardData(
+                  date: _dateController.text == 'All Time' ? null : _dateController.text,
+                );
+                chartProvider.fetchAttendanceData();
               },
             ),
         ],
@@ -357,12 +439,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final Size size = MediaQuery.of(context).size;
     final p = context.read<PermissionProvider>();
     final dashboardProvider = context.watch<DashboardSummaryProvider>();
-    final chartProvider = context.watch<ChartProvider>(); // Fixed: Use ChartProvider
+    final chartProvider = context.watch<ChartProvider>();
 
     return RefreshIndicator(
       onRefresh: () async {
-        await dashboardProvider.refreshDashboardData();
-        await chartProvider.fetchAttendanceData(month: chartProvider.selectedMonth);
+        await dashboardProvider.refreshDashboardData(
+          date: _dateController.text == 'All Time' ? null : _dateController.text,
+        );
+        await chartProvider.fetchAttendanceData();
       },
       color: const Color(0xFF667EEA),
       child: SingleChildScrollView(
@@ -415,7 +499,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+                          DateFormat('dd MMM yyyy').format(DateTime.now()),
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 14,
@@ -444,8 +528,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // Month Filter
-            _buildMonthFilter(dashboardProvider),
+            // Date Filter Widget - UPDATED
+            _buildDateFilter(dashboardProvider),
 
             // Statistics Cards
             Padding(
@@ -459,88 +543,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(height: 24),
 
-            // Additional Stats Cards (Short Leave & Late Comers)
+            // Additional Stats Cards
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildAdditionalStats(dashboardProvider, size),
+              // child: _buildAdditionalStats(dashboardProvider, size),
             ),
 
             const SizedBox(height: 24),
 
-            // 🔥 ATTENDANCE CHART SECTION 🔥
-            _buildAttendanceChartSection(chartProvider), // Fixed: Pass ChartProvider
-
-            const SizedBox(height: 24),
-
-            // Quick Access Cards
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8, bottom: 16),
-                    child: Text(
-                      'Quick Access',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: size.width > 600 ? 4 : 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.2,
-                    children: [
-                      if (p.hasPermission('can-view-attendence'))
-                        PermissionCard(
-                          title: 'Attendance',
-                          icon: Iconsax.finger_cricle,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                          ),
-                          onTap: () => setState(() => _currentIndex = _getScreenIndex(1, p)),
-                        ),
-
-                      if (p.hasPermission('can-edit-leave-application'))
-                        PermissionCard(
-                          title: 'Leave',
-                          icon: Iconsax.calendar_edit,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFF9800), Color(0xFFF57C00)],
-                          ),
-                          onTap: () => setState(() => _currentIndex = _getScreenIndex(2, p)),
-                        ),
-
-                      if (p.hasPermission('can-view-salary'))
-                        PermissionCard(
-                          title: 'Salary',
-                          icon: Iconsax.wallet_money,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF9C27B0), Color(0xFF7B1FA2)],
-                          ),
-                          onTap: () => setState(() => _currentIndex = _getScreenIndex(3, p)),
-                        ),
-
-                      // Analytics Card
-                      PermissionCard(
-                        title: 'Analytics',
-                        icon: Iconsax.chart,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF2196F3), Color(0xFF1976D2)],
-                        ),
-                        onTap: () => _showAnalyticsOptionsDialog(chartProvider), // Fixed: Pass ChartProvider
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            // Attendance Chart Section
+            _buildAttendanceChartSection(chartProvider),
 
             const SizedBox(height: 32),
           ],
@@ -549,76 +561,112 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Month Filter Widget
-  Widget _buildMonthFilter(DashboardSummaryProvider provider) {
-    return Padding(
-      padding: const EdgeInsets.all(4.0),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+  // Updated Date Filter Widget
+  Widget _buildDateFilter(DashboardSummaryProvider provider) {
+    final displayDate = _dateController.text == 'All Time'
+        ? 'All Time'
+        : _formatDateForDisplay(_dateController.text);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFF667EEA).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFF667EEA).withOpacity(0.1),
+            child: const Icon(
+              Iconsax.calendar_1,
+              color: Color(0xFF667EEA),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Date',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                GestureDetector(
+                  onTap: () => _selectDate(context),
+                  child: AbsorbPointer(
+                    child: TextFormField(
+                      controller: _dateController,
+                      decoration: InputDecoration(
+                        hintText: 'Select Date',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
+                        suffixIcon: Icon(
+                          Iconsax.calendar,
+                          color: Colors.grey[500],
+                          size: 18,
+                        ),
+                      ),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: _showAllTimeData,
+            style: TextButton.styleFrom(
+              backgroundColor: _dateController.text == 'All Time'
+                  ? const Color(0xFF667EEA).withOpacity(0.1)
+                  : Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Iconsax.calendar_1,
-                color: Color(0xFF667EEA),
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Statistics Period',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    provider.selectedMonth == 'all' ? 'All Time' : 'Month: ${provider.selectedMonth}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
+                side: BorderSide(
+                  color: _dateController.text == 'All Time'
+                      ? const Color(0xFF667EEA)
+                      : Colors.grey[300]!,
+                ),
               ),
             ),
-            IconButton(
-              icon: const Icon(
-                Iconsax.filter,
-                color: Color(0xFF667EEA),
-                size: 20,
+            child: Text(
+              'All Time',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: _dateController.text == 'All Time' ? FontWeight.w600 : FontWeight.w500,
+                color: _dateController.text == 'All Time'
+                    ? const Color(0xFF667EEA)
+                    : Colors.grey[600],
               ),
-              onPressed: () {
-                _showMonthSelectionDialog(provider);
-              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -713,7 +761,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton(
-                onPressed: () => provider.fetchDashboardSummary(),
+                onPressed: () => provider.fetchDashboardSummary(
+                  date: _dateController.text == 'All Time' ? null : _dateController.text,
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF667EEA),
                   shape: RoundedRectangleBorder(
@@ -750,12 +800,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Stats Grid with Real Data
+  // Stats Grid with Real Data - CLICKABLE CARDS - UPDATED
   Widget _buildStatsGrid(DashboardSummaryProvider provider, Size size) {
     final summary = provider.currentSummary ?? provider.dashboardSummary;
 
     if (summary == null) {
       return _buildNoDataWidget();
+    }
+
+    // Get date context for titles
+    String dateContext = '';
+    if (_dateController.text != 'All Time') {
+      dateContext = '\n${_formatDateForDisplay(_dateController.text)}';
+    } else {
+      dateContext = '\nAll Time';
     }
 
     return GridView.count(
@@ -766,152 +824,334 @@ class _DashboardScreenState extends State<DashboardScreen> {
       mainAxisSpacing: 16,
       childAspectRatio: 1.1,
       children: [
-        _buildStatCard(
+        // Total Staff Card
+        _buildClickableStatCard(
           icon: Iconsax.people,
           title: 'Total Staff',
+          // $dateContext
           value: '${summary.totalEmployees}',
+          // subtitle: 'All Employees',
           color: const Color(0xFF4CAF50),
-          iconColor: Colors.white,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StaffDetailsScreen(
+                  title: 'Total Staff',
+                  filterType: 'all',
+                  selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+                ),
+              ),
+            );
+          },
         ),
-        _buildStatCard(
+
+        // Present Card
+        _buildClickableStatCard(
           icon: Iconsax.calendar_tick,
-          title: 'Present',
+          title: 'Today Attandance',
           value: '${summary.presentCount}',
           subtitle: '${summary.presentPercentage.toStringAsFixed(1)}%',
           color: const Color(0xFF2196F3),
-          iconColor: Colors.white,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => TodayAttendance(
+
+                ),
+              ),
+            );
+          },
         ),
-        _buildStatCard(
+
+        // Leave Card
+        _buildClickableStatCard(
           icon: Iconsax.calendar_remove,
           title: 'On Leave',
           value: '${summary.leaveCount}',
           subtitle: '${summary.leavePercentage.toStringAsFixed(1)}%',
           color: const Color(0xFFFF9800),
-          iconColor: Colors.white,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StaffDetailsScreen(
+                  title: 'Leave Staff',
+                  filterType: 'leave',
+                  selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+                ),
+              ),
+            );
+          },
         ),
-        _buildStatCard(
+
+        // Absent Card
+        _buildClickableStatCard(
           icon: Iconsax.calendar_search,
           title: 'Absent',
           value: '${summary.absentCount}',
           subtitle: '${summary.absentPercentage.toStringAsFixed(1)}%',
           color: const Color(0xFFF44336),
-          iconColor: Colors.white,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StaffDetailsScreen(
+                  title: 'Absent Staff',
+                  filterType: 'absent',
+                  selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
   }
 
-  // Additional Stats Cards
-  Widget _buildAdditionalStats(DashboardSummaryProvider provider, Size size) {
-    final summary = provider.currentSummary ?? provider.dashboardSummary;
-
-    if (summary == null) {
-      return const SizedBox.shrink();
-    }
-
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: size.width > 600 ? 2 : 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 2.5,
-      children: [
-        _buildDetailStatCard(
-          icon: Iconsax.clock,
-          title: 'Short Leave',
-          value: '${summary.shortLeaveCount}',
-          percentage: summary.shortLeavePercentage,
-          color: const Color(0xFF9C27B0),
+  // Clickable Stat Card Component
+  Widget _buildClickableStatCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    String? subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        splashColor: color.withOpacity(0.1),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
+            ],
+          ),
         ),
-        _buildDetailStatCard(
-          icon: Iconsax.timer_1,
-          title: 'Late Come',
-          value: '${summary.lateComersCount}',
-          percentage: summary.lateComersPercentage,
-          color: const Color(0xFF795548),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildDetailStatCard({
+  // Additional Stats Cards (Short Leave & Late Comers) - UPDATED
+  // Widget _buildAdditionalStats(DashboardSummaryProvider provider, Size size) {
+  //   final summary = provider.currentSummary ?? provider.dashboardSummary;
+  //
+  //   if (summary == null) {
+  //     return const SizedBox.shrink();
+  //   }
+  //
+  //   // Get date context for titles
+  //   String dateContext = '';
+  //   if (_dateController.text != 'All Time') {
+  //     dateContext = ' (${_formatDateForDisplay(_dateController.text)})';
+  //   } else {
+  //     dateContext = ' (All Time)';
+  //   }
+  //
+  //   return GridView.count(
+  //     shrinkWrap: true,
+  //     physics: const NeverScrollableScrollPhysics(),
+  //     crossAxisCount: size.width > 600 ? 2 : 2,
+  //     crossAxisSpacing: 16,
+  //     mainAxisSpacing: 16,
+  //     childAspectRatio: 2.5,
+  //     children: [
+  //       // Short Leave Card
+  //       _buildClickableDetailStatCard(
+  //         icon: Iconsax.clock,
+  //         title: 'Short Leave$dateContext',
+  //         value: '${summary.shortLeaveCount}',
+  //         percentage: summary.shortLeavePercentage,
+  //         color: const Color(0xFF9C27B0),
+  //         onTap: () {
+  //           Navigator.push(
+  //             context,
+  //             MaterialPageRoute(
+  //               builder: (context) => StaffDetailsScreen(
+  //                 title: 'Short Leave Staff',
+  //                 filterType: 'short_leave',
+  //                 selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+  //               ),
+  //             ),
+  //           );
+  //         },
+  //       ),
+  //
+  //       // Late Comers Card
+  //       _buildClickableDetailStatCard(
+  //         icon: Iconsax.timer_1,
+  //         title: 'Late Comers$dateContext',
+  //         value: '${summary.lateComersCount}',
+  //         percentage: summary.lateComersPercentage,
+  //         color: const Color(0xFF795548),
+  //         onTap: () {
+  //           Navigator.push(
+  //             context,
+  //             MaterialPageRoute(
+  //               builder: (context) => StaffDetailsScreen(
+  //                 title: 'Late Comers',
+  //                 filterType: 'late',
+  //                 selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+  //               ),
+  //             ),
+  //           );
+  //         },
+  //       ),
+  //     ],
+  //   );
+  // }
+
+  // Clickable Detail Stat Card Component
+  Widget _buildClickableDetailStatCard({
     required IconData icon,
     required String title,
     required String value,
     required double percentage,
     required Color color,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        splashColor: color.withOpacity(0.1),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 50,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
-                  ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 2),
-                Row(
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      value,
+                      title,
                       style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black87,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${percentage.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: color,
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          value,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${percentage.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              Icon(
+                Iconsax.arrow_right_3,
+                color: color,
+                size: 18,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -958,94 +1198,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Update _buildStatCard to include optional subtitle
-  Widget _buildStatCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    String? subtitle,
-    required Color color,
-    required Color iconColor,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
+  // Attendance Chart Section
   Widget _buildAttendanceChartSection(ChartProvider provider) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 300;
-    final isMediumScreen = screenWidth >= 400 && screenWidth < 600;
 
     return Column(
       children: [
-        // Chart Header - RESPONSIVE VERSION
         Container(
-          margin: EdgeInsets.symmetric(
-            horizontal: screenWidth > 600 ? 20 : 16,
-          ),
-          padding: EdgeInsets.symmetric(
-            horizontal: isSmallScreen ? 12 : 16,
-            vertical: isSmallScreen ? 10 : 12,
-          ),
+          margin: EdgeInsets.symmetric(horizontal: screenWidth > 600 ? 20 : 16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -1060,92 +1221,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // First row: Title and icon
               Row(
                 children: [
                   Icon(
                     provider.isAdmin ? Iconsax.chart_square : Iconsax.chart_2,
                     color: const Color(0xFF667EEA),
-                    size: isSmallScreen ? 20 : 22,
+                    size: 22,
                   ),
-                  SizedBox(width: isSmallScreen ? 6 : 8),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       provider.isAdmin ? 'Team Attendance' : 'My Attendance',
-                      style: TextStyle(
-                        fontSize: isSmallScreen ? 14 : 16,
+                      style: const TextStyle(
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: Colors.black87,
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
                     ),
                   ),
-
-                  // Action buttons on same row for larger screens
-                  if (!isSmallScreen && !provider.isLoading)
-                    _buildActionButtons(provider, isSmallScreen),
-                ],
-              ),
-
-              // Second row: Month filter and stats (or actions for small screens)
-              const SizedBox(height: 4),
-
-              Row(
-                children: [
-                  // Month filter chip
-                  if (provider.selectedMonth != null)
-                    Expanded(
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isSmallScreen ? 8 : 10,
-                          vertical: isSmallScreen ? 4 : 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF667EEA).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.calendar_month,
-                              size: isSmallScreen ? 12 : 14,
-                              color: const Color(0xFF667EEA),
-                            ),
-                            SizedBox(width: isSmallScreen ? 4 : 6),
-                            Expanded(
-                              child: Text(
-                                _formatChartMonth(provider.selectedMonth!),
-                                style: TextStyle(
-                                  fontSize: isSmallScreen ? 10 : 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF667EEA),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                              ),
-                            ),
-                          ],
-                        ),
+                  if (!provider.isLoading)
+                    IconButton(
+                      icon: Icon(
+                        Icons.refresh,
+                        color: provider.isLoading ? Colors.grey : const Color(0xFF667EEA),
+                        size: 18,
                       ),
+                      onPressed: provider.isLoading ? null : () {
+                        provider.fetchAttendanceData();
+                      },
                     ),
-
-                  // Spacer
-                  if (provider.selectedMonth != null && isSmallScreen)
-                    const SizedBox(width: 8),
-
-                  // Action buttons for small screens
-                  if (isSmallScreen && !provider.isLoading)
-                    _buildActionButtons(provider, isSmallScreen),
                 ],
               ),
-
-              // Stats summary
-              if (provider.chartData != null && provider.chartData!.data.isNotEmpty)
-                const SizedBox(height: 1),
-              // if (provider.chartData != null && provider.chartData!.data.isNotEmpty)
-              //   _buildChartSummary(provider, isSmallScreen),
             ],
           ),
         ),
@@ -1162,117 +1268,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-// Helper: Action buttons
-  Widget _buildActionButtons(ChartProvider provider, bool isSmallScreen) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: Icon(
-            Icons.refresh,
-            color: provider.isLoading ? Colors.grey : const Color(0xFF667EEA),
-            size: isSmallScreen ? 16 : 18,
-          ),
-          padding: const EdgeInsets.all(4),
-          constraints: const BoxConstraints(),
-          onPressed: provider.isLoading ? null : () {
-            provider.fetchAttendanceData(
-              month: provider.selectedMonth,
-              context: context,
-            );
-          },
-        ),
-        IconButton(
-          icon: Icon(
-            Icons.filter_list,
-            color: const Color(0xFF667EEA),
-            size: isSmallScreen ? 16 : 18,
-          ),
-          padding: const EdgeInsets.all(4),
-          constraints: const BoxConstraints(),
-          onPressed: () => _showChartFilterDialog(provider),
-        ),
-      ],
-    );
-  }
-
-// Helper: Chart summary
-  Widget _buildChartSummary(ChartProvider provider, bool isSmallScreen) {
-    final totalPresent = provider.chartData!.totalPresent;
-    final totalAbsent = provider.chartData!.totalAbsent;
-    final totalLate = provider.chartData!.totalLate;
-    final total = totalPresent + totalAbsent + totalLate;
-    final percentage = total > 0 ? (totalPresent / total * 100) : 0;
-
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem(
-            'Total',
-            '$total',
-            Colors.blue,
-            isSmallScreen,
-          ),
-          _buildStatItem(
-            'Present',
-            '$totalPresent',
-            const Color(0xFF4CAF50),
-            isSmallScreen,
-          ),
-          _buildStatItem(
-            'Absent',
-            '$totalAbsent',
-            const Color(0xFFF44336),
-            isSmallScreen,
-          ),
-          _buildStatItem(
-            'Late',
-            '$totalLate',
-            const Color(0xFFFF9800),
-            isSmallScreen,
-          ),
-          _buildStatItem(
-            'Rate',
-            '${percentage.toStringAsFixed(1)}%',
-            percentage >= 80 ? Colors.green : Colors.orange,
-            isSmallScreen,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, Color color, bool isSmallScreen) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: isSmallScreen ? 12 : 14,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isSmallScreen ? 8 : 10,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
-    );
-  }
-
-// Helper: Loading state
   Widget _buildChartLoading(double screenWidth) {
     return Container(
       height: screenWidth > 600 ? 350 : 300,
@@ -1303,7 +1298,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-// Helper: Error state
   Widget _buildChartError(ChartProvider provider, double screenWidth) {
     return Container(
       padding: EdgeInsets.all(screenWidth > 600 ? 24 : 20),
@@ -1332,10 +1326,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 16),
           ElevatedButton(
-            onPressed: () => provider.fetchAttendanceData(
-              month: provider.selectedMonth,
-              context: context,
-            ),
+            onPressed: () => provider.fetchAttendanceData(),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF667EEA),
               shape: RoundedRectangleBorder(
@@ -1349,263 +1340,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-// Helper: Chart widget
   Widget _buildChartWidget(ChartProvider provider, double screenWidth) {
     return ChartWidget(
       chartData: provider.chartData,
-      chartTitle: provider.selectedMonth == null
-          ? (provider.isAdmin ? 'Team Attendance Overview' : 'My Attendance Overview')
-          : '${provider.isAdmin ? 'Team' : 'My'} Attendance - ${_formatChartMonth(provider.selectedMonth!)}',
+      chartTitle: provider.isAdmin ? 'Team Attendance Overview' : 'My Attendance Overview',
       chartHeight: screenWidth > 600 ? 350 : 300,
       presentColor: const Color(0xFF4CAF50),
       absentColor: const Color(0xFFF44336),
       lateColor: const Color(0xFFFF9800),
       showLegend: true,
       showGridLines: true,
-    );
-  }
-
-// Helper: Format month
-  String _formatChartMonth(String month) {
-    try {
-      final parts = month.split('-');
-      final year = int.parse(parts[0]);
-      final monthNum = int.parse(parts[1]);
-      final monthNames = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ];
-      return '${monthNames[monthNum - 1]} $year';
-    } catch (e) {
-      return month;
-    }
-  }
-  void _showChartFilterDialog(ChartProvider provider) {
-    final currentYear = DateTime.now().year;
-    final currentMonth = DateTime.now().month;
-
-    // Generate last 6 months plus current month
-    final months = <String?>[null]; // null for "All Time"
-    for (int i = 0; i < 6; i++) {
-      final date = DateTime(currentYear, currentMonth - i);
-      final monthString = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-      months.add(monthString);
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.filter_alt, color: Color(0xFF667EEA)),
-              SizedBox(width: 10),
-              Text(
-                'Attendance Data',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: months.length,
-              itemBuilder: (context, index) {
-                final month = months[index];
-                final isSelected = provider.selectedMonth == month;
-
-                return ListTile(
-                  leading: Icon(
-                    month == null ? Icons.all_inclusive : Icons.calendar_month,
-                    color: isSelected ? const Color(0xFF667EEA) : Colors.grey,
-                  ),
-                  title: Text(
-                    month == null ? 'All Time' : _formatChartMonth(month),
-                    style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? const Color(0xFF667EEA) : Colors.black87,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check, color: Color(0xFF667EEA), size: 20)
-                      : null,
-                  onTap: () {
-                    Navigator.pop(context);
-                    provider.fetchAttendanceData(month: month);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.grey,
-              ),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                provider.fetchAttendanceData(month: null); // Load all time
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF667EEA),
-              ),
-              child: const Text('All Time'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAnalyticsOptionsDialog(ChartProvider provider) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Analytics Options',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF667EEA),
-                ),
-              ),
-              const SizedBox(height: 20),
-              ListTile(
-                leading: const Icon(Icons.refresh, color: Color(0xFF667EEA)),
-                title: const Text('Refresh Chart Data'),
-                onTap: () {
-                  Navigator.pop(context);
-                  provider.fetchAttendanceData(month: provider.selectedMonth);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.filter_list, color: Color(0xFF667EEA)),
-                title: const Text('Filter by Month'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showChartFilterDialog(provider);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.timeline, color: Color(0xFF667EEA)),
-                title: const Text('View All Time Data'),
-                onTap: () {
-                  Navigator.pop(context);
-                  provider.fetchAttendanceData(month: null);
-                },
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF667EEA),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-                child: const Text(
-                  'Close',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Month Selection Dialog
-  void _showMonthSelectionDialog(DashboardSummaryProvider provider) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        final currentYear = DateTime.now().year;
-        final currentMonth = DateTime.now().month;
-
-        // Generate last 12 months
-        final months = <String>['all'];
-        for (int i = 0; i < 12; i++) {
-          final date = DateTime(currentYear, currentMonth - i);
-          final monthString = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-          months.add(monthString);
-        }
-
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Iconsax.calendar_1, color: Color(0xFF667EEA)),
-              SizedBox(width: 12),
-              Text(
-                'Select Period',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: months.length,
-              itemBuilder: (context, index) {
-                final month = months[index];
-                final isSelected = provider.selectedMonth == month;
-
-                return ListTile(
-                  leading: Icon(
-                    month == 'all' ? Iconsax.calendar : Iconsax.calendar_2,
-                    color: isSelected ? const Color(0xFF667EEA) : Colors.grey,
-                  ),
-                  title: Text(
-                    month == 'all' ? 'All Time' : month,
-                    style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? const Color(0xFF667EEA) : Colors.black87,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(Iconsax.tick_circle, color: Color(0xFF667EEA), size: 20)
-                      : null,
-                  onTap: () {
-                    Navigator.pop(context);
-                    if (month == 'all') {
-                      provider.clearMonthlySummary();
-                    } else {
-                      provider.fetchDashboardSummary(month: month);
-                    }
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ],
-        );
-      },
     );
   }
 }
