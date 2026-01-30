@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:payroll_app/provider/Auth_provider/Auth_provider.dart';
+import 'package:payroll_app/provider/absents_provider/absents_provider.dart';
 import 'package:payroll_app/provider/attendance_provider/attendance_provider.dart';
 import 'package:payroll_app/provider/chart_provider/chart_provider.dart';
 import 'package:payroll_app/provider/dashboard_provider/dashboard_summary_provider.dart';
@@ -29,6 +30,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DashboardSummaryProvider()),
         ChangeNotifierProvider(create: (_) => ChartProvider()),
         ChangeNotifierProvider(create: (_) => EmployeeSalaryProvider()),
+        ChangeNotifierProvider(create: (_) => AbsentProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

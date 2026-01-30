@@ -15,6 +15,8 @@ import '../../provider/dashboard_provider/dashboard_summary_provider.dart';
 import '../../provider/permissions_provider/permissions.dart';
 import '../../widget/dashboard_chart/dashborad_chart.dart';
 import '../Approve_Leave/ApproveLeaveScreen.dart';
+import 'absents_screen/absents_screen.dart';
+import 'on_leave/on_leave.dart';
 // import 'staff_details_screen.dart'; // Import the new screen
 
 class DashboardScreen extends StatefulWidget {
@@ -849,7 +851,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Present Card
         _buildClickableStatCard(
           icon: Iconsax.calendar_tick,
-          title: 'Today Attandance',
+          title: _dateController.text == 'All Time'
+              ? 'Today Attendance'
+              : 'Attendance',
           value: '${summary.presentCount}',
           subtitle: '${summary.presentPercentage.toStringAsFixed(1)}%',
           color: const Color(0xFF2196F3),
@@ -858,7 +862,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) => TodayAttendance(
-
+                  selectedDate: _dateController.text == 'All Time'
+                      ? null  // Show today if "All Time" is selected
+                      : _dateController.text,
                 ),
               ),
             );
@@ -876,10 +882,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => StaffDetailsScreen(
-                  title: 'Leave Staff',
-                  filterType: 'leave',
-                  selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+                builder: (context) => LeaveListScreen(
+                  selectedDate: _dateController.text == 'All Time'
+                      ? null
+                      : _dateController.text,
                 ),
               ),
             );
@@ -888,7 +894,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         // Absent Card
         _buildClickableStatCard(
-          icon: Iconsax.calendar_search,
+          icon: Iconsax.calendar_remove,
           title: 'Absent',
           value: '${summary.absentCount}',
           subtitle: '${summary.absentPercentage.toStringAsFixed(1)}%',
@@ -897,10 +903,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => StaffDetailsScreen(
-                  title: 'Absent Staff',
-                  filterType: 'absent',
-                  selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+                builder: (context) => AbsentListScreen(
+                  selectedDate: _dateController.text == 'All Time'
+                      ? null
+                      : _dateController.text,
                 ),
               ),
             );

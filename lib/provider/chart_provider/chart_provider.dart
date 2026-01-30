@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../Utility/global_url.dart';
 import '../../model/chart_model/chart_model.dart';
 import '../Auth_provider/Auth_provider.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +28,7 @@ class ChartProvider extends ChangeNotifier {
   String? get userName => _userName;
 
   // Base URL for API
-  static const String _baseUrl = 'https://api.afaqmis.com/api';
+  // static const String _baseUrl = 'https://api.afaqmis.com/api';
 
   // Load user info from SharedPreferences
   Future<void> _loadUserInfo() async {
@@ -116,7 +117,7 @@ class ChartProvider extends ChangeNotifier {
       }
 
       // Build the final URL
-      final uri = Uri.parse('$_baseUrl/dashboard-chart');
+      final uri = Uri.parse('${GlobalUrls.baseurl}/api/dashboard-chart');
       apiUrl = uri.replace(queryParameters: queryParams).toString();
 
       print('📡 API Request:');

@@ -328,17 +328,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
             ),
             ...provider.employeeNames.where((name) => name != 'All').map((String value) {
+              // Find the employee to get their image URL
+              final employee = provider.employees.firstWhere(
+                    (emp) => emp.name == value,
+                orElse: () => Employee(
+                  id: 0,
+                  name: value,
+                  empId: '',
+                  department: '',
+                  imageUrl: null,
+                ),
+              );
+
               return DropdownMenuItem<String>(
                 value: value,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
+                      // Employee Profile Image
                       Container(
                         width: 32,
                         height: 32,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
+                        decoration: BoxDecoration(
+                          gradient: employee.imageUrl != null && employee.imageUrl!.isNotEmpty
+                              ? null
+                              : const LinearGradient(
                             colors: [
                               Color(0xFF667EEA),
                               Color(0xFF764BA2),
@@ -346,28 +361,95 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           ),
                           shape: BoxShape.circle,
                         ),
-                        child: Center(
-                          child: Text(
-                            value.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                        child: ClipOval(
+                          child: employee.imageUrl != null && employee.imageUrl!.isNotEmpty
+                              ? Image.network(
+                            employee.imageUrl!,
+                            fit: BoxFit.cover,
+                            width: 32,
+                            height: 32,
+                            errorBuilder: (context, error, stackTrace) {
+                              // Fallback to initials
+                              return Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFF667EEA),
+                                      Color(0xFF764BA2),
+                                    ],
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    value.substring(0, 1).toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFF667EEA),
+                                      Color(0xFF764BA2),
+                                    ],
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                              : Center(
+                            child: Text(
+                              value.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          value,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              value,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (employee.empId.isNotEmpty)
+                              Text(
+                                employee.empId,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
                         ),
                       ),
                     ],
@@ -380,7 +462,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
     );
   }
-
   Widget _buildDepartmentFilter(AttendanceProvider provider) {
     return Container(
       decoration: BoxDecoration(

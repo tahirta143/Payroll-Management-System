@@ -15,6 +15,7 @@ class ApproveLeave {
   final DateTime updatedAt;
   final String employeeName;
   final String employeeCode;
+  final String? imageUrl;
   final String departmentName;
   String status;
   final String payMode; // Add this field
@@ -24,6 +25,7 @@ class ApproveLeave {
     required this.leaveId,
     required this.date,
     this.code,
+    this.imageUrl,
     required this.departmentId,
     required this.employeeId,
     this.designation,
@@ -112,6 +114,12 @@ class ApproveLeave {
       departmentName: parseString(json['department_name']),
       status: parseStatus(json['status']),
       payMode: parsePayMode(json['pay_mode']), // Add this
+      imageUrl: json['employee_image'] ??
+          json['profile_image'] ??
+          json['avatar'] ??
+          json['photo'] ??
+          json['image_url'] ??
+          json['image'], // Add this
     );
   }
 
@@ -142,6 +150,7 @@ class ApproveLeave {
   ApproveLeave copyWith({
     String? status,
     String? payMode,
+    String? imageUrl,
   }) {
     return ApproveLeave(
       id: id,
@@ -161,6 +170,7 @@ class ApproveLeave {
       employeeName: employeeName,
       employeeCode: employeeCode,
       departmentName: departmentName,
+      imageUrl: imageUrl ?? this.imageUrl,
       status: status ?? this.status,
       payMode: payMode ?? this.payMode, // Add this
     );

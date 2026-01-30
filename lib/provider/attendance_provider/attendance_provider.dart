@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:payroll_app/Utility/global_url.dart';
 import 'package:payroll_app/screen/attendance/attendance_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -204,7 +205,7 @@ class AttendanceProvider extends ChangeNotifier {
       final token = await _getToken();
 
       final response = await http.get(
-        Uri.parse('https://api.afaqmis.com/api/attendance'),
+        Uri.parse('${GlobalUrls.baseurl}/api/attendance'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -503,7 +504,7 @@ class AttendanceProvider extends ChangeNotifier {
       final token = await _getToken();
 
       final response = await http.get(
-        Uri.parse('https://api.afaqmis.com/api/employees'),
+        Uri.parse('${GlobalUrls.baseurl}/api/employees'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -622,7 +623,7 @@ class AttendanceProvider extends ChangeNotifier {
       final token = await _getToken();
 
       final response = await http.get(
-        Uri.parse('https://api.afaqmis.com/api/departments'),
+        Uri.parse('${GlobalUrls.baseurl}/api/departments'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -687,7 +688,7 @@ class AttendanceProvider extends ChangeNotifier {
       final token = await _getToken();
 
       final response = await http.get(
-        Uri.parse('https://api.afaqmis.com/api/duty-shifts'),
+        Uri.parse('${GlobalUrls.baseurl}/api/duty-shifts'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -771,7 +772,7 @@ class AttendanceProvider extends ChangeNotifier {
       final token = await _getToken();
 
       final response = await http.post(
-        Uri.parse('https://api.afaqmis.com/api/attendance'),
+        Uri.parse('${GlobalUrls.baseurl}/api/attendance'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -820,7 +821,7 @@ class AttendanceProvider extends ChangeNotifier {
       final token = await _getToken();
 
       final response = await http.put(
-        Uri.parse('https://api.afaqmis.com/api/attendance/$id'),
+        Uri.parse('${GlobalUrls.baseurl}/api/attendance/$id'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -872,7 +873,7 @@ class AttendanceProvider extends ChangeNotifier {
       final token = await _getToken();
 
       final response = await http.delete(
-        Uri.parse('https://api.afaqmis.com/api/attendance/$id'),
+        Uri.parse('${GlobalUrls.baseurl}/api/attendance/$id'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -1052,6 +1053,7 @@ class AttendanceProvider extends ChangeNotifier {
       );
     }
   }
+
 
   void navigateToEditScreen(BuildContext context, Attendance attendance) async {
     if (!isAdmin) {

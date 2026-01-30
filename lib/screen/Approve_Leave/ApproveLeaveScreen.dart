@@ -76,39 +76,32 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         backgroundColor: const Color(0xFF667EEA),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // Debug button
-          // IconButton(
-          //   onPressed: () {
-          //     print('=== DEBUG INFO ===');
-          //     print('isAdmin: ${leaveProvider.isAdmin}');
-          //     print('currentUserId: ${leaveProvider.currentUserId}');
-          //     print('Total leaves: ${leaveProvider.leaves.length}');
-          //     print('Pending leaves: ${leaveProvider.pendingCount}');
-          //     if (leaveProvider.leaves.isNotEmpty) {
-          //       for (var i = 0; i < min(3, leaveProvider.leaves.length); i++) {
-          //         print('Leave $i: ${leaveProvider.leaves[i].status} - ${leaveProvider.leaves[i].employeeName}');
-          //       }
-          //     }
-          //     _showSnackBar('Admin: ${leaveProvider.isAdmin}, Leaves: ${leaveProvider.leaves.length}');
-          //   },
-          //   icon: const Icon(Iconsax.info_circle, color: Colors.white),
-          //   tooltip: 'Debug Info',
-          // ),
-          // New Leave Button
+          // New Leave Button - FIXED
           IconButton(
             onPressed: () {
               print('=== NEW LEAVE BUTTON PRESSED ===');
               print('isAdmin: ${leaveProvider.isAdmin}');
               print('isLoading: ${leaveProvider.isLoading}');
 
-              // Wrap in try-catch to see any errors
-              try {
-                _showNewLeaveDialog(context, leaveProvider);
-              } catch (e, stackTrace) {
-                print('Error showing dialog: $e');
-                print('Stack trace: $stackTrace');
-                _showSnackBar('Error: $e', isError: true);
-              }
+              // Check if widget is mounted
+              if (!mounted) return;
+
+              // Use Future.microtask to ensure build completes
+              Future.microtask(() {
+                try {
+                  // Use a separate variable for context
+                  final currentContext = context;
+                  if (mounted) {
+                    _showNewLeaveDialog(currentContext, leaveProvider);
+                  }
+                } catch (e, stackTrace) {
+                  print('Error showing dialog: $e');
+                  print('Stack trace: $stackTrace');
+                  if (mounted) {
+                    _showSnackBar('Error: $e', isError: true);
+                  }
+                }
+              });
             },
             icon: const Icon(Iconsax.add, color: Colors.white),
             tooltip: 'New Leave Request',
@@ -1432,46 +1425,49 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     }
   }
 
-  // FIXED: New Leave Dialog with all features
+  // UPDATED: New Leave Dialog with Department-first selection
   Future<void> _showNewLeaveDialog(BuildContext context, LeaveProvider provider) async {
     print('=== SHOW NEW LEAVE DIALOG START ===');
 
+    // Check if provider is ready
+    if (provider.isLoading) {
+      _showSnackBar('Please wait, loading data...', isError: true);
+      return;
+    }
+
     // For admin users, fetch employees first
     if (provider.isAdmin) {
-      try {
-        // Show loading
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const AlertDialog(
-            content: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Text('Loading employees...'),
-              ],
-            ),
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Loading employees...'),
+            ],
           ),
-        );
+        ),
+      );
 
-        await provider.fetchAllEmployees();
+      try {
+        await provider.fetchAllEmployeesForDropdown();
 
         // Close loading dialog
         if (Navigator.canPop(context)) {
           Navigator.pop(context);
         }
 
-        // Check if we have employees
         if (provider.allEmployees.isEmpty) {
           _showSnackBar('No employees found. Please try again.', isError: true);
           return;
         }
-
       } catch (e) {
-        print('Error fetching employees: $e');
         if (Navigator.canPop(context)) {
-          Navigator.pop(context); // Close loading dialog
+          Navigator.pop(context);
         }
         _showSnackBar('Failed to load employees: $e', isError: true);
         return;
@@ -1479,6 +1475,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     }
 
     // Variables for form
+    String? selectedDepartment;
     int? selectedEmployeeId;
     String? selectedLeaveType;
     String? selectedPayMode;
@@ -1493,11 +1490,36 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       }
     }
 
+    // Get unique departments from employees
+    List<String> getDepartmentsFromEmployees() {
+      final departments = <String>{};
+      for (var employee in provider.allEmployees) {
+        final dept = employee['department_name']?.toString() ?? 'Unknown';
+        departments.add(dept);
+      }
+      return ['Select Department', ...departments.toList()..sort()];
+    }
+
+    // Get employees filtered by selected department
+    List<Map<String, dynamic>> getFilteredEmployees() {
+      if (selectedDepartment == null || selectedDepartment == 'Select Department') {
+        return provider.allEmployees;
+      }
+      return provider.allEmployees.where((emp) {
+        final empDept = emp['department_name']?.toString() ?? 'Unknown';
+        return empDept == selectedDepartment;
+      }).toList();
+    }
+
+    // Now show the main dialog
     await showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final departments = getDepartmentsFromEmployees();
+            final filteredEmployees = getFilteredEmployees();
+
             return Dialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -1551,8 +1573,90 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Employee Dropdown - Only for admin
+                            // Department Dropdown - Only for admin
                             if (provider.isAdmin) ...[
+                              const Text(
+                                'Select Department *',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: selectedDepartment,
+                                    isExpanded: true,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    icon: const Icon(Iconsax.arrow_down_1),
+                                    elevation: 2,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                    ),
+                                    hint: const Text('Select Department'),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedDepartment = value;
+                                        selectedEmployeeId = null; // Reset employee selection
+                                      });
+                                    },
+                                    items: departments.map((String dept) {
+                                      return DropdownMenuItem<String>(
+                                        value: dept,
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: const BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Color(0xFF667EEA),
+                                                    Color(0xFF764BA2),
+                                                  ],
+                                                ),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  dept.substring(0, 1),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                dept,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+
+                              // Employee Dropdown (filtered by department)
                               const Text(
                                 'Select Employee *',
                                 style: TextStyle(
@@ -1578,13 +1682,19 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                       fontSize: 14,
                                       color: Colors.black87,
                                     ),
-                                    hint: const Text('Select Employee'),
-                                    onChanged: (value) {
+                                    hint: Text(
+                                      selectedDepartment == null || selectedDepartment == 'Select Department'
+                                          ? 'Select Department first'
+                                          : 'Select Employee',
+                                    ),
+                                    onChanged: (selectedDepartment == null || selectedDepartment == 'Select Department')
+                                        ? null
+                                        : (value) {
                                       setState(() {
                                         selectedEmployeeId = value;
                                       });
                                     },
-                                    items: provider.allEmployees.map((employee) {
+                                    items: filteredEmployees.map((employee) {
                                       return DropdownMenuItem<int>(
                                         value: employee['id'],
                                         child: Row(
@@ -1963,9 +2073,15 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                             child: ElevatedButton(
                               onPressed: () async {
                                 // Validation
-                                if (provider.isAdmin && selectedEmployeeId == null) {
-                                  _showSnackBar('Please select an employee', isError: true);
-                                  return;
+                                if (provider.isAdmin) {
+                                  if (selectedDepartment == null || selectedDepartment == 'Select Department') {
+                                    _showSnackBar('Please select a department', isError: true);
+                                    return;
+                                  }
+                                  if (selectedEmployeeId == null) {
+                                    _showSnackBar('Please select an employee', isError: true);
+                                    return;
+                                  }
                                 }
                                 if (selectedLeaveType == null) {
                                   _showSnackBar('Please select leave type', isError: true);

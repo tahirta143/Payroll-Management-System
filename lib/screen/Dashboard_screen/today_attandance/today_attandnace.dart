@@ -7,7 +7,9 @@ import '../../../model/attendance_model/attendance_model.dart';
 import '../../../provider/attendance_provider/attendance_provider.dart';
 
 class TodayAttendance extends StatefulWidget {
-  const TodayAttendance({super.key});
+  final String? selectedDate;  // Add this parameter
+
+  const TodayAttendance({super.key, this.selectedDate});  // Update constructor
 
   @override
   State<TodayAttendance> createState() => _TodayAttendanceState();
@@ -53,7 +55,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
       await provider.fetchAttendance();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Today\'s attendance refreshed!'),
+          content: Text('Attendance data refreshed!'),
           backgroundColor: Colors.green,
           duration: Duration(seconds: 1),
         ),
@@ -73,23 +75,47 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     }
   }
 
-  // Get today's attendance only
-  List<Attendance> _getTodayAttendance(List<Attendance> allAttendance) {
-    final today = DateTime.now();
-    return allAttendance.where((attendance) {
-      return attendance.date.year == today.year &&
-          attendance.date.month == today.month &&
-          attendance.date.day == today.day;
-    }).toList();
+  // Get target date
+  String get _targetDate {
+    return widget.selectedDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+  }
+
+  // Get attendance for the target date (not just today)
+  List<Attendance> _getDateAttendance(List<Attendance> allAttendance) {
+    try {
+      final target = DateTime.parse(_targetDate);
+      return allAttendance.where((attendance) {
+        return attendance.date.year == target.year &&
+            attendance.date.month == target.month &&
+            attendance.date.day == target.day;
+      }).toList();
+    } catch (e) {
+      // If date parsing fails, return empty list
+      return [];
+    }
+  }
+
+  // Format date for display
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (e) {
+      return dateString;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFF),
       appBar: AppBar(
-        title: const Text(
-          "Today's Attendance",
-          style: TextStyle(
+        backgroundColor: const Color(0xFF667EEA),
+        title: Text(
+          widget.selectedDate != null
+              ? "Attendance - ${_formatDate(_targetDate)}"
+              : "Today's Attendance",
+          style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -167,7 +193,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
           ),
           child: Column(
             children: [
-              // Today's Date Header
+              // Date Header - Updated to show selected date
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
@@ -189,7 +215,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          DateFormat('EEEE').format(DateTime.now()),
+                          DateFormat('EEEE').format(DateTime.parse(_targetDate)),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -198,7 +224,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          DateFormat('dd MMMM yyyy').format(DateTime.now()),
+                          _formatDate(_targetDate),
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -215,13 +241,15 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                       child: Row(
                         children: [
                           Icon(
-                            Iconsax.calendar,
+                            widget.selectedDate != null
+                                ? Iconsax.calendar_tick
+                                : Iconsax.calendar,
                             size: 18,
                             color: const Color(0xFF667EEA),
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Today',
+                            widget.selectedDate != null ? 'Selected Date' : 'Today',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -238,11 +266,11 @@ class _TodayAttendanceState extends State<TodayAttendance> {
               // Statistics Cards
               Consumer<AttendanceProvider>(
                 builder: (context, provider, child) {
-                  final todayAttendance = _getTodayAttendance(provider.allAttendance);
-                  final totalPresent = todayAttendance.where((a) => a.isPresent).length;
-                  final totalLate = todayAttendance.where((a) => a.lateMinutes > 0).length;
-                  final totalAbsent = todayAttendance.where((a) => !a.isPresent).length;
-                  final totalOvertime = todayAttendance.where((a) => a.overtimeMinutes > 0).length;
+                  final dateAttendance = _getDateAttendance(provider.allAttendance);
+                  final totalPresent = dateAttendance.where((a) => a.isPresent).length;
+                  final totalLate = dateAttendance.where((a) => a.lateMinutes > 0).length;
+                  final totalAbsent = dateAttendance.where((a) => !a.isPresent).length;
+                  final totalOvertime = dateAttendance.where((a) => a.overtimeMinutes > 0).length;
 
                   return _buildStatisticsCards(
                     totalPresent: totalPresent,
@@ -404,9 +432,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
           return _buildErrorScreen(provider);
         }
 
-        final todayAttendance = _getTodayAttendance(provider.allAttendance);
+        final dateAttendance = _getDateAttendance(provider.allAttendance);
 
-        if (todayAttendance.isEmpty) {
+        if (dateAttendance.isEmpty) {
           return _buildEmptyScreen();
         }
 
@@ -425,9 +453,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
               ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: todayAttendance.length,
+                itemCount: dateAttendance.length,
                 itemBuilder: (context, index) {
-                  final attendance = todayAttendance[index];
+                  final attendance = dateAttendance[index];
                   return _buildAttendanceCard(attendance);
                 },
               ),
@@ -487,7 +515,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Loading today\'s attendance...',
+                            widget.selectedDate != null
+                                ? 'Loading attendance for ${_formatDate(_targetDate)}...'
+                                : 'Loading today\'s attendance...',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[600],
@@ -507,6 +537,22 @@ class _TodayAttendanceState extends State<TodayAttendance> {
   }
 
   Widget _buildAttendanceCard(Attendance attendance) {
+    // Get employee image from provider
+    final provider = Provider.of<AttendanceProvider>(context, listen: false);
+    final employee = provider.employees.firstWhere(
+          (emp) => emp.name == attendance.employeeName || emp.empId == attendance.empId,
+      orElse: () => Employee(
+        id: 0,
+        name: attendance.employeeName,
+        empId: attendance.empId,
+        department: attendance.departmentName,
+        imageUrl: null,
+      ),
+    );
+
+    // Use employee.imageUrl instead of attendance.imageUrl
+    final imageUrl = employee.imageUrl;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -536,7 +582,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                   height: 50,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
+                    gradient: imageUrl != null && imageUrl.isNotEmpty
+                        ? null
+                        : const LinearGradient(
                       colors: [
                         Color(0xFF667EEA),
                         Color(0xFF764BA2),
@@ -544,25 +592,50 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: attendance.statusColor.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
                   ),
-                  child: Center(
-                    child: Text(
-                      attendance.employeeName.substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                  child: ClipOval(
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      width: 50,
+                      height: 50,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFF667EEA),
+                                Color(0xFF764BA2),
+                              ],
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              attendance.employeeName.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                        : Center(
+                      child: Text(
+                        attendance.employeeName.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
                 ),
+
                 // Status indicator dot
                 Positioned(
                   right: 0,
@@ -603,31 +676,31 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: attendance.statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          attendance.status,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: attendance.statusColor,
-                          ),
-                        ),
-                      ),
+                      // Container(
+                      //   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      //   decoration: BoxDecoration(
+                      //     color: attendance.statusColor.withOpacity(0.1),
+                      //     borderRadius: BorderRadius.circular(6),
+                      //   ),
+                      //   child: Text(
+                      //     attendance.,
+                      //     style: TextStyle(
+                      //       fontSize: 12,
+                      //       fontWeight: FontWeight.w600,
+                      //       color: attendance.statusColor,
+                      //     ),
+                      //   ),
+                      // ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    attendance.empId.isNotEmpty ? attendance.empId : 'N/A',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
+                  // const SizedBox(height: 4),
+                  // Text(
+                  //   attendance.empId.isNotEmpty ? attendance.empId : 'N/A',
+                  //   style: TextStyle(
+                  //     fontSize: 12,
+                  //     color: Colors.grey[600],
+                  //   ),
+                  // ),
                   const SizedBox(height: 8),
 
                   // Time Details
@@ -713,7 +786,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Details',
+                              'Status',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Colors.grey[500],
@@ -737,22 +810,22 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                                   ),
                                 ),
                               )
-                            else if (attendance.overtimeMinutes > 0)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  'OT ${attendance.overtimeMinutes}m',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.blue[700],
-                                  ),
-                                ),
-                              )
+                            // else if (attendance.overtimeMinutes > 0)
+                            //   Container(
+                            //     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            //     decoration: BoxDecoration(
+                            //       color: Colors.blue.withOpacity(0.1),
+                            //       borderRadius: BorderRadius.circular(6),
+                            //     ),
+                            //     child: Text(
+                            //       'OT ${attendance.overtimeMinutes}m',
+                            //       style: TextStyle(
+                            //         fontSize: 11,
+                            //         fontWeight: FontWeight.w600,
+                            //         color: Colors.blue[700],
+                            //       ),
+                            //     ),
+                            //   )
                             else if (attendance.isPresent)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -812,7 +885,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
           ),
           const SizedBox(height: 20),
           Text(
-            'Loading today\'s attendance...',
+            widget.selectedDate != null
+                ? 'Loading attendance for ${_formatDate(_targetDate)}...'
+                : 'Loading today\'s attendance...',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[600],
@@ -904,7 +979,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No Attendance Today',
+              widget.selectedDate != null
+                  ? 'No Attendance Data'
+                  : 'No Attendance Today',
               style: TextStyle(
                 fontSize: 18,
                 color: Colors.grey[600],
@@ -913,7 +990,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
             ),
             const SizedBox(height: 8),
             Text(
-              'No attendance records found for today',
+              widget.selectedDate != null
+                  ? 'No attendance records found for ${_formatDate(_targetDate)}'
+                  : 'No attendance records found for today',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey[400],

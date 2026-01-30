@@ -149,6 +149,7 @@ class Attendance {
   final String dutyShiftEnd;
   final String? lateMinutesStr;
   final String? overtimeMinutesStr;
+  final String? imageUrl; // Add this line
 
   Attendance({
     required this.id,
@@ -171,6 +172,7 @@ class Attendance {
     required this.dutyShiftEnd,
     this.lateMinutesStr,
     this.overtimeMinutesStr,
+    this.imageUrl, // Add this parameter
   });
 
   factory Attendance.fromJson(Map<String, dynamic> json) {
@@ -187,6 +189,12 @@ class Attendance {
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toString()),
       updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toString()),
       empId: json['emp_id'] ?? '',
+      imageUrl: json['employee_image'] ??
+          json['profile_image'] ??
+          json['avatar'] ??
+          json['photo'] ??
+          json['image_url'] ??
+          json['image'], // Parse image URL from API
       employeeName: json['employee_name'] ?? '',
       employeeMachineCode: json['employee_machine_code'],
       departmentName: json['department_name'] ?? '',
@@ -392,6 +400,7 @@ class Employee {
   final int id;
   final String name;
   final String empId;
+  final String? imageUrl;
   final String department; // department name
   final int? departmentId; // department ID
 
@@ -399,6 +408,7 @@ class Employee {
     required this.id,
     required this.name,
     required this.empId,
+    this.imageUrl, // Add this
     required this.department,
     this.departmentId,
   });
@@ -408,6 +418,11 @@ class Employee {
       id: json['id'] ?? json['employee_id'] ?? 0,
       name: json['name'] ?? json['employee_name'] ?? '',
       empId: json['emp_id'] ?? json['employee_code'] ?? '',
+      imageUrl: json['image_url'] ?? // Add image URL parsing
+          json['profile_image'] ??
+          json['avatar'] ??
+          json['photo'] ??
+          json['image'],
       department: json['department'] ?? json['department_name'] ?? '',
       departmentId: json['department_id'] ?? 0,
     );
