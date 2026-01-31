@@ -17,7 +17,6 @@ import '../../widget/dashboard_chart/dashborad_chart.dart';
 import '../Approve_Leave/ApproveLeaveScreen.dart';
 import 'absents_screen/absents_screen.dart';
 import 'on_leave/on_leave.dart';
-// import 'staff_details_screen.dart'; // Import the new screen
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,7 +28,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
   bool _isInitialized = false;
-  late DashboardSummaryProvider _dashboardProvider;
   DateTime? _selectedDate;
   final TextEditingController _dateController = TextEditingController();
 
@@ -42,36 +40,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _initializeApp() async {
-    // Initialize SharedPreferences globally before anything else
     await DashboardSummaryProvider.initializeSharedPreferences();
 
     setState(() {
       _isInitialized = true;
     });
 
-    // Fetch dashboard data after initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final dashboardProvider = context.read<DashboardSummaryProvider>();
       final authProvider = context.read<AuthProvider>();
       final chartProvider = context.read<ChartProvider>();
 
-      // Store provider reference
-      _dashboardProvider = dashboardProvider;
-
-      // Only fetch if user is authenticated
       if (authProvider.token != null) {
+        // Fetch data for the current date (today)
         dashboardProvider.fetchDashboardSummary(date: _dateController.text);
         chartProvider.fetchAttendanceData();
       }
     });
   }
 
-  // Format date for API (yyyy-MM-dd)
   String _formatDateForApi(DateTime date) {
     return DateFormat('yyyy-MM-dd').format(date);
   }
 
-  // Format date for display
   String _formatDateForDisplay(String dateString) {
     if (dateString == 'all' || dateString == 'All Time') return 'All Time';
 
@@ -83,7 +74,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Show date picker
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -171,6 +161,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: () {
                 final dashboardProvider = context.read<DashboardSummaryProvider>();
                 final chartProvider = context.read<ChartProvider>();
+
+                // Refresh with current date filter
                 dashboardProvider.refreshDashboardData(
                   date: _dateController.text == 'All Time' ? null : _dateController.text,
                 );
@@ -180,7 +172,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
 
-      /// 📌 SIDEBAR DRAWER
       drawer: SidebarDrawer(
         permissionProvider: p,
         selectedIndex: _currentIndex,
@@ -194,18 +185,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         },
       ),
 
-      /// 🏠 BODY (GRID DASHBOARD)
       body: IndexedStack(
         index: _currentIndex,
         children: _getScreens(p),
       ),
 
-      /// 🔻 BOTTOM NAVIGATION BAR
       bottomNavigationBar: _buildBottomNavigationBar(p),
     );
   }
 
-  // Helper method to get app bar title based on current index
   Widget _getAppBarTitle(int index) {
     final screens = _getScreens(context.read<PermissionProvider>());
 
@@ -252,7 +240,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    // Default to Dashboard
     return const Text(
       'Dashboard',
       style: TextStyle(
@@ -266,38 +253,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Widget> _getScreens(PermissionProvider p) {
     List<Widget> screens = [];
 
-    // Screen 0: Dashboard/Home (Always available)
     screens.add(_buildHomeScreen());
 
-    // Screen 1: Attendance (check permission)
     if (p.hasPermission('can-view-attendence')) {
       screens.add(const AttendanceScreen());
     }
 
-    // Screen 2: Leave Approval (check permission)
     if (p.hasPermission('can-edit-leave-application')) {
       screens.add(const ApproveLeaveScreen());
     }
 
-    // Screen 3: Salary (check permission)
     if (p.hasPermission('can-view-salary')) {
       screens.add(const SalaryScreen());
     }
 
-    // Screen 4: Settings (Always available - LAST ITEM)
     screens.add(const SettingsScreen());
 
     return screens;
   }
 
-  // Get the bottom navigation index from screen index
   int _getBottomNavIndex(int screenIndex, PermissionProvider p) {
-    if (screenIndex == 0) return 0; // Dashboard is always first
+    if (screenIndex == 0) return 0;
 
     int bottomNavIndex = 1;
     int currentScreenIndex = 1;
 
-    // Check each possible screen in order
     if (p.hasPermission('can-view-attendence')) {
       if (currentScreenIndex == screenIndex) return bottomNavIndex;
       currentScreenIndex++;
@@ -316,48 +296,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavIndex++;
     }
 
-    // Settings (always last)
     if (currentScreenIndex == screenIndex) return bottomNavIndex;
 
-    return 0; // Default to Dashboard
+    return 0;
   }
 
-  // Get the screen index from bottom navigation index
   int _getScreenIndex(int bottomNavIndex, PermissionProvider p) {
-    if (bottomNavIndex == 0) return 0; // Dashboard
+    if (bottomNavIndex == 0) return 0;
 
     int screenIndex = 1;
     int currentBottomNavIndex = 1;
 
-    // Attendance
     if (p.hasPermission('can-view-attendence')) {
       if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
       screenIndex++;
       currentBottomNavIndex++;
     }
 
-    // Leave
     if (p.hasPermission('can-edit-leave-application')) {
       if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
       screenIndex++;
       currentBottomNavIndex++;
     }
 
-    // Salary
     if (p.hasPermission('can-view-salary')) {
       if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
       screenIndex++;
       currentBottomNavIndex++;
     }
 
-    // Settings (always last)
     if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
 
-    return 0; // Default to Dashboard
+    return 0;
   }
 
   Widget _buildBottomNavigationBar(PermissionProvider p) {
-    // Create bottom navigation items based on permissions
     List<BottomNavigationBarItem> items = [
       const BottomNavigationBarItem(
         icon: Icon(Iconsax.home, size: 22),
@@ -392,7 +365,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    // Always add Settings as LAST item
     items.add(
       const BottomNavigationBarItem(
         icon: Icon(Iconsax.setting, size: 22),
@@ -400,7 +372,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
 
-    // Get current bottom nav index
     int currentBottomNavIndex = _getBottomNavIndex(_currentIndex, p);
 
     return Container(
@@ -530,7 +501,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // Date Filter Widget - UPDATED
+            // Date Filter Widget
             _buildDateFilter(dashboardProvider),
 
             // Statistics Cards
@@ -563,7 +534,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Updated Date Filter Widget
   Widget _buildDateFilter(DashboardSummaryProvider provider) {
     final displayDate = _dateController.text == 'All Time'
         ? 'All Time'
@@ -661,7 +631,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               'All Time',
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: _dateController.text == 'All Time' ? FontWeight.w600 : FontWeight.w500,
+                fontWeight:
+                _dateController.text == 'All Time' ? FontWeight.w600 : FontWeight.w500,
                 color: _dateController.text == 'All Time'
                     ? const Color(0xFF667EEA)
                     : Colors.grey[600],
@@ -673,7 +644,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Loading State
   Widget _buildLoadingCards() {
     return GridView.count(
       shrinkWrap: true,
@@ -733,7 +703,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Error State
   Widget _buildErrorWidget(DashboardSummaryProvider provider) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -802,121 +771,171 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Stats Grid with Real Data - CLICKABLE CARDS - UPDATED
   Widget _buildStatsGrid(DashboardSummaryProvider provider, Size size) {
-    final summary = provider.currentSummary ?? provider.dashboardSummary;
+    final summary = provider.currentSummary;
 
     if (summary == null) {
       return _buildNoDataWidget();
     }
 
-    // Get date context for titles
-    String dateContext = '';
-    if (_dateController.text != 'All Time') {
-      dateContext = '\n${_formatDateForDisplay(_dateController.text)}';
-    } else {
-      dateContext = '\nAll Time';
+    // Get the actual date from the summary model
+    String actualDate = summary.selectedDate;
+
+    // Format the date for display
+    String displayDateText = 'All Time';
+    bool isDateSpecific = false;
+
+    if (actualDate != 'all' && actualDate != 'All Time') {
+      try {
+        final parsedDate = DateTime.parse(actualDate);
+        displayDateText = DateFormat('dd MMM yyyy').format(parsedDate);
+        isDateSpecific = true;
+      } catch (e) {
+        displayDateText = actualDate;
+        isDateSpecific = actualDate != 'all';
+      }
     }
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: size.width > 600 ? 4 : 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.1,
+    // Create title suffix
+    String dateSuffix = isDateSpecific ? '\n$displayDateText' : '\nAll Time';
+
+    // Check if this is a date with no attendance data yet (all zeros)
+    final isNoDataYet = summary.isNoDataForDate;
+
+    return Column(
       children: [
-        // Total Staff Card
-        _buildClickableStatCard(
-          icon: Iconsax.people,
-          title: 'Total Staff',
-          // $dateContext
-          value: '${summary.totalEmployees}',
-          // subtitle: 'All Employees',
-          color: const Color(0xFF4CAF50),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => StaffDetailsScreen(
-                  title: 'Total Staff',
-                  filterType: 'all',
-                  selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
+        // Show a message if no attendance data yet for this date
+        if (isNoDataYet && isDateSpecific)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange),
+            ),
+            child: Row(
+              children: [
+                Icon(Iconsax.info_circle, color: Colors.orange[700], size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'No attendance data marked yet for $displayDateText',
+                        style: TextStyle(
+                          color: Colors.orange[800],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${summary.totalEmployees} employees - Attendance not recorded',
+                        style: TextStyle(
+                          color: Colors.orange[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-        ),
+              ],
+            ),
+          ),
 
-        // Present Card
-        _buildClickableStatCard(
-          icon: Iconsax.calendar_tick,
-          title: _dateController.text == 'All Time'
-              ? 'Today Attendance'
-              : 'Attendance',
-          value: '${summary.presentCount}',
-          subtitle: '${summary.presentPercentage.toStringAsFixed(1)}%',
-          color: const Color(0xFF2196F3),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => TodayAttendance(
-                  selectedDate: _dateController.text == 'All Time'
-                      ? null  // Show today if "All Time" is selected
-                      : _dateController.text,
-                ),
-              ),
-            );
-          },
-        ),
+        // Statistics Grid
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: size.width > 600 ? 4 : 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.1,
+          children: [
+            // Total Staff Card - ALWAYS show this, even if no data yet
+            _buildClickableStatCard(
+              icon: Iconsax.people,
+              title: 'Total Staff$dateSuffix',
+              value: '${summary.totalEmployees}',
+              subtitle: 'All Employees', // Always show this subtitle
+              color: const Color(0xFF4CAF50), // Always green for total staff
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => StaffDetailsScreen(
+                      title: 'Total Staff',
+                      filterType: 'all',
+                      selectedDate: isDateSpecific ? actualDate : null,
+                    ),
+                  ),
+                );
+              },
+            ),
 
-        // Leave Card
-        _buildClickableStatCard(
-          icon: Iconsax.calendar_remove,
-          title: 'On Leave',
-          value: '${summary.leaveCount}',
-          subtitle: '${summary.leavePercentage.toStringAsFixed(1)}%',
-          color: const Color(0xFFFF9800),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => LeaveListScreen(
-                  selectedDate: _dateController.text == 'All Time'
-                      ? null
-                      : _dateController.text,
-                ),
-              ),
-            );
-          },
-        ),
+            // Present Card
+            _buildClickableStatCard(
+              icon: Iconsax.calendar_tick,
+              title: isDateSpecific ? 'Attendance$dateSuffix' : 'Today Attendance$dateSuffix',
+              value: '${summary.presentCount}',
+              subtitle: isNoDataYet ? 'Not marked yet' : '${summary.presentPercentage.toStringAsFixed(1)}%',
+              color: isNoDataYet ? Colors.grey : const Color(0xFF2196F3),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TodayAttendance(
+                      selectedDate: isDateSpecific ? actualDate : null,
+                    ),
+                  ),
+                );
+              },
+            ),
 
-        // Absent Card
-        _buildClickableStatCard(
-          icon: Iconsax.calendar_remove,
-          title: 'Absent',
-          value: '${summary.absentCount}',
-          subtitle: '${summary.absentPercentage.toStringAsFixed(1)}%',
-          color: const Color(0xFFF44336),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => AbsentListScreen(
-                  selectedDate: _dateController.text == 'All Time'
-                      ? null
-                      : _dateController.text,
-                ),
-              ),
-            );
-          },
+            // Leave Card
+            _buildClickableStatCard(
+              icon: Iconsax.calendar_remove,
+              title: 'On Leave$dateSuffix',
+              value: '${summary.leaveCount}',
+              subtitle: isNoDataYet ? 'Not marked yet' : '${summary.leavePercentage.toStringAsFixed(1)}%',
+              color: isNoDataYet ? Colors.grey : const Color(0xFFFF9800),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LeaveListScreen(
+                      selectedDate: isDateSpecific ? actualDate : null,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            // Absent Card
+            _buildClickableStatCard(
+              icon: Iconsax.calendar_remove,
+              title: 'Absent$dateSuffix',
+              value: '${summary.absentCount}',
+              subtitle: isNoDataYet ? 'Not marked yet' : '${summary.absentPercentage.toStringAsFixed(1)}%',
+              color: isNoDataYet ? Colors.grey : const Color(0xFFF44336),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AbsentListScreen(
+                      selectedDate: isDateSpecific ? actualDate : null,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ],
     );
   }
-
-  // Clickable Stat Card Component
   Widget _buildClickableStatCard({
     required IconData icon,
     required String title,
@@ -924,13 +943,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String? subtitle,
     required Color color,
     required VoidCallback onTap,
+    bool isDisabled = false, // Add this parameter
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        splashColor: color.withOpacity(0.1),
+        splashColor: isDisabled ? Colors.transparent : color.withOpacity(0.1),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -950,22 +970,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: isDisabled ? Colors.grey[200] : color.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
-                  color: color,
+                  color: isDisabled ? Colors.grey[400] : color,
                   size: 20,
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black87,
+                  color: isDisabled ? Colors.grey[600] : Colors.black87,
                 ),
               ),
               if (subtitle != null) ...[
@@ -974,7 +994,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: color,
+                    color: isDisabled ? Colors.grey[500] : color,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -982,9 +1002,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 4),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey,
+                  color: isDisabled ? Colors.grey[500] : Colors.grey,
                   fontWeight: FontWeight.w500,
                 ),
                 textAlign: TextAlign.center,
@@ -997,76 +1017,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Additional Stats Cards (Short Leave & Late Comers) - UPDATED
-  // Widget _buildAdditionalStats(DashboardSummaryProvider provider, Size size) {
-  //   final summary = provider.currentSummary ?? provider.dashboardSummary;
-  //
-  //   if (summary == null) {
-  //     return const SizedBox.shrink();
-  //   }
-  //
-  //   // Get date context for titles
-  //   String dateContext = '';
-  //   if (_dateController.text != 'All Time') {
-  //     dateContext = ' (${_formatDateForDisplay(_dateController.text)})';
-  //   } else {
-  //     dateContext = ' (All Time)';
-  //   }
-  //
-  //   return GridView.count(
-  //     shrinkWrap: true,
-  //     physics: const NeverScrollableScrollPhysics(),
-  //     crossAxisCount: size.width > 600 ? 2 : 2,
-  //     crossAxisSpacing: 16,
-  //     mainAxisSpacing: 16,
-  //     childAspectRatio: 2.5,
-  //     children: [
-  //       // Short Leave Card
-  //       _buildClickableDetailStatCard(
-  //         icon: Iconsax.clock,
-  //         title: 'Short Leave$dateContext',
-  //         value: '${summary.shortLeaveCount}',
-  //         percentage: summary.shortLeavePercentage,
-  //         color: const Color(0xFF9C27B0),
-  //         onTap: () {
-  //           Navigator.push(
-  //             context,
-  //             MaterialPageRoute(
-  //               builder: (context) => StaffDetailsScreen(
-  //                 title: 'Short Leave Staff',
-  //                 filterType: 'short_leave',
-  //                 selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
-  //               ),
-  //             ),
-  //           );
-  //         },
-  //       ),
-  //
-  //       // Late Comers Card
-  //       _buildClickableDetailStatCard(
-  //         icon: Iconsax.timer_1,
-  //         title: 'Late Comers$dateContext',
-  //         value: '${summary.lateComersCount}',
-  //         percentage: summary.lateComersPercentage,
-  //         color: const Color(0xFF795548),
-  //         onTap: () {
-  //           Navigator.push(
-  //             context,
-  //             MaterialPageRoute(
-  //               builder: (context) => StaffDetailsScreen(
-  //                 title: 'Late Comers',
-  //                 filterType: 'late',
-  //                 selectedDate: _dateController.text == 'All Time' ? null : _dateController.text,
-  //               ),
-  //             ),
-  //           );
-  //         },
-  //       ),
-  //     ],
-  //   );
-  // }
-
-  // Clickable Detail Stat Card Component
   Widget _buildClickableDetailStatCard({
     required IconData icon,
     required String title,
@@ -1204,7 +1154,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Attendance Chart Section
   Widget _buildAttendanceChartSection(ChartProvider provider) {
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -1263,7 +1212,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Chart Content
         if (provider.isLoading)
           _buildChartLoading(screenWidth)
         else if (provider.error != null)
@@ -1360,7 +1308,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// Fixed SidebarDrawer
 class SidebarDrawer extends StatelessWidget {
   final PermissionProvider permissionProvider;
   final int selectedIndex;
@@ -1375,24 +1322,19 @@ class SidebarDrawer extends StatelessWidget {
     this.onDrawerClose,
   });
 
-  // Helper method to get screen index for menu items
   int _getScreenIndex(String itemTitle) {
-    // Dashboard is always index 0
     if (itemTitle == 'Dashboard') return 0;
 
-    // Settings is always the last item
     if (itemTitle == 'Settings') {
-      // Calculate based on how many screens are before Settings
-      int index = 1; // Start after Dashboard
+      int index = 1;
 
       if (permissionProvider.hasPermission('can-view-attendence')) index++;
       if (permissionProvider.hasPermission('can-edit-leave-application')) index++;
       if (permissionProvider.hasPermission('can-view-salary')) index++;
 
-      return index; // Settings is at the calculated index
+      return index;
     }
 
-    // For other menu items, we need to check if they exist and find their position
     List<String> availableScreens = ['Dashboard'];
 
     if (permissionProvider.hasPermission('can-view-attendence')) {
@@ -1406,7 +1348,6 @@ class SidebarDrawer extends StatelessWidget {
     }
     availableScreens.add('Settings');
 
-    // Find the index of the item title
     return availableScreens.indexOf(itemTitle);
   }
 
@@ -1414,7 +1355,6 @@ class SidebarDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context, listen: true);
 
-    // Define menu items
     final List<Map<String, dynamic>> menuItems = [
       {
         'icon': Iconsax.dcube,
@@ -1465,7 +1405,6 @@ class SidebarDrawer extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              // Drawer Header
               Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
@@ -1523,13 +1462,11 @@ class SidebarDrawer extends StatelessWidget {
                 ),
               ),
 
-              // Menu Items
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                   children: [
                     ...menuItems.map((item) {
-                      // For logout, show it regardless of permission
                       if (item['isLogout'] == true) {
                         return _drawerItem(
                           icon: item['icon'],
@@ -1541,7 +1478,6 @@ class SidebarDrawer extends StatelessWidget {
                         );
                       }
 
-                      // For Settings (always available)
                       if (item['permission'] == 'always-available') {
                         final screenIndex = _getScreenIndex(item['title']);
                         return _drawerItem(
@@ -1556,7 +1492,6 @@ class SidebarDrawer extends StatelessWidget {
                         );
                       }
 
-                      // For other items, check permission
                       if (!permissionProvider.hasPermission(item['permission'])) {
                         return const SizedBox.shrink();
                       }
@@ -1577,7 +1512,6 @@ class SidebarDrawer extends StatelessWidget {
                 ),
               ),
 
-              // User Profile
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -1807,7 +1741,6 @@ class SidebarDrawer extends StatelessWidget {
                 Navigator.of(dialogContext).pop();
                 if (onDrawerClose != null) onDrawerClose!();
 
-                // Logout from both providers
                 await auth.logout();
                 await dashboardProvider.logout();
 
@@ -1838,7 +1771,6 @@ class SidebarDrawer extends StatelessWidget {
   }
 }
 
-// Permission Card Component
 class PermissionCard extends StatelessWidget {
   final String title;
   final IconData icon;

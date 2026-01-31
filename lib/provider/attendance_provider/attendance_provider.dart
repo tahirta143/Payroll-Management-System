@@ -32,10 +32,9 @@ class AttendanceProvider extends ChangeNotifier {
   // Filtering
   String _searchQuery = '';
   String _selectedDepartmentFilter = 'All';
-  String _selectedEmployeeFilter = 'All';
+  String _selectedEmployeeFilter = '';
   String _selectedMonthFilter = 'All';
   List<String> _departmentNames = ['All'];
-  List<String> _employeeNames = ['All'];
   List<String> _availableMonths = ['All'];
 
   // User Data
@@ -61,7 +60,6 @@ class AttendanceProvider extends ChangeNotifier {
   String get selectedEmployeeFilter => _selectedEmployeeFilter;
   String get selectedMonthFilter => _selectedMonthFilter;
   List<String> get departmentNames => _departmentNames;
-  List<String> get employeeNames => _employeeNames;
   List<String> get availableMonths => _availableMonths;
 
   // User Role Getters
@@ -77,6 +75,86 @@ class AttendanceProvider extends ChangeNotifier {
   int get totalLate => isAdmin ? _attendance.where((a) => a.lateMinutes > 0).length : 0;
   int get totalAbsent => isAdmin ? _attendance.where((a) => !a.isPresent).length : 0;
   int get totalOvertime => isAdmin ? _attendance.where((a) => a.overtimeMinutes > 0).length : 0;
+
+  // Get employees by selected department - FIXED VERSION
+  List<Employee> get filteredEmployees {
+    if (_selectedDepartmentFilter == 'All' || _selectedDepartmentFilter.isEmpty) {
+      return []; // Empty when "All" departments is selected
+    } else {
+      // Debug: Print all employees and their departments
+      print('=== FILTERING EMPLOYEES ===');
+      print('Selected department: $_selectedDepartmentFilter');
+      print('Total employees: ${_employees.length}');
+
+      // Clean and normalize the selected department
+      final selectedDept = _selectedDepartmentFilter.trim().toLowerCase();
+
+      final filtered = _employees.where((employee) {
+        // Clean and normalize employee department
+        final employeeDept = employee.department?.trim().toLowerCase() ?? '';
+
+        // Multiple matching strategies
+        bool matches = false;
+
+        // 1. Exact match (case-insensitive)
+        if (employeeDept == selectedDept) {
+          matches = true;
+        }
+        // 2. Contains match (partial)
+        else if (employeeDept.contains(selectedDept) || selectedDept.contains(employeeDept)) {
+          matches = true;
+        }
+        // 3. Check for common department variations
+        else if (_isDepartmentMatch(selectedDept, employeeDept)) {
+          matches = true;
+        }
+
+        if (matches) {
+          print('Found employee: ${employee.name} in ${employee.department} (cleaned: $employeeDept)');
+        }
+        return matches;
+      }).toList();
+
+      print('Filtered employees count: ${filtered.length}');
+      return filtered;
+    }
+  }
+
+  // Helper method to check department matches with common variations
+  bool _isDepartmentMatch(String selectedDept, String employeeDept) {
+    if (selectedDept.isEmpty || employeeDept.isEmpty) return false;
+
+    // Common department abbreviations and variations
+    final departmentVariations = {
+      'it': ['information technology', 'tech', 'technical', 'software', 'development'],
+      'hr': ['human resources', 'personnel', 'recruitment'],
+      'finance': ['accounting', 'accounts', 'treasury'],
+      'marketing': ['sales', 'advertising', 'promotion'],
+      'operations': ['production', 'manufacturing', 'logistics'],
+      'admin': ['administration', 'administrative', 'office'],
+      'support': ['customer service', 'helpdesk', 'service'],
+    };
+
+    // Check if both departments match any common variation
+    for (var entry in departmentVariations.entries) {
+      final key = entry.key;
+      final variations = entry.value;
+
+      // Check if selected department matches the key or any variation
+      final selectedMatches = selectedDept == key ||
+          variations.any((v) => selectedDept.contains(v) || v.contains(selectedDept));
+
+      // Check if employee department matches the key or any variation
+      final employeeMatches = employeeDept == key ||
+          variations.any((v) => employeeDept.contains(v) || v.contains(employeeDept));
+
+      if (selectedMatches && employeeMatches) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
   // Get token from shared preferences
   Future<String> _getToken() async {
@@ -232,6 +310,9 @@ class AttendanceProvider extends ChangeNotifier {
             .map((json) => Attendance.fromJson(json))
             .toList();
 
+        // SORT attendance by date ASCENDING (oldest first)
+        _attendance.sort((a, b) => a.date.compareTo(b.date));
+
         // DEBUG: Print date information
         print('=== ATTENDANCE DATES DEBUG ===');
         if (_attendance.isNotEmpty) {
@@ -318,23 +399,17 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // Method to extract months from attendance data - FIXED
+  // Method to extract months from attendance data
   void _extractMonthsFromData() {
     try {
       final monthsSet = <String>{};
-
-      print('=== EXTRACTING MONTHS ===');
-      print('Total attendance records: ${_attendance.length}');
 
       for (final attendance in _attendance) {
         final monthName = _formatMonthForFilter(attendance.date);
         if (monthName.isNotEmpty) {
           monthsSet.add(monthName);
-          print('Added month: $monthName from date: ${attendance.date}');
         }
       }
-
-      print('Unique months found: ${monthsSet.length}');
 
       // Sort months chronologically (most recent first)
       final sortedMonths = monthsSet.toList()
@@ -344,30 +419,22 @@ class AttendanceProvider extends ChangeNotifier {
             final dateB = _parseMonthFromFilter(b);
             return dateB.compareTo(dateA); // Most recent first
           } catch (e) {
-            print('Error sorting months: $e');
             return 0;
           }
         });
 
       _availableMonths = ['All', ...sortedMonths];
 
-      print('Extracted ${_availableMonths.length} months for filter');
-      if (_availableMonths.length > 1) {
-        print('Available months: ${_availableMonths.sublist(1)}');
-      }
     } catch (e) {
-      print('Error extracting months: $e');
       _availableMonths = ['All'];
     }
   }
 
-  // Helper method to format date for month filter - FIXED
+  // Helper method to format date for month filter
   String _formatMonthForFilter(DateTime date) {
     try {
-      // Format as "January 2024"
       return DateFormat('MMMM yyyy').format(date);
     } catch (e) {
-      print('Error formatting month: $e for date: $date');
       return '';
     }
   }
@@ -377,7 +444,6 @@ class AttendanceProvider extends ChangeNotifier {
     try {
       return DateFormat('MMMM yyyy').parse(monthFilter);
     } catch (e) {
-      print('Error parsing month: $e for input: $monthFilter');
       return DateTime.now();
     }
   }
@@ -391,12 +457,8 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // Update the _applyFilters method to include month filtering
+  // Update the _applyFilters method
   void _applyFilters() {
-    print('=== APPLYING FILTERS ===');
-    print('Selected month: $_selectedMonthFilter');
-    print('Total records before filtering: ${_attendance.length}');
-
     _filteredAttendance = _attendance.where((attendance) {
       // Search filter
       final matchesSearch =
@@ -416,9 +478,11 @@ class AttendanceProvider extends ChangeNotifier {
               attendance.departmentName == _selectedDepartmentFilter;
 
       // Employee filter (only for admin)
+      // Show all when no employee selected or "All" departments
       final matchesEmployee =
           !isAdmin || // If not admin, always true
-              _selectedEmployeeFilter == 'All' ||
+              _selectedDepartmentFilter == 'All' ||
+              _selectedEmployeeFilter.isEmpty ||
               attendance.employeeName == _selectedEmployeeFilter;
 
       // Month filter (only for admin)
@@ -426,17 +490,28 @@ class AttendanceProvider extends ChangeNotifier {
       if (isAdmin && _selectedMonthFilter != 'All') {
         final recordMonth = _formatMonthForFilter(attendance.date);
         matchesMonth = recordMonth == _selectedMonthFilter;
-        if (!matchesMonth) {
-          print('Record month ($recordMonth) does NOT match selected month ($_selectedMonthFilter)');
-        }
       }
 
       return matchesSearch && matchesDepartment && matchesEmployee && matchesMonth;
     }).toList();
+  }
 
-    print('Filtered to ${_filteredAttendance.length} records');
-    if (isAdmin && _selectedMonthFilter != 'All') {
-      print('Current month filter: $_selectedMonthFilter');
+  // Department filter setter
+  void setDepartmentFilter(String department) {
+    if (isAdmin) {
+      _selectedDepartmentFilter = department;
+      _selectedEmployeeFilter = ''; // Reset employee filter when department changes
+      _applyFilters();
+      notifyListeners();
+    }
+  }
+
+  // Employee filter setter
+  void setEmployeeFilter(String employee) {
+    if (isAdmin && employee.isNotEmpty) {
+      _selectedEmployeeFilter = employee;
+      _applyFilters();
+      notifyListeners();
     }
   }
 
@@ -445,7 +520,6 @@ class AttendanceProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Try to get additional identifiers
       final additionalIds = [
         prefs.getInt('employee_id'),
         prefs.getInt('emp_id'),
@@ -453,7 +527,7 @@ class AttendanceProvider extends ChangeNotifier {
 
       final additionalCodes = [
         prefs.getString('emp_code'),
-        prefs.getString('employee_id'), // Sometimes stored as string
+        prefs.getString('employee_id'),
         prefs.getString('staff_id'),
       ].whereType<String>().where((code) => code.isNotEmpty).toList();
 
@@ -463,7 +537,6 @@ class AttendanceProvider extends ChangeNotifier {
         for (final attendance in _attendance) {
           bool matches = false;
 
-          // Try additional IDs
           for (var id in additionalIds) {
             if (attendance.employeeId == id) {
               matches = true;
@@ -471,7 +544,6 @@ class AttendanceProvider extends ChangeNotifier {
             }
           }
 
-          // Try additional codes
           if (!matches && attendance.empId.isNotEmpty) {
             for (var code in additionalCodes) {
               if (attendance.empId.toLowerCase() == code.toLowerCase()) {
@@ -519,7 +591,6 @@ class AttendanceProvider extends ChangeNotifier {
           employeesList = data['employees'] as List<dynamic>;
         }
 
-        // Clear existing employees
         _employees = [];
 
         if (employeesList.isNotEmpty) {
@@ -538,7 +609,12 @@ class AttendanceProvider extends ChangeNotifier {
           }
         }
 
-        // If no employees were parsed, use fallback
+        // Debug: Print all employees
+        print('=== ALL EMPLOYEES ===');
+        for (var emp in _employees) {
+          print('Employee: ${emp.name}, Department: ${emp.department}');
+        }
+
         if (_employees.isEmpty) {
           _employees = [
             Employee(id: 1, name: 'John Doe', empId: 'EMP001', department: 'IT'),
@@ -583,16 +659,20 @@ class AttendanceProvider extends ChangeNotifier {
           data['staff_id']?.toString() ??
           'N/A';
 
-      final department = data['department']?.toString() ??
+      // Clean department name - this is IMPORTANT
+      String department = data['department']?.toString() ??
           data['department_name']?.toString() ??
           data['dept']?.toString() ??
           data['department_id']?.toString() ??
           'Unknown Department';
 
+      // Trim and clean department name
+      department = department.trim();
+
       return Employee(
         id: id,
-        name: name,
-        empId: empId,
+        name: name.trim(),
+        empId: empId.trim(),
         department: department,
       );
     } catch (e) {
@@ -648,6 +728,19 @@ class AttendanceProvider extends ChangeNotifier {
             .map((d) => Department.fromJson(d))
             .toList();
 
+        // Extract department names for dropdown
+        final departmentSet = _departments
+            .map((dept) => dept.name.trim())
+            .where((name) => name.isNotEmpty)
+            .toSet();
+        _departmentNames = ['All', ...departmentSet];
+
+        // Debug: Print all departments
+        print('=== ALL DEPARTMENTS ===');
+        for (var dept in _departments) {
+          print('Department: ${dept.name}');
+        }
+
         if (_departments.isEmpty) {
           _departments = [
             Department(id: 1, name: 'IT', description: 'Information Technology'),
@@ -655,6 +748,7 @@ class AttendanceProvider extends ChangeNotifier {
             Department(id: 3, name: 'Finance', description: 'Finance Department'),
             Department(id: 4, name: 'Operations', description: 'Operations Department'),
           ];
+          _departmentNames = ['All', 'IT', 'HR', 'Finance', 'Operations'];
         }
 
       } else {
@@ -664,6 +758,7 @@ class AttendanceProvider extends ChangeNotifier {
           Department(id: 3, name: 'Finance'),
           Department(id: 4, name: 'Operations'),
         ];
+        _departmentNames = ['All', 'IT', 'HR', 'Finance', 'Operations'];
       }
     } catch (e) {
       print('Error fetching departments: $e');
@@ -673,6 +768,7 @@ class AttendanceProvider extends ChangeNotifier {
         Department(id: 3, name: 'Finance'),
         Department(id: 4, name: 'Operations'),
       ];
+      _departmentNames = ['All', 'IT', 'HR', 'Finance', 'Operations'];
     } finally {
       _isLoadingDepartments = false;
       notifyListeners();
@@ -757,7 +853,7 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // POST - Create new attendance (only admin)
+  // POST - Create new attendance (FIXED)
   Future<bool> createAttendance(AttendanceCreateDTO dto) async {
     if (!isAdmin) {
       _error = 'Only administrators can create attendance records';
@@ -787,7 +883,7 @@ class AttendanceProvider extends ChangeNotifier {
           responseData['attendance'] ?? responseData['data'] ?? {},
         );
         _attendance.insert(0, newAttendance);
-        _extractMonthsFromData(); // Update months list
+        _extractMonthsFromData();
         _applyFilters();
 
         return true;
@@ -806,7 +902,7 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // PUT - Update attendance (only admin)
+  // PUT - Update attendance (FIXED)
   Future<bool> updateAttendance(int id, AttendanceCreateDTO dto) async {
     if (!isAdmin) {
       _error = 'Only administrators can update attendance records';
@@ -838,7 +934,7 @@ class AttendanceProvider extends ChangeNotifier {
             responseData['attendance'] ?? responseData['data'] ?? {},
           );
           _attendance[index] = updatedAttendance;
-          _extractMonthsFromData(); // Update months list
+          _extractMonthsFromData();
           _applyFilters();
         }
 
@@ -858,7 +954,7 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // DELETE - Remove attendance (only admin)
+  // DELETE - Remove attendance (FIXED)
   Future<bool> deleteAttendance(int id) async {
     if (!isAdmin) {
       _error = 'Only administrators can delete attendance records';
@@ -882,7 +978,7 @@ class AttendanceProvider extends ChangeNotifier {
 
       if (response.statusCode == 200 || response.statusCode == 204) {
         _attendance.removeWhere((attendance) => attendance.id == id);
-        _extractMonthsFromData(); // Update months list
+        _extractMonthsFromData();
         _applyFilters();
 
         return true;
@@ -903,27 +999,18 @@ class AttendanceProvider extends ChangeNotifier {
 
   // Helper methods for filtering
   void _extractFilters() {
-    // Only extract filters if user is admin
     if (isAdmin) {
-      // Extract unique departments
+      // Extract unique departments from attendance
       final departmentSet = _attendance
-          .map((attendance) => attendance.departmentName)
+          .map((attendance) => attendance.departmentName.trim())
           .where((dept) => dept.isNotEmpty)
           .toSet();
-      _departmentNames = ['All', ...departmentSet];
 
-      // Extract unique employees
-      final employeeSet = _attendance
-          .map((attendance) => attendance.employeeName)
-          .where((emp) => emp.isNotEmpty)
-          .toSet();
-      _employeeNames = ['All', ...employeeSet];
-
-      print('Extracted ${_departmentNames.length} departments and ${_employeeNames.length} employees');
+      // Combine with department list from API
+      final allDepartments = {...departmentSet, ..._departments.map((d) => d.name.trim())};
+      _departmentNames = ['All', ...allDepartments];
     } else {
-      // For regular users, show only their own data in filters
       _departmentNames = ['All'];
-      _employeeNames = ['All'];
     }
   }
 
@@ -933,27 +1020,11 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDepartmentFilter(String department) {
-    if (isAdmin) {
-      _selectedDepartmentFilter = department;
-      _applyFilters();
-      notifyListeners();
-    }
-  }
-
-  void setEmployeeFilter(String employee) {
-    if (isAdmin) {
-      _selectedEmployeeFilter = employee;
-      _applyFilters();
-      notifyListeners();
-    }
-  }
-
   void clearFilters() {
     _searchQuery = '';
     if (isAdmin) {
       _selectedDepartmentFilter = 'All';
-      _selectedEmployeeFilter = 'All';
+      _selectedEmployeeFilter = '';
       _selectedMonthFilter = 'All';
     }
     _applyFilters();
@@ -1002,7 +1073,7 @@ class AttendanceProvider extends ChangeNotifier {
     };
   }
 
-  // Navigation methods with permission checks
+  // Navigation methods
   void navigateToAddScreen(BuildContext context) async {
     if (!isAdmin) {
       _showPermissionError(context, 'add attendance records');
@@ -1053,7 +1124,6 @@ class AttendanceProvider extends ChangeNotifier {
       );
     }
   }
-
 
   void navigateToEditScreen(BuildContext context, Attendance attendance) async {
     if (!isAdmin) {

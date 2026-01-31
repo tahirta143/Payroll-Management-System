@@ -34,12 +34,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenWidth < 600;
+    final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
+    final isLargeScreen = screenWidth >= 900;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Attendance',
           style: TextStyle(
-            fontSize: 24,
+            fontSize: isSmallScreen ? 20 : (isMediumScreen ? 22 : 24),
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
@@ -53,7 +59,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 children: [
                   // User role indicator
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 8 : 12,
+                      vertical: isSmallScreen ? 4 : 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
@@ -62,14 +71,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       children: [
                         Icon(
                           provider.isAdmin ? Iconsax.shield_tick : Iconsax.user,
-                          size: 16,
+                          size: isSmallScreen ? 14 : 16,
                           color: Colors.white,
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: isSmallScreen ? 4 : 6),
                         Text(
                           provider.isAdmin ? 'Admin' : 'User',
-                          style: const TextStyle(
-                            fontSize: 14,
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 12 : 14,
                             color: Colors.white,
                             fontWeight: FontWeight.w500,
                           ),
@@ -77,13 +86,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  SizedBox(width: isSmallScreen ? 8 : 16),
                   IconButton(
-                    icon: const Icon(Iconsax.refresh),
+                    icon: Icon(
+                      Iconsax.refresh,
+                      size: isSmallScreen ? 20 : 24,
+                    ),
                     onPressed: () => provider.fetchAttendance(),
                     tooltip: 'Refresh',
                   ),
-                  const SizedBox(width: 16),
+                  SizedBox(width: isSmallScreen ? 8 : 16),
                 ],
               );
             },
@@ -117,19 +129,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 },
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: isSmallScreen ? 14 : 18),
 
               // Attendance List
               Expanded(
                 child: Container(
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  margin: EdgeInsets.fromLTRB(
+                    isSmallScreen ? 12 : 16,
+                    0,
+                    isSmallScreen ? 12 : 16,
+                    isSmallScreen ? 8 : 10,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
-                        blurRadius: 15,
+                        blurRadius: isSmallScreen ? 10 : 15,
                         offset: const Offset(0, 6),
                       ),
                     ],
@@ -150,7 +167,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               provider.navigateToAddScreen(context);
             },
             backgroundColor: const Color(0xFF667EEA),
-            child: const Icon(Iconsax.add, color: Colors.white),
+            child: Icon(
+              Iconsax.add,
+              color: Colors.white,
+              size: isSmallScreen ? 24 : 28,
+            ),
           )
               : const SizedBox.shrink();
         },
@@ -159,20 +180,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildSearchSection() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     return Consumer<AttendanceProvider>(
       builder: (context, provider, child) {
         final isAdmin = provider.isAdmin;
 
         return Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(16),
+          margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
+                blurRadius: isSmallScreen ? 8 : 10,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -193,11 +217,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     hintText: isAdmin
                         ? 'Search by employee name or ID...'
                         : 'Search your attendance...',
-                    hintStyle: TextStyle(color: Colors.grey[500]),
-                    prefixIcon: Icon(Iconsax.search_normal, color: Colors.grey[500]),
+                    hintStyle: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: isSmallScreen ? 13 : 14,
+                    ),
+                    prefixIcon: Icon(
+                      Iconsax.search_normal,
+                      color: Colors.grey[500],
+                      size: isSmallScreen ? 20 : 22,
+                    ),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
-                      icon: Icon(Iconsax.close_circle, color: Colors.grey[500]),
+                      icon: Icon(
+                        Iconsax.close_circle,
+                        color: Colors.grey[500],
+                        size: isSmallScreen ? 20 : 22,
+                      ),
                       onPressed: () {
                         _searchController.clear();
                         provider.setSearchQuery('');
@@ -205,36 +240,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     )
                         : null,
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 12 : 16,
+                      vertical: isSmallScreen ? 12 : 14,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: isSmallScreen ? 12 : 16),
 
               // Filter Row (Admin only)
               if (isAdmin) ...[
-                Row(
-                  children: [
-                    // Employee Filter
-                    Expanded(
-                      child: _buildEmployeeFilter(provider),
-                    ),
-                    const SizedBox(width: 8),
-                    // Department Filter
-                    Expanded(
-                      child: _buildDepartmentFilter(provider),
-                    ),
-                    const SizedBox(width: 8),
-                    // Month Filter
-                    Expanded(
-                      child: _buildMonthFilter(provider),
-                    ),
-                  ],
-                ),
+                _buildFilterRow(provider),
               ],
             ],
           ),
@@ -243,226 +261,241 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildEmployeeFilter(AttendanceProvider provider) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF667EEA).withOpacity(0.2),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
+  Widget _buildFilterRow(AttendanceProvider provider) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
+
+    if (isVerySmallScreen) {
+      // For very small screens, stack filters vertically
+      return Column(
+        children: [
+          _buildDepartmentFilter(provider),
+          SizedBox(height: isSmallScreen ? 8 : 12),
+          _buildEmployeeFilter(provider),
+          SizedBox(height: isSmallScreen ? 8 : 12),
+          _buildMonthFilter(provider),
         ],
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: provider.selectedEmployeeFilter,
-          isExpanded: true,
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF667EEA).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
+      );
+    } else {
+      // For normal screens, use horizontal layout
+      return Row(
+        children: [
+          Expanded(child: _buildDepartmentFilter(provider)),
+          SizedBox(width: isSmallScreen ? 6 : 8),
+          Expanded(child: _buildEmployeeFilter(provider)),
+          SizedBox(width: isSmallScreen ? 6 : 8),
+          Expanded(child: _buildMonthFilter(provider)),
+        ],
+      );
+    }
+  }
+
+  Widget _buildEmployeeFilter(AttendanceProvider provider) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
+
+    return Consumer<AttendanceProvider>(
+      builder: (context, provider, child) {
+        // Check if department is selected (not "All")
+        final isDepartmentSelected = provider.selectedDepartmentFilter != 'All';
+
+        // Get employees for the selected department
+        final employeesForDepartment = provider.filteredEmployees;
+        final hasEmployees = employeesForDepartment.isNotEmpty;
+
+        // Enable dropdown only when department is selected AND has employees
+        final isEnabled = isDepartmentSelected && hasEmployees;
+
+        // Determine what to show in the dropdown
+        String displayText;
+        if (!isDepartmentSelected) {
+          displayText = 'Select Department';
+        } else if (!hasEmployees) {
+          displayText = 'No employees';
+        } else if (provider.selectedEmployeeFilter.isEmpty) {
+          displayText = 'Select Employee';
+        } else {
+          displayText = provider.selectedEmployeeFilter;
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isEnabled
+                  ? const Color(0xFF667EEA).withOpacity(0.5)
+                  : Colors.grey[300]!,
+              width: 1.5,
             ),
-            child: const Icon(
-              Iconsax.arrow_down_1,
-              size: 16,
-              color: Color(0xFF667EEA),
-            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          style: TextStyle(
-            fontSize: 13,
-            color: provider.selectedEmployeeFilter == 'All'
-                ? Colors.grey[600]
-                : Colors.black87,
-            fontWeight: FontWeight.w500,
-          ),
-          onChanged: (String? value) {
-            if (value != null) {
-              provider.setEmployeeFilter(value);
-            }
-          },
-          items: [
-            DropdownMenuItem<String>(
-              value: 'All',
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: provider.selectedEmployeeFilter.isNotEmpty
+                  ? provider.selectedEmployeeFilter
+                  : null,
+              isExpanded: true,
+              icon: Container(
+                padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
+                decoration: BoxDecoration(
+                  color: isEnabled
+                      ? const Color(0xFF667EEA).withOpacity(0.1)
+                      : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  Iconsax.arrow_down_1,
+                  size: isSmallScreen ? 14 : 16,
+                  color: isEnabled
+                      ? const Color(0xFF667EEA)
+                      : Colors.grey[400],
+                ),
+              ),
+              style: TextStyle(
+                fontSize: isSmallScreen ? 12 : 13,
+                color: isEnabled ? Colors.black87 : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+              hint: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 8 : 12,
+                  vertical: isSmallScreen ? 6 : 8,
+                ),
                 child: Row(
                   children: [
                     Container(
-                      width: 32,
-                      height: 32,
+                      width: isSmallScreen ? 28 : 32,
+                      height: isSmallScreen ? 28 : 32,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF667EEA),
+                        color: isEnabled
+                            ? const Color(0xFF667EEA).withOpacity(0.1)
+                            : Colors.grey[300],
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
-                        child: Text(
-                          '👥',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
+                      child: Center(
+                        child: Icon(
+                          Iconsax.people,
+                          size: isSmallScreen ? 14 : 16,
+                          color: isEnabled
+                              ? const Color(0xFF667EEA)
+                              : Colors.grey[400],
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    const Expanded(
+                    SizedBox(width: isSmallScreen ? 8 : 12),
+                    Expanded(
                       child: Text(
-                        'All Employees',
+                        _truncateText(displayText, isVerySmallScreen ? 15 : 20),
                         style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey,
+                          fontSize: isSmallScreen ? 12 : 13,
+                          color: isEnabled ? Colors.black87 : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            ...provider.employeeNames.where((name) => name != 'All').map((String value) {
-              // Find the employee to get their image URL
-              final employee = provider.employees.firstWhere(
-                    (emp) => emp.name == value,
-                orElse: () => Employee(
-                  id: 0,
-                  name: value,
-                  empId: '',
-                  department: '',
-                  imageUrl: null,
-                ),
-              );
-
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      // Employee Profile Image
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          gradient: employee.imageUrl != null && employee.imageUrl!.isNotEmpty
-                              ? null
-                              : const LinearGradient(
-                            colors: [
-                              Color(0xFF667EEA),
-                              Color(0xFF764BA2),
-                            ],
+              onChanged: isEnabled ? (String? value) {
+                if (value != null && value.isNotEmpty) {
+                  provider.setEmployeeFilter(value);
+                }
+              } : null,
+              items: isEnabled ? employeesForDepartment.map((employee) {
+                return DropdownMenuItem<String>(
+                  value: employee.name,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 8 : 12,
+                      vertical: isSmallScreen ? 6 : 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: isSmallScreen ? 28 : 32,
+                          height: isSmallScreen ? 28 : 32,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFF667EEA),
+                                Color(0xFF764BA2),
+                              ],
+                            ),
+                            shape: BoxShape.circle,
                           ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: ClipOval(
-                          child: employee.imageUrl != null && employee.imageUrl!.isNotEmpty
-                              ? Image.network(
-                            employee.imageUrl!,
-                            fit: BoxFit.cover,
-                            width: 32,
-                            height: 32,
-                            errorBuilder: (context, error, stackTrace) {
-                              // Fallback to initials
-                              return Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Color(0xFF667EEA),
-                                      Color(0xFF764BA2),
-                                    ],
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    value.substring(0, 1).toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Color(0xFF667EEA),
-                                      Color(0xFF764BA2),
-                                    ],
-                                  ),
-                                ),
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                ),
-                              );
-                            },
-                          )
-                              : Center(
+                          child: Center(
                             child: Text(
-                              value.substring(0, 1).toUpperCase(),
-                              style: const TextStyle(
+                              employee.name.substring(0, 1).toUpperCase(),
+                              style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 14,
+                                fontSize: isSmallScreen ? 12 : 14,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              value,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.black87,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (employee.empId.isNotEmpty)
+                        SizedBox(width: isSmallScreen ? 8 : 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                               Text(
-                                employee.empId,
+                                _truncateText(employee.name, isVerySmallScreen ? 12 : 18),
                                 style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey[600],
+                                  fontSize: isSmallScreen ? 12 : 13,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w500,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                          ],
+                              if (employee.empId.isNotEmpty)
+                                Text(
+                                  employee.empId,
+                                  style: TextStyle(
+                                    fontSize: isSmallScreen ? 10 : 11,
+                                    color: Colors.grey[600],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }).toList(),
-          ],
-        ),
-      ),
+                );
+              }).toList() : null,
+            ),
+          ),
+        );
+      },
     );
   }
+
+  String _truncateText(String text, int maxLength) {
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength)}...';
+  }
+
   Widget _buildDepartmentFilter(AttendanceProvider provider) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -484,19 +517,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           value: provider.selectedDepartmentFilter,
           isExpanded: true,
           icon: Container(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
             decoration: BoxDecoration(
               color: const Color(0xFF667EEA).withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Icon(
+            child: Icon(
               Iconsax.arrow_down_1,
-              size: 14,
-              color: Color(0xFF667EEA),
+              size: isSmallScreen ? 12 : 14,
+              color: const Color(0xFF667EEA),
             ),
           ),
           style: TextStyle(
-            fontSize: 12,
+            fontSize: isSmallScreen ? 11 : 12,
             color: provider.selectedDepartmentFilter == 'All'
                 ? Colors.grey[600]
                 : Colors.black87,
@@ -511,29 +544,34 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             DropdownMenuItem<String>(
               value: 'All',
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 6 : 8,
+                  vertical: isSmallScreen ? 4 : 6,
+                ),
                 child: Row(
                   children: [
                     Container(
-                      width: 28,
-                      height: 28,
+                      width: isSmallScreen ? 24 : 28,
+                      height: isSmallScreen ? 24 : 28,
                       decoration: BoxDecoration(
                         color: Colors.grey[300],
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Text(
                           '🏢',
-                          style: TextStyle(fontSize: 12),
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 10 : 12,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Expanded(
+                    SizedBox(width: isSmallScreen ? 6 : 8),
+                    Expanded(
                       child: Text(
                         'All Depts',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: isSmallScreen ? 11 : 12,
                           color: Colors.grey,
                           fontWeight: FontWeight.w500,
                         ),
@@ -547,14 +585,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: isSmallScreen ? 4 : 6,
+                  ),
                   child: Row(
                     children: [
                       Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
+                        width: isSmallScreen ? 24 : 28,
+                        height: isSmallScreen ? 24 : 28,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
                             colors: [
                               Color(0xFF667EEA),
                               Color(0xFF764BA2),
@@ -565,20 +606,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         child: Center(
                           child: Text(
                             value.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
-                              fontSize: 12,
+                              fontSize: isSmallScreen ? 10 : 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: isSmallScreen ? 6 : 8),
                       Expanded(
                         child: Text(
-                          value,
-                          style: const TextStyle(
-                            fontSize: 12,
+                          _truncateText(value, isVerySmallScreen ? 12 : 18),
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 11 : 12,
                             color: Colors.black87,
                             fontWeight: FontWeight.w500,
                           ),
@@ -598,6 +639,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildMonthFilter(AttendanceProvider provider) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -619,19 +664,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           value: provider.selectedMonthFilter,
           isExpanded: true,
           icon: Container(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
             decoration: BoxDecoration(
               color: const Color(0xFF667EEA).withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Icon(
+            child: Icon(
               Iconsax.calendar,
-              size: 14,
-              color: Color(0xFF667EEA),
+              size: isSmallScreen ? 12 : 14,
+              color: const Color(0xFF667EEA),
             ),
           ),
           style: TextStyle(
-            fontSize: 12,
+            fontSize: isSmallScreen ? 11 : 12,
             color: provider.selectedMonthFilter == 'All'
                 ? Colors.grey[600]
                 : Colors.black87,
@@ -646,30 +691,33 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             DropdownMenuItem<String>(
               value: 'All',
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 6 : 8,
+                  vertical: isSmallScreen ? 4 : 6,
+                ),
                 child: Row(
                   children: [
                     Container(
-                      width: 28,
-                      height: 28,
+                      width: isSmallScreen ? 24 : 28,
+                      height: isSmallScreen ? 24 : 28,
                       decoration: BoxDecoration(
                         color: Colors.grey[300],
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Icon(
                           Iconsax.calendar_1,
-                          size: 14,
+                          size: isSmallScreen ? 12 : 14,
                           color: Colors.grey,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Expanded(
+                    SizedBox(width: isSmallScreen ? 6 : 8),
+                    Expanded(
                       child: Text(
                         'All Months',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: isSmallScreen ? 11 : 12,
                           color: Colors.grey,
                           fontWeight: FontWeight.w500,
                         ),
@@ -683,14 +731,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: isSmallScreen ? 4 : 6,
+                  ),
                   child: Row(
                     children: [
                       Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
+                        width: isSmallScreen ? 24 : 28,
+                        height: isSmallScreen ? 24 : 28,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
                             colors: [
                               Color(0xFF667EEA),
                               Color(0xFF764BA2),
@@ -701,20 +752,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         child: Center(
                           child: Text(
                             _getMonthNumber(value),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
-                              fontSize: 11,
+                              fontSize: isSmallScreen ? 10 : 11,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: isSmallScreen ? 6 : 8),
                       Expanded(
                         child: Text(
-                          value,
-                          style: const TextStyle(
-                            fontSize: 12,
+                          _truncateText(value, isVerySmallScreen ? 10 : 16),
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 11 : 12,
                             color: Colors.black87,
                             fontWeight: FontWeight.w500,
                           ),
@@ -735,9 +786,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   String _getMonthNumber(String monthWithYear) {
     try {
-      // Extract just the month name from "January 2024"
       final monthName = monthWithYear.split(' ')[0];
-
       final months = {
         'January': '1', 'February': '2', 'March': '3', 'April': '4',
         'May': '5', 'June': '6', 'July': '7', 'August': '8',
@@ -750,19 +799,33 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildStatisticsCards(AttendanceProvider provider) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
+    final isLargeScreen = screenWidth >= 900;
+
+    // Calculate responsive height based on screen size
+    final cardHeight = isVerySmallScreen
+        ? screenHeight * 0.12
+        : (isSmallScreen ? screenHeight * 0.13 : screenHeight * 0.14);
+
     return SizedBox(
-      height: 110,
+      height: cardHeight,
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 1.0,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: isVerySmallScreen ? 10 : (isSmallScreen ? 15 : 20),
+          mainAxisSpacing: isVerySmallScreen ? 8 : (isSmallScreen ? 10 : 12),
+          childAspectRatio: isVerySmallScreen ? 0.9 : (isSmallScreen ? 1.0 : 1.1),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: 4,
+        padding: EdgeInsets.symmetric(
+          horizontal: isVerySmallScreen ? 12 : (isSmallScreen ? 16 : 20),
+          vertical: isVerySmallScreen ? 4 : (isSmallScreen ? 6 : 8),
+        ),
+        itemCount: 3,
         itemBuilder: (context, index) {
           final stats = [
             {
@@ -783,71 +846,68 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               'count': provider.totalAbsent.toString(),
               'color': const Color(0xFFF44336),
             },
-            {
-              'icon': Iconsax.timer,
-              'title': 'Overtime',
-              'count': provider.totalOvertime.toString(),
-              'color': const Color(0xFF2196F3),
-            },
           ];
 
           final stat = stats[index];
           return Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(15),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 10)),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 28,
-                  height: 28,
+                  width: isVerySmallScreen ? 28 : (isSmallScreen ? 32 : 36),
+                  height: isVerySmallScreen ? 26 : (isSmallScreen ? 30 : 34),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        (stat['color'] as Color).withOpacity(0.2),
-                        (stat['color'] as Color).withOpacity(0.1),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: (stat['color'] as Color).withOpacity(0.1),
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: (stat['color'] as Color).withOpacity(0.3),
+                      width: 1.5,
+                    ),
                   ),
-                  child: Icon(
-                    stat['icon'] as IconData,
-                    color: stat['color'] as Color,
-                    size: 16,
+                  child: Center(
+                    child: Icon(
+                      stat['icon'] as IconData,
+                      color: stat['color'] as Color,
+                      size: isVerySmallScreen ? 14 : (isSmallScreen ? 16 : 18),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: isVerySmallScreen ? 4 : (isSmallScreen ? 6 : 8)),
                 Text(
                   stat['count'] as String,
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: TextStyle(
+                    fontSize: isVerySmallScreen ? 16 : (isSmallScreen ? 18 : 20),
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
                   maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: isVerySmallScreen ? 2 : (isSmallScreen ? 3 : 4)),
                 Text(
                   stat['title'] as String,
                   style: TextStyle(
-                    fontSize: 9,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+                    fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
+                    color: (stat['color'] as Color).withOpacity(0.8),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
                   maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -858,6 +918,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildAttendanceList() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
+
     return Consumer<AttendanceProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && provider.attendance.isEmpty) {
@@ -873,22 +938,30 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               children: [
                 Icon(
                   Iconsax.warning_2,
-                  size: 60,
+                  size: isSmallScreen ? 50 : 60,
                   color: Colors.grey[300],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Error: ${provider.error}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[500],
+                SizedBox(height: isSmallScreen ? 12 : 16),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 16 : 24),
+                  child: Text(
+                    'Error: ${provider.error}',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 14 : 16,
+                      color: Colors.grey[500],
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: isSmallScreen ? 12 : 16),
                 ElevatedButton(
                   onPressed: () => provider.fetchAttendance(),
-                  child: const Text('Retry'),
+                  child: Text(
+                    'Retry',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 14 : 16,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -902,27 +975,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               children: [
                 Icon(
                   Iconsax.note_remove,
-                  size: 60,
+                  size: isSmallScreen ? 50 : 60,
                   color: Colors.grey[300],
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: isSmallScreen ? 12 : 16),
                 Text(
                   provider.isAdmin
                       ? 'No attendance records found'
                       : 'No attendance records for you',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: isSmallScreen ? 14 : 16,
                     color: Colors.grey[500],
                   ),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  provider.isAdmin
-                      ? 'Try adding new attendance records'
-                      : 'Contact admin if you think this is an error',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[400],
+                SizedBox(height: isSmallScreen ? 8 : 12),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 20 : 32),
+                  child: Text(
+                    provider.isAdmin
+                        ? 'Try adding new attendance records'
+                        : 'Contact admin if you think this is an error',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 12 : 14,
+                      color: Colors.grey[400],
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
@@ -930,14 +1008,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           );
         }
 
-        final screenWidth = MediaQuery.of(context).size.width;
-        final isSmallScreen = screenWidth < 600;
-
         return Column(
           children: [
             // Table Header
             Container(
-              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+              padding: EdgeInsets.all(isVerySmallScreen ? 8 : (isSmallScreen ? 12 : 16)),
               decoration: BoxDecoration(
                 color: Colors.grey[50],
                 borderRadius: const BorderRadius.only(
@@ -955,25 +1030,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 children: [
                   // Serial Number
                   SizedBox(
-                    width: isSmallScreen ? 40 : 50,
+                    width: isVerySmallScreen ? 30 : (isSmallScreen ? 40 : 50),
                     child: Text(
                       'Sr.No',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 11 : 12,
+                        fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: isVerySmallScreen ? 4 : 8),
                   // Date
                   Expanded(
-                    flex: isSmallScreen ? 2 : 3,
+                    flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
                     child: Text(
                       'Date',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 11 : 12,
+                        fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
@@ -981,11 +1056,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ),
                   // Time In
                   Expanded(
-                    flex: isSmallScreen ? 2 : 3,
+                    flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
                     child: Text(
                       'Time In',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 11 : 12,
+                        fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
@@ -994,11 +1069,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ),
                   // Time Out
                   Expanded(
-                    flex: isSmallScreen ? 2 : 3,
+                    flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
                     child: Text(
                       'Time Out',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 11 : 12,
+                        fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
@@ -1007,11 +1082,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ),
                   // Status
                   Expanded(
-                    flex: isSmallScreen ? 2 : 3,
+                    flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
                     child: Text(
                       'Status',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 11 : 12,
+                        fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
@@ -1021,11 +1096,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   // Actions (Admin only)
                   if (provider.isAdmin)
                     SizedBox(
-                      width: isSmallScreen ? 30 : 40,
+                      width: isVerySmallScreen ? 20 : (isSmallScreen ? 30 : 40),
                       child: Text(
-                        isSmallScreen ? '' : 'Actions',
+                        isVerySmallScreen || isSmallScreen ? '' : 'Actions',
                         style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 12,
+                          fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                           fontWeight: FontWeight.w600,
                           color: Colors.black87,
                         ),
@@ -1059,6 +1134,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget _buildTableRow(Attendance attendance, bool isAdmin, int serialNo) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
 
     return Container(
       decoration: BoxDecoration(
@@ -1072,32 +1148,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 12 : 16,
-          vertical: isSmallScreen ? 8 : 12,
+          horizontal: isVerySmallScreen ? 8 : (isSmallScreen ? 12 : 16),
+          vertical: isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 12),
         ),
         child: Row(
           children: [
             // Serial Number
             SizedBox(
-              width: isSmallScreen ? 40 : 50,
+              width: isVerySmallScreen ? 30 : (isSmallScreen ? 40 : 50),
               child: Text(
                 serialNo.toString(),
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 12 : 13,
+                  fontSize: isVerySmallScreen ? 11 : (isSmallScreen ? 12 : 13),
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: isVerySmallScreen ? 4 : 8),
             // Date Column
             Expanded(
-              flex: isSmallScreen ? 2 : 3,
+              flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
               child: Text(
                 _formatDate(attendance.date),
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 11 : 12,
+                  fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                   color: Colors.black87,
                 ),
                 textAlign: TextAlign.left,
@@ -1105,34 +1181,35 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
             // Time In Column
             Expanded(
-              flex: isSmallScreen ? 2 : 3,
+              flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 4 : 8,
-                      vertical: isSmallScreen ? 3 : 4,
+                      horizontal: isVerySmallScreen ? 2 : (isSmallScreen ? 4 : 8),
+                      vertical: isVerySmallScreen ? 2 : (isSmallScreen ? 3 : 4),
                     ),
                     decoration: BoxDecoration(
                       color: Colors.green.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           attendance.timeIn.isNotEmpty
                               ? attendance.timeIn.substring(0, 5)
                               : '--:--',
                           style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 12,
+                            fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                             fontWeight: FontWeight.w600,
                             color: Colors.green[700],
                           ),
                           textAlign: TextAlign.center,
                         ),
                         if (attendance.lateMinutes > 0) ...[
-                          const SizedBox(height: 2),
+                          SizedBox(height: isVerySmallScreen ? 1 : 2),
                         ],
                       ],
                     ),
@@ -1142,34 +1219,35 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
             // Time Out Column
             Expanded(
-              flex: isSmallScreen ? 2 : 3,
+              flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 4 : 8,
-                      vertical: isSmallScreen ? 3 : 4,
+                      horizontal: isVerySmallScreen ? 2 : (isSmallScreen ? 4 : 8),
+                      vertical: isVerySmallScreen ? 2 : (isSmallScreen ? 3 : 4),
                     ),
                     decoration: BoxDecoration(
                       color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           attendance.timeOut.isNotEmpty
                               ? attendance.timeOut.substring(0, 5)
                               : '--:--',
                           style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 12,
+                            fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
                             fontWeight: FontWeight.w600,
                             color: Colors.blue[700],
                           ),
                           textAlign: TextAlign.center,
                         ),
                         if (attendance.overtimeMinutes > 0) ...[
-                          const SizedBox(height: 2),
+                          SizedBox(height: isVerySmallScreen ? 1 : 2),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(
@@ -1179,7 +1257,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             child: Text(
                               'OT: ${attendance.overtimeMinutes}m',
                               style: TextStyle(
-                                fontSize: isSmallScreen ? 9 : 10,
+                                fontSize: isVerySmallScreen ? 8 : (isSmallScreen ? 9 : 10),
                                 color: Colors.blue[700],
                                 fontWeight: FontWeight.w500,
                               ),
@@ -1195,11 +1273,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
             // Status Column
             Expanded(
-              flex: isSmallScreen ? 2 : 3,
+              flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
               child: Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 4 : 8,
-                  vertical: isSmallScreen ? 4 : 6,
+                  horizontal: isVerySmallScreen ? 2 : (isSmallScreen ? 4 : 8),
+                  vertical: isVerySmallScreen ? 3 : (isSmallScreen ? 4 : 6),
                 ),
                 decoration: BoxDecoration(
                   color: attendance.statusColor.withOpacity(0.1),
@@ -1207,11 +1285,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       attendance.status,
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 10 : 11,
+                        fontSize: isVerySmallScreen ? 9 : (isSmallScreen ? 10 : 11),
                         fontWeight: FontWeight.w600,
                         color: attendance.statusColor,
                       ),
@@ -1220,11 +1299,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (attendance.lateMinutes > 0 && attendance.status.toLowerCase() == 'late') ...[
-                      const SizedBox(height: 2),
+                      SizedBox(height: isVerySmallScreen ? 1 : 2),
                       Text(
                         'Late by ${attendance.lateMinutes}m',
                         style: TextStyle(
-                          fontSize: isSmallScreen ? 8 : 9,
+                          fontSize: isVerySmallScreen ? 7 : (isSmallScreen ? 8 : 9),
                           color: Colors.orange[700],
                           fontWeight: FontWeight.w500,
                         ),
@@ -1232,11 +1311,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                     ],
                     if (attendance.status.toLowerCase() == 'on time') ...[
-                      const SizedBox(height: 2),
+                      SizedBox(height: isVerySmallScreen ? 1 : 2),
                       Text(
                         'Perfect',
                         style: TextStyle(
-                          fontSize: isSmallScreen ? 8 : 9,
+                          fontSize: isVerySmallScreen ? 7 : (isSmallScreen ? 8 : 9),
                           color: Colors.green[700],
                           fontWeight: FontWeight.w500,
                         ),

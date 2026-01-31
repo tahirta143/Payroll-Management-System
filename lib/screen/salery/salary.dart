@@ -1043,15 +1043,7 @@ SizedBox(width: 10,),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 4),
-                                // Text(
-                                //   'ID: ${employee.empId}',
-                                //   style: TextStyle(color: Colors.grey[600]),
-                                // ),
-                                // if (employee.department != null)
-                                //   Text(
-                                //     'Dept: ${employee.department}',
-                                //     style: TextStyle(color: Colors.grey[600]),
-                                //   ),
+
                               ],
                             ),
                           ),

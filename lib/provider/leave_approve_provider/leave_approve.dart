@@ -905,7 +905,6 @@ class LeaveProvider extends ChangeNotifier {
           print('PUT error: $e');
         }
       }
-
       // Method 3: POST to reject endpoint
       if (!success) {
         print('Method 3: Trying POST to /reject...');
@@ -979,7 +978,6 @@ class LeaveProvider extends ChangeNotifier {
     _successMessage = '';
     notifyListeners();
   }
-
   // Debug method
   Future<void> debugUserInfo() async {
     final prefs = await SharedPreferences.getInstance();

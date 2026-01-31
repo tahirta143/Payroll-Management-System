@@ -624,10 +624,8 @@ class EmployeeSalaryProvider with ChangeNotifier {
         await fetchEmployees();
       }
 
-      // Filter out employees who already have salaries
-      return _employees.where((employee) {
-        return !_salaries.any((salary) => salary.employeeId == employee.id);
-      }).toList();
+      // Return ALL employees, not just those without salaries
+      return _employees.toList();
     } catch (e) {
       print('Error getting available employees: $e');
       return [];
