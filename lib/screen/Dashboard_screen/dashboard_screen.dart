@@ -244,7 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       if (screen is ApproveLeaveScreen) {
         return const Text(
-          'Leave Approval',
+          'Leave',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
@@ -294,6 +294,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+
   List<Widget> _getScreens(PermissionProvider p) {
     List<Widget> screens = [];
 
@@ -305,10 +306,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       screens.add(const AttendanceScreen());
     }
 
-    // 2 - Leave Approval
-    if (p.hasPermission('can-edit-leave-application')) {
-      screens.add(const ApproveLeaveScreen());
-    }
+    // 2 - Leave Approval/My Leaves - ALWAYS ADD THIS FOR ALL USERS
+    screens.add(const ApproveLeaveScreen());
 
     // 3 - Salary Slip
     screens.add(const SalarySlipScreen());
@@ -334,6 +333,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return screens;
   }
+
   // Helper method to get screen index based on item title
   int _getScreenIndexForItem(String itemTitle, PermissionProvider p) {
     final screens = _getScreens(p);
@@ -377,12 +377,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavIndex++;
     }
 
-    // 2. Leave Approval
-    if (p.hasPermission('can-edit-leave-application')) {
-      if (currentScreenIndex == screenIndex) return bottomNavIndex;
-      currentScreenIndex++;
-      bottomNavIndex++;
-    }
+    // 2. Leave Approval - ALWAYS IN BOTTOM NAV
+    if (currentScreenIndex == screenIndex) return bottomNavIndex;
+    currentScreenIndex++;
+    bottomNavIndex++;
 
     // 3. Salary Slip - NOT in bottom nav (skip)
     if (currentScreenIndex == screenIndex) return 0; // Go to home since not in bottom nav
@@ -419,12 +417,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       currentBottomNavIndex++;
     }
 
-    // 2. Leave Approval
-    if (p.hasPermission('can-edit-leave-application')) {
-      if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
-      screenIndex++;
-      currentBottomNavIndex++;
-    }
+    // 2. Leave Approval - ALWAYS IN BOTTOM NAV
+    if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
+    screenIndex++;
+    currentBottomNavIndex++;
 
     // 3. Salary Slip - NOT in bottom nav (skip - screenIndex increases)
     screenIndex++;
@@ -463,15 +459,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    // Add leave approval item if permission exists
-    if (p.hasPermission('can-edit-leave-application')) {
-      items.add(
-        const BottomNavigationBarItem(
-          icon: Icon(Iconsax.calendar_tick, size: 22),
-          label: 'Leave',
-        ),
-      );
-    }
+    // ALWAYS ADD LEAVE ITEM FOR ALL USERS
+    items.add(
+      const BottomNavigationBarItem(
+        icon: Icon(Iconsax.calendar_tick, size: 22),
+        label: 'Leave',
+      ),
+    );
 
     // Add salary item if permission exists (old salary screen)
     if (p.hasPermission('can-view-salary')) {
@@ -527,6 +521,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+
   Widget _buildHomeScreen() {
     final Size size = MediaQuery.of(context).size;
     final p = context.read<PermissionProvider>();
@@ -631,14 +626,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   : dashboardProvider.error != null
                   ? _buildErrorWidget(dashboardProvider)
                   : _buildStatsGrid(dashboardProvider, size),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Additional Stats Cards
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              // child: _buildAdditionalStats(dashboardProvider, size),
             ),
 
             const SizedBox(height: 24),
@@ -1151,102 +1138,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildClickableDetailStatCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required double percentage,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        splashColor: color.withOpacity(0.1),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          value,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${percentage.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: color,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Iconsax.arrow_right_3,
-                color: color,
-                size: 18,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildNoDataWidget() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1573,9 +1464,10 @@ class SidebarDrawer extends StatelessWidget {
       },
       {
         'icon': Iconsax.tick_circle,
-        'title': 'Approve Leave',
+        'title': 'Leave',
         'permission': 'can-edit-leave-application',
-        'requiresPermission': true,
+        'requiresPermission': false, // Changed to false - always show
+        'description': 'View and manage leaves',
       },
       {
         'icon': Iconsax.document_text,

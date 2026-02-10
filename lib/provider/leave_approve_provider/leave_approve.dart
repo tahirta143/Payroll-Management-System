@@ -1,7 +1,7 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../Utility/global_url.dart';
 import '../../model/leave_approve_model/leave_approve.dart';
@@ -43,6 +43,9 @@ class LeaveProvider extends ChangeNotifier {
     'urgent_work'
   ];
 
+  // Debug mode
+  bool _debugMode = true;
+
   List<ApproveLeave> get leaves => _filteredLeaves;
   List<ApproveLeave> get allLeaves => _leaves;
   bool get isLoading => _isLoading;
@@ -59,6 +62,8 @@ class LeaveProvider extends ChangeNotifier {
   int? get currentUserId => _currentUserId;
   int? get currentDepartmentId => _currentDepartmentId;
   String? get userRole => _userRole;
+  String? get currentEmployeeName => _currentEmployeeName;
+  String? get currentEmployeeCode => _currentEmployeeCode;
 
   // New getters
   List<Map<String, dynamic>> get allEmployees => _allEmployees;
@@ -66,29 +71,34 @@ class LeaveProvider extends ChangeNotifier {
   List<String> get leaveTypes => _leaveTypes;
 
   // Call this method after user logs in to set their role and ID
-  Future<void> initializeUserRole() async {
+  Future<void> initializeUserData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      print('=== INITIALIZE USER ROLE ===');
+      print('=== INITIALIZE USER DATA ===');
 
-      // 1. First, extract from userData
+      // Get user data
       final userDataString = prefs.getString('userData');
       if (userDataString != null && userDataString.isNotEmpty) {
         try {
           final userData = jsonDecode(userDataString);
           print('userData: $userData');
 
-          // Extract role
-          _userRole = userData['role_label'] ?? 'user';
-          print('Extracted role: "$_userRole"');
-
-          // Extract user ID
+          // Extract user info
           _currentUserId = userData['id'];
-          print('Extracted user ID: $_currentUserId');
+          _currentEmployeeName = userData['name']?.toString() ?? '';
+          _currentEmployeeCode = userData['employee_code']?.toString() ?? '';
+          _userRole = userData['role_label']?.toString() ?? 'user';
 
-          // Extract name
-          _currentEmployeeName = userData['name'];
+          // NORMALIZE THE ROLE - CRITICAL FIX
+          if (_userRole!.toLowerCase().contains('attendence') ||
+              _userRole!.toLowerCase().contains('attendance') ||
+              _userRole!.toLowerCase().contains('employee') ||
+              _userRole!.toLowerCase().contains('staff') ||
+              _userRole!.toLowerCase().contains('user')) {
+            _userRole = 'employee'; // Normalize to 'employee'
+            print('Normalized role from "${userData['role_label']}" to "$_userRole"');
+          }
 
           // Extract department ID
           if (userData['department'] != null) {
@@ -98,6 +108,17 @@ class LeaveProvider extends ChangeNotifier {
               _currentDepartmentId = userData['department_id'];
             }
           }
+
+          // If department ID is still null, try to get it from department_id field
+          if (_currentDepartmentId == null && userData['department_id'] != null) {
+            _currentDepartmentId = userData['department_id'];
+          }
+
+          // Determine if admin
+          final roleLower = _userRole!.toLowerCase().trim();
+          _isAdmin = roleLower.contains('admin') ||
+              roleLower.contains('super') ||
+              roleLower.contains('manager');
 
           // Save for future use
           await prefs.setString('user_role', _userRole!);
@@ -110,15 +131,18 @@ class LeaveProvider extends ChangeNotifier {
           if (_currentDepartmentId != null) {
             await prefs.setInt('department_id', _currentDepartmentId!);
           }
+          if (_currentEmployeeCode != null) {
+            await prefs.setString('employee_code', _currentEmployeeCode!);
+          }
 
         } catch (e) {
           print('Error parsing userData: $e');
         }
       }
 
-      // 2. If still not set, try from storage
+      // If still not set, try from storage
       if (_userRole == null) {
-        _userRole = prefs.getString('user_role') ?? 'user';
+        _userRole = prefs.getString('user_role') ?? 'employee'; // Default to employee
       }
       if (_currentUserId == null) {
         _currentUserId = prefs.getInt('user_id');
@@ -129,10 +153,11 @@ class LeaveProvider extends ChangeNotifier {
       if (_currentDepartmentId == null) {
         _currentDepartmentId = prefs.getInt('department_id');
       }
+      if (_currentEmployeeCode == null) {
+        _currentEmployeeCode = prefs.getString('employee_code');
+      }
 
-      _currentEmployeeCode = prefs.getString('employee_code');
-
-      // Check if user is admin
+      // Re-check admin status
       final roleLower = _userRole!.toLowerCase().trim();
       _isAdmin = roleLower.contains('admin') ||
           roleLower.contains('super') ||
@@ -140,18 +165,18 @@ class LeaveProvider extends ChangeNotifier {
 
       print('Final values:');
       print('User Role: "$_userRole"');
-      print('Role (lowercase): "$roleLower"');
       print('User ID: $_currentUserId');
-      print('User Name: $_currentEmployeeName');
+      print('User Name: "$_currentEmployeeName"');
+      print('User Code: "$_currentEmployeeCode"');
       print('Department ID: $_currentDepartmentId');
       print('isAdmin: $_isAdmin');
       print('==============================');
 
       notifyListeners();
     } catch (e) {
-      print('Error initializing user role: $e');
+      print('Error initializing user data: $e');
       _isAdmin = false;
-      _userRole = 'user';
+      _userRole = 'employee'; // Default to employee
     }
   }
 
@@ -177,9 +202,17 @@ class LeaveProvider extends ChangeNotifier {
         throw Exception('No authentication token found');
       }
 
+      // Initialize user data first
+      await initializeUserData();
+
       String apiUrl = 'https://api.afaqmis.com/api/leaves';
 
-      print('Fetching leaves from: $apiUrl');
+      print('=== FETCH LEAVES ===');
+      print('Fetching from: $apiUrl');
+      print('User is admin: $_isAdmin');
+      print('Current user ID: $_currentUserId');
+      print('Current user name: "$_currentEmployeeName"');
+      print('Current department ID: $_currentDepartmentId');
 
       final response = await http.get(
         Uri.parse(apiUrl),
@@ -200,6 +233,14 @@ class LeaveProvider extends ChangeNotifier {
 
         // Handle different API response formats
         if (responseData is Map) {
+          print('=== API RESPONSE STRUCTURE ===');
+          responseData.forEach((key, value) {
+            print('Key: "$key", Type: ${value.runtimeType}');
+            if (value is List) {
+              print('  List length: ${value.length}');
+            }
+          });
+
           if (responseData.containsKey('data')) {
             if (responseData['data'] is List) {
               leaveList = responseData['data'];
@@ -227,49 +268,59 @@ class LeaveProvider extends ChangeNotifier {
           _leaves = leaveList.map((json) => ApproveLeave.fromJson(json)).toList();
           print('Successfully created ${_leaves.length} ApproveLeave objects');
 
-          // Debug first leave
-          if (_leaves.isNotEmpty) {
-            print('First leave: ${_leaves.first.employeeName}, image: ${_leaves.first.imageUrl}');
-          }
-        }
-
-        // If leaves don't have images, fetch from employees API
-        if (_leaves.isNotEmpty && (_leaves.first.imageUrl == null || _leaves.first.imageUrl!.isEmpty)) {
-          print('Fetching employee images for leaves...');
-          final employeeImageMap = await fetchAllEmployees();
-
-          // Update leaves with image URLs
-          for (int i = 0; i < _leaves.length; i++) {
+          // Debug: Print all leaves
+          print('=== DEBUG: ALL LEAVES FROM API ===');
+          for (var i = 0; i < min(_leaves.length, 10); i++) {
             final leave = _leaves[i];
-            String? imageUrl;
-
-            // Try to find image by employee code
-            if (employeeImageMap.containsKey(leave.employeeCode)) {
-              imageUrl = employeeImageMap[leave.employeeCode];
-              print('Found image for ${leave.employeeName} by employeeCode');
-            }
-            // Try to find image by employee name
-            else if (employeeImageMap.containsKey(leave.employeeName)) {
-              imageUrl = employeeImageMap[leave.employeeName];
-              print('Found image for ${leave.employeeName} by name');
-            }
-            // Try to find image by employee ID
-            else if (employeeImageMap.containsKey(leave.employeeId.toString())) {
-              imageUrl = employeeImageMap[leave.employeeId.toString()];
-              print('Found image for ${leave.employeeName} by ID');
-            }
-
-            if (imageUrl != null) {
-              // Update the leave with the image URL
-              _leaves[i] = leave.copyWith(imageUrl: imageUrl);
+            print('Leave ${i + 1}:');
+            print('  ID: ${leave.id}');
+            print('  Employee ID: ${leave.employeeId}');
+            print('  Employee Name: "${leave.employeeName}"');
+            print('  Employee Code: "${leave.employeeCode}"');
+            print('  Status: ${leave.status}');
+            print('  Department ID: ${leave.departmentId}');
+            if (leave.employeeId == _currentUserId) {
+              print('  ✓ THIS IS CURRENT USER (ID: $_currentUserId)');
             }
           }
         }
 
         // If user is not admin, filter to show only their leaves
         if (!_isAdmin && _currentUserId != null) {
-          _leaves = _leaves.where((leave) => leave.employeeId == _currentUserId).toList();
-          print('Filtered to ${_leaves.length} leaves for user ID: $_currentUserId');
+          print('=== FILTERING LEAVES FOR NON-ADMIN USER ===');
+          print('Current user ID: $_currentUserId');
+          print('Current user name: "$_currentEmployeeName"');
+          final originalCount = _leaves.length;
+
+          if (!_debugMode) {
+            // Production filtering
+            _leaves = _leaves.where((leave) => leave.employeeId == _currentUserId).toList();
+            print('Filtered from $originalCount to ${_leaves.length} leaves for user ID: $_currentUserId');
+
+            // Also filter by employee name as additional check
+            if (_leaves.isEmpty && _currentEmployeeName != null) {
+              print('Trying to filter by employee name: "$_currentEmployeeName"');
+              _leaves = _leaves.where((leave) =>
+              leave.employeeName.toLowerCase().contains(_currentEmployeeName!.toLowerCase()) ||
+                  (_currentEmployeeCode != null && leave.employeeCode.toLowerCase().contains(_currentEmployeeCode!.toLowerCase()))
+              ).toList();
+              print('After name filtering: ${_leaves.length} leaves');
+            }
+          } else {
+            // Debug mode: Show debug info but don't filter
+            print('DEBUG MODE: Showing all leaves for debugging');
+            print('Total leaves: ${_leaves.length}');
+
+            // Count user's leaves
+            int userLeavesCount = _leaves.where((leave) => leave.employeeId == _currentUserId).length;
+            print('User has $userLeavesCount leaves in total list');
+
+            // Show user's leaves
+            print('=== USER LEAVES ===');
+            for (var leave in _leaves.where((leave) => leave.employeeId == _currentUserId)) {
+              print('  - ${leave.employeeName} (ID: ${leave.employeeId}) - Status: ${leave.status}');
+            }
+          }
         }
 
         // Extract unique departments and employees
@@ -359,7 +410,38 @@ class LeaveProvider extends ChangeNotifier {
   Future<void> fetchAllEmployeesForDropdown() async {
     try {
       print('=== FETCHING EMPLOYEES FOR DROPDOWN ===');
+      print('User is admin: $_isAdmin');
+      print('Current user ID: $_currentUserId');
+      print('Current user name: "$_currentEmployeeName"');
+      print('Current department ID: $_currentDepartmentId');
 
+      // Always clear existing list first
+      _allEmployees.clear();
+
+      // For non-admin users, add only themselves
+      if (!_isAdmin) {
+        print('Non-admin user: Adding only current user to dropdown');
+
+        if (_currentUserId != null && _currentEmployeeName != null) {
+          _allEmployees.add({
+            'id': _currentUserId!,
+            'name': _currentEmployeeName!,
+            'employee_code': _currentEmployeeCode ?? '',
+            'department_id': _currentDepartmentId ?? 1,
+            'department_name': 'My Department',
+            'designation': 'Employee',
+            'image': null,
+          });
+          print('Added current user to dropdown: "$_currentEmployeeName", Dept ID: $_currentDepartmentId');
+        } else {
+          print('Warning: Current user data not available for non-admin');
+        }
+
+        notifyListeners();
+        return;
+      }
+
+      // For admin users, fetch all employees from API
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
@@ -383,20 +465,31 @@ class LeaveProvider extends ChangeNotifier {
 
         print('Found ${employeesData.length} employees in API response');
 
-        // Clear existing list
-        _allEmployees.clear();
-
         // Process each employee
         for (var emp in employeesData) {
           try {
+            // Extract department ID - handle multiple formats
+            int? departmentId;
+
+            if (emp['department_id'] != null) {
+              departmentId = int.tryParse(emp['department_id'].toString());
+            } else if (emp['department'] != null) {
+              if (emp['department'] is Map) {
+                departmentId = int.tryParse(emp['department']['id']?.toString() ?? '');
+              } else {
+                departmentId = int.tryParse(emp['department'].toString());
+              }
+            } else if (emp['dept_id'] != null) {
+              departmentId = int.tryParse(emp['dept_id'].toString());
+            }
+
             final employeeMap = {
               'id': emp['id'] ?? 0,
               'name': emp['name']?.toString() ?? 'Unknown',
               'employee_code': emp['employee_code']?.toString() ?? emp['emp_id']?.toString() ?? '',
-              'department_id': emp['department_id'] ??
-                  (emp['department'] is Map ? emp['department']['id'] : null),
+              'department_id': departmentId ?? 1,
               'department_name': emp['department_name']?.toString() ??
-                  (emp['department'] is Map ? emp['department']['name']?.toString() : 'Unknown'),
+                  (emp['department'] is Map ? emp['department']['name']?.toString() : 'Unknown Department'),
               'designation': emp['designation']?.toString() ??
                   (emp['designation_info'] is Map ? emp['designation_info']['name']?.toString() : ''),
               'image': emp['image']?.toString() ??
@@ -404,8 +497,8 @@ class LeaveProvider extends ChangeNotifier {
                   emp['profile_image']?.toString(),
             };
 
-            // Only add if we have at least name and employee code
-            if (employeeMap['name'] != 'Unknown' && employeeMap['employee_code'].toString().isNotEmpty) {
+            // Only add if we have at least name
+            if (employeeMap['name'] != 'Unknown') {
               _allEmployees.add(employeeMap);
             }
           } catch (e) {
@@ -417,19 +510,33 @@ class LeaveProvider extends ChangeNotifier {
         notifyListeners();
       } else {
         print('Failed to fetch employees: ${response.statusCode}');
+        print('Response body: ${response.body}');
         throw Exception('Failed to fetch employees: ${response.statusCode}');
       }
     } catch (e, stackTrace) {
       print('Error in fetchAllEmployeesForDropdown: $e');
       print('Stack trace: $stackTrace');
-      _allEmployees = [];
+
+      // Fallback: Add current user even if there's an error
+      if (_currentUserId != null && _currentEmployeeName != null) {
+        _allEmployees.add({
+          'id': _currentUserId!,
+          'name': _currentEmployeeName!,
+          'employee_code': _currentEmployeeCode ?? '',
+          'department_id': _currentDepartmentId ?? 1,
+          'department_name': 'My Department',
+          'designation': 'Employee',
+          'image': null,
+        });
+        notifyListeners();
+      }
+
       _error = 'Failed to load employees: $e';
       notifyListeners();
-      rethrow;
     }
   }
 
-  // Updated submitLeave method with employee selection and pay mode
+  // Submit leave for admin (selecting employee)
   Future<bool> submitLeave({
     required int selectedEmployeeId,
     required String natureOfLeave,
@@ -440,6 +547,11 @@ class LeaveProvider extends ChangeNotifier {
     String? reason,
   }) async {
     try {
+      // Only admin can submit leave for other employees
+      if (!_isAdmin) {
+        throw Exception('Only admin users can submit leaves for other employees');
+      }
+
       _isLoading = true;
       _error = '';
       _successMessage = '';
@@ -462,19 +574,14 @@ class LeaveProvider extends ChangeNotifier {
         throw Exception('Selected employee not found');
       }
 
-      // Get department ID from selected employee or current user
-      int? departmentId = selectedEmployee['department_id'] ?? _currentDepartmentId;
-
-      // If still no department ID, try to extract it
-      if (departmentId == null && selectedEmployee['department_id'] == null) {
-        print('Warning: No department ID found for employee');
-      }
+      // Get department ID from selected employee
+      int? departmentId = selectedEmployee['department_id'] ?? 1;
 
       // Prepare the request body
       final requestBody = {
         'leave_id': _generateLeaveId(),
         'date': DateTime.now().toIso8601String().split('T')[0],
-        'department_id': departmentId ?? 1, // Fallback to 1 if null
+        'department_id': departmentId,
         'employee_id': selectedEmployeeId,
         'nature_of_leave': natureOfLeave,
         'from_date': fromDate.toIso8601String().split('T')[0],
@@ -482,12 +589,12 @@ class LeaveProvider extends ChangeNotifier {
         'days': days,
         'pay_mode': payMode.toLowerCase().replaceAll(' ', '_'),
         'reason': reason ?? '',
-        'submitted_by_role': _userRole,
+        'submitted_by_role': 'admin', // Fixed role
         'submitted_by': _currentUserId,
-        'status': 'pending', // Always submit as pending
+        'status': 'pending',
       };
 
-      print('Submitting leave request: $requestBody');
+      print('Admin submitting leave request: $requestBody');
 
       final response = await http.post(
         Uri.parse('https://api.afaqmis.com/api/leaves'),
@@ -508,6 +615,12 @@ class LeaveProvider extends ChangeNotifier {
 
         _successMessage = 'Leave request submitted successfully!';
         return true;
+      } else if (response.statusCode == 500) {
+        print('=== SERVER ERROR 500 DETAILS ===');
+        print('Request Body: $requestBody');
+        print('Response Body: ${response.body}');
+
+        throw Exception('Server error: Please try again or contact administrator.');
       } else {
         final errorData = json.decode(response.body);
         final errorMessage = errorData['message'] ??
@@ -525,7 +638,7 @@ class LeaveProvider extends ChangeNotifier {
     }
   }
 
-  // Overloaded submitLeave for non-admin users (they can only submit for themselves)
+  // Submit leave for non-admin users (they can only submit for themselves)
   Future<bool> submitLeaveForSelf({
     required String natureOfLeave,
     required DateTime fromDate,
@@ -551,11 +664,36 @@ class LeaveProvider extends ChangeNotifier {
       if (_currentUserId == null) {
         throw Exception('User ID not found. Please login again.');
       }
+
+      // If department ID is not set, try to get it from user data
       if (_currentDepartmentId == null) {
-        throw Exception('Department ID not found. Please login again.');
+        print('Warning: Department ID not found, trying to extract from user data...');
+
+        final userDataString = prefs.getString('userData');
+        if (userDataString != null) {
+          try {
+            final userData = jsonDecode(userDataString);
+            if (userData['department'] != null) {
+              if (userData['department'] is Map) {
+                _currentDepartmentId = userData['department']['id'];
+              } else {
+                _currentDepartmentId = userData['department_id'];
+              }
+              print('Extracted department ID from userData: $_currentDepartmentId');
+            }
+          } catch (e) {
+            print('Error extracting department from userData: $e');
+          }
+        }
+
+        // If still not set, use default
+        if (_currentDepartmentId == null) {
+          _currentDepartmentId = 1; // Default department ID
+          print('Using default department ID: $_currentDepartmentId');
+        }
       }
 
-      // Prepare the request body
+      // Prepare the request body - CRITICAL FIX: Use 'employee' role instead of _userRole
       final requestBody = {
         'leave_id': _generateLeaveId(),
         'date': DateTime.now().toIso8601String().split('T')[0],
@@ -567,12 +705,12 @@ class LeaveProvider extends ChangeNotifier {
         'days': days,
         'pay_mode': payMode.toLowerCase().replaceAll(' ', '_'),
         'reason': reason ?? '',
-        'submitted_by_role': _userRole,
+        'submitted_by_role': 'employee', // FIXED: Changed from _userRole to 'employee'
         'submitted_by': _currentUserId,
-        'status': 'pending', // Always submit as pending
+        'status': 'pending',
       };
 
-      print('Submitting leave request for self: $requestBody');
+      print('Non-admin submitting leave request for self: $requestBody');
 
       final response = await http.post(
         Uri.parse('https://api.afaqmis.com/api/leaves'),
@@ -593,6 +731,25 @@ class LeaveProvider extends ChangeNotifier {
 
         _successMessage = 'Leave request submitted successfully!';
         return true;
+      } else if (response.statusCode == 500) {
+        print('=== SERVER ERROR 500 DETAILS ===');
+        print('Request Body: $requestBody');
+        print('Response Body: ${response.body}');
+
+        // Try to parse error
+        try {
+          final errorData = json.decode(response.body);
+          final errorMessage = errorData['message'] ?? errorData['error'] ?? 'Server Error 500';
+
+          if (errorMessage.toLowerCase().contains('role') ||
+              errorMessage.toLowerCase().contains('permission')) {
+            throw Exception('Permission denied. Please contact administrator.');
+          } else {
+            throw Exception('Server error: $errorMessage');
+          }
+        } catch (e) {
+          throw Exception('Server error occurred. Please try again.');
+        }
       } else {
         final errorData = json.decode(response.body);
         final errorMessage = errorData['message'] ??
@@ -616,16 +773,38 @@ class LeaveProvider extends ChangeNotifier {
         .where((leave) => leave.departmentName.isNotEmpty)
         .map((leave) => leave.departmentName)
         .toSet();
-    _departments = ['All', ...departmentSet.toList()..sort()];
 
-    // Extract unique employees
-    final employeeSet = _leaves
-        .where((leave) => leave.employeeName.isNotEmpty)
-        .map((leave) => leave.employeeName)
-        .toSet();
-    _employees = ['All', ...employeeSet.toList()..sort()];
+    // For non-admin users, if no departments found, add their department
+    if (!_isAdmin && departmentSet.isEmpty && _currentEmployeeName != null) {
+      _departments = ['All', 'My Department'];
+      _selectedDepartmentFilter = 'My Department';
+    } else {
+      // Use Set to ensure uniqueness, then convert to List
+      final uniqueDepartments = departmentSet.toList()..sort();
+      _departments = ['All', ...uniqueDepartments];
+
+      // If non-admin, also add "My Department" option
+      if (!_isAdmin && _currentEmployeeName != null && !_departments.contains('My Department')) {
+        _departments.add('My Department');
+      }
+    }
+
+    // Extract unique employees - only for admin
+    if (_isAdmin) {
+      final employeeSet = _leaves
+          .where((leave) => leave.employeeName.isNotEmpty)
+          .map((leave) => leave.employeeName)
+          .toSet();
+      _employees = ['All', ...employeeSet.toList()..sort()];
+    } else {
+      // For non-admin, show only themselves
+      _employees = ['All', _currentEmployeeName ?? 'My Leaves'];
+      _selectedEmployeeFilter = _currentEmployeeName ?? 'My Leaves';
+    }
 
     print('Extracted ${_departments.length} departments and ${_employees.length} employees');
+    print('Departments: $_departments');
+    print('Employees: $_employees');
   }
 
   void _applyFilters() {
@@ -638,12 +817,26 @@ class LeaveProvider extends ChangeNotifier {
           (leave.reason != null && leave.reason!.toLowerCase().contains(_searchQuery.toLowerCase()));
 
       // Department filter
-      final matchesDepartment = _selectedDepartmentFilter == 'All' ||
-          leave.departmentName == _selectedDepartmentFilter;
+      bool matchesDepartment;
+      if (!_isAdmin && _selectedDepartmentFilter == 'My Department') {
+        // For non-admin, if they have "My Department" selected, show all their leaves
+        matchesDepartment = true;
+      } else {
+        matchesDepartment = _selectedDepartmentFilter == 'All' ||
+            leave.departmentName == _selectedDepartmentFilter;
+      }
 
       // Employee filter
-      final matchesEmployee = _selectedEmployeeFilter == 'All' ||
-          leave.employeeName == _selectedEmployeeFilter;
+      bool matchesEmployee;
+      if (!_isAdmin) {
+        // For non-admin, only show their own leaves
+        matchesEmployee = leave.employeeId == _currentUserId ||
+            (_currentEmployeeName != null &&
+                leave.employeeName.toLowerCase().contains(_currentEmployeeName!.toLowerCase()));
+      } else {
+        matchesEmployee = _selectedEmployeeFilter == 'All' ||
+            leave.employeeName == _selectedEmployeeFilter;
+      }
 
       // Status filter - normalize comparison
       final leaveStatus = leave.status.toLowerCase();
@@ -966,8 +1159,12 @@ class LeaveProvider extends ChangeNotifier {
 
   void clearFilters() {
     _searchQuery = '';
-    _selectedDepartmentFilter = 'All';
-    _selectedEmployeeFilter = 'All';
+    if (_isAdmin) {
+      _selectedDepartmentFilter = 'All';
+      _selectedEmployeeFilter = 'All';
+    } else {
+      _selectedEmployeeFilter = _currentEmployeeName ?? 'My Leaves';
+    }
     _selectedStatusFilter = 'All';
     _applyFilters();
     notifyListeners();
@@ -978,6 +1175,7 @@ class LeaveProvider extends ChangeNotifier {
     _successMessage = '';
     notifyListeners();
   }
+
   // Debug method
   Future<void> debugUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
@@ -996,6 +1194,7 @@ class LeaveProvider extends ChangeNotifier {
         print('  name: "${userData['name']}"');
         print('  role_label: "${userData['role_label']}"');
         print('  department: ${userData['department']}');
+        print('  department_id: ${userData['department_id']}');
       } catch (e) {
         print('Error parsing userData: $e');
       }
@@ -1008,6 +1207,15 @@ class LeaveProvider extends ChangeNotifier {
     print('  _currentEmployeeName: "$_currentEmployeeName"');
     print('  _currentDepartmentId: $_currentDepartmentId');
     print('  All employees count: ${_allEmployees.length}');
+    print('  Leaves count: ${_leaves.length}');
+    print('  Filtered leaves count: ${_filteredLeaves.length}');
     print('========================');
+  }
+
+  // Toggle debug mode
+  void toggleDebugMode() {
+    _debugMode = !_debugMode;
+    print('Debug mode: $_debugMode');
+    notifyListeners();
   }
 }

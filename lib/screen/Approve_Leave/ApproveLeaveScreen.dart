@@ -24,14 +24,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<LeaveProvider>(context, listen: false);
 
-      // Initialize user role
-      await provider.initializeUserRole();
+      // Initialize user data
+      await provider.initializeUserData();
 
       // Debug
       print('=== INIT COMPLETE ===');
       print('User Role: ${provider.userRole}');
       print('isAdmin: ${provider.isAdmin}');
       print('User ID: ${provider.currentUserId}');
+      print('User Name: ${provider.currentEmployeeName}');
+      print('Department ID: ${provider.currentDepartmentId}');
 
       // Fetch leaves
       await provider.fetchLeaves();
@@ -46,8 +48,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     print('=== SCREEN BUILD ===');
     print('isAdmin: ${leaveProvider.isAdmin}');
     print('leaves count: ${leaveProvider.leaves.length}');
+    print('User Name: ${leaveProvider.currentEmployeeName}');
+    print('Department ID: ${leaveProvider.currentDepartmentId}');
     if (leaveProvider.leaves.isNotEmpty) {
+      print('First leave employee: ${leaveProvider.leaves.first.employeeName}');
       print('First leave status: ${leaveProvider.leaves.first.status}');
+      print('First leave department: ${leaveProvider.leaves.first.departmentName}');
     }
 
     // Show success/error messages
@@ -65,7 +71,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          leaveProvider.isAdmin ? 'Approve Leave' : 'My Leaves',
+          leaveProvider.isAdmin ? 'Leave Management' : 'My Leaves',
           style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -76,12 +82,14 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         backgroundColor: const Color(0xFF667EEA),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // New Leave Button - FIXED
+          // New Leave Button
           IconButton(
             onPressed: () {
               print('=== NEW LEAVE BUTTON PRESSED ===');
               print('isAdmin: ${leaveProvider.isAdmin}');
               print('isLoading: ${leaveProvider.isLoading}');
+              print('User Name: ${leaveProvider.currentEmployeeName}');
+              print('Department ID: ${leaveProvider.currentDepartmentId}');
 
               // Check if widget is mounted
               if (!mounted) return;
@@ -183,6 +191,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     print('=== FILTER SECTION ===');
     print('isAdmin: ${provider.isAdmin}');
     print('employees count: ${provider.employees.length}');
+    print('departments count: ${provider.departments.length}');
+    print('current user name: ${provider.currentEmployeeName}');
+    print('current department ID: ${provider.currentDepartmentId}');
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -211,7 +222,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               controller: _searchController,
               onChanged: (value) => provider.setSearchQuery(value),
               decoration: InputDecoration(
-                hintText: 'Search by employee name or ID...',
+                hintText: provider.isAdmin
+                    ? 'Search by employee name or ID...'
+                    : 'Search your leaves...',
                 hintStyle: TextStyle(color: Colors.grey[500]),
                 prefixIcon: Icon(Iconsax.search_normal, color: Colors.grey[500]),
                 suffixIcon: _searchController.text.isNotEmpty
@@ -357,7 +370,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   ),
                 ),
               if (provider.isAdmin) const SizedBox(width: 8),
-              // Department Filter
+
+              // Department Filter - Show for all users
+              // Department Filter - Show for all users
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
@@ -411,7 +426,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           provider.setDepartmentFilter(value);
                         }
                       },
-                      items: provider.departments.map((String value) {
+                      items: provider.departments.toSet().map((String value) { // ADD .toSet() HERE
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Container(
@@ -478,9 +493,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Status Filter
-              Container(
-                width: 140,
+
+              // Status Filter - Always show
+              Expanded(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
@@ -717,6 +732,17 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   : 'You have no leave requests yet',
               style: TextStyle(fontSize: 14, color: Colors.grey[400]),
             ),
+            if (!provider.isAdmin)
+              ElevatedButton(
+                onPressed: () {
+                  _showNewLeaveDialog(context, provider);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF667EEA),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Create Your First Leave Request'),
+              ),
           ],
         ),
       );
@@ -1089,15 +1115,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      Text(
-                        leave.departmentName,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+                      if (provider.isAdmin)
+                        Text(
+                          leave.departmentName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                     ],
                   ),
                 ),
@@ -1231,10 +1258,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          icon: const Icon(Iconsax.tick_circle, size: 16,color: Colors.white,),
+                          icon: const Icon(Iconsax.tick_circle, size: 16, color: Colors.white),
                           label: const Text(
                             'Approve',
-                            style: TextStyle(fontSize: 12,color: Colors.white),
+                            style: TextStyle(fontSize: 12, color: Colors.white),
                           ),
                         ),
                       ),
@@ -1249,10 +1276,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          icon: const Icon(Iconsax.close_circle, size: 16,color: Colors.white,),
+                          icon: const Icon(Iconsax.close_circle, size: 16, color: Colors.white),
                           label: const Text(
                             'Reject',
-                            style: TextStyle(fontSize: 12,color: Colors.white),
+                            style: TextStyle(fontSize: 12, color: Colors.white),
                           ),
                         ),
                       ),
@@ -1425,14 +1452,142 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     }
   }
 
-  // UPDATED: New Leave Dialog with Department-first selection
+  // UPDATED: New Leave Dialog with proper handling for admin vs non-admin
+  // UPDATED: New Leave Dialog with proper handling for admin vs non-admin
   Future<void> _showNewLeaveDialog(BuildContext context, LeaveProvider provider) async {
     print('=== SHOW NEW LEAVE DIALOG START ===');
+    print('User is admin: ${provider.isAdmin}');
+    print('User Name: ${provider.currentEmployeeName}');
+    print('Department ID: ${provider.currentDepartmentId}');
 
-    // Check if provider is ready
-    if (provider.isLoading) {
-      _showSnackBar('Please wait, loading data...', isError: true);
-      return;
+    // Variables for form
+    int? selectedEmployeeId;
+    int? selectedDepartmentId;
+    String? selectedLeaveType;
+    String? selectedPayMode;
+    DateTime? fromDate;
+    DateTime? toDate;
+    int days = 0;
+    String reason = '';
+
+    // Store filtered employees by department
+    List<Map<String, dynamic>> filteredEmployees = [];
+
+    void calculateDays() {
+      if (fromDate != null && toDate != null) {
+        days = toDate!.difference(fromDate!).inDays + 1;
+      }
+    }
+
+    // Function to filter employees by department - FIXED VERSION
+    void filterEmployeesByDepartment(int? departmentIndex) {
+      if (departmentIndex == null || provider.allEmployees.isEmpty) {
+        filteredEmployees = [];
+        selectedEmployeeId = null;
+        return;
+      }
+
+      print('=== FILTERING EMPLOYEES BY DEPARTMENT ===');
+      print('Department index selected: $departmentIndex');
+      print('Total employees in provider: ${provider.allEmployees.length}');
+
+      // Get unique department names list (excluding 'All')
+      final departmentList = provider.departments
+          .where((dept) => dept != 'All')
+          .toSet()
+          .toList();
+
+      print('Available departments: $departmentList');
+
+      // Check if index is valid
+      if (departmentIndex - 1 < 0 || departmentIndex - 1 >= departmentList.length) {
+        print('Invalid department index');
+        filteredEmployees = [];
+        selectedEmployeeId = null;
+        return;
+      }
+
+      final selectedDeptName = departmentList[departmentIndex - 1];
+      print('Selected department name: "$selectedDeptName"');
+
+      // Debug: Print all employees with their department info
+      print('--- All Employees with Department Info ---');
+      for (var emp in provider.allEmployees) {
+        print('Employee: ${emp['name']}, Dept ID: ${emp['department_id']}, Dept Name: "${emp['department_name']}"');
+      }
+
+      // Filter employees by department name
+      filteredEmployees = provider.allEmployees.where((emp) {
+        final empDeptName = emp['department_name']?.toString() ?? '';
+        final empDeptId = emp['department_id']?.toString() ?? '';
+        final empName = emp['name']?.toString() ?? '';
+
+        // Check if department name matches
+        final matches = empDeptName == selectedDeptName;
+
+        if (empDeptName.isNotEmpty) {
+          print('Comparing: Employee "$empName" (Dept: "$empDeptName", ID: $empDeptId) with "$selectedDeptName"');
+        }
+
+        return matches;
+      }).toList();
+
+      print('Filtered ${filteredEmployees.length} employees for department "$selectedDeptName"');
+
+      // If no matches by name, try to match by department ID
+      if (filteredEmployees.isEmpty) {
+        print('No matches by department name, trying to get department ID mapping...');
+
+        // Try to get department ID from leaves data
+        int? deptId;
+        final leaves = provider.allLeaves;
+        for (var leave in leaves) {
+          if (leave.departmentName == selectedDeptName) {
+            deptId = leave.departmentId;
+            break;
+          }
+        }
+
+        if (deptId != null) {
+          print('Found department ID for "$selectedDeptName": $deptId');
+          filteredEmployees = provider.allEmployees.where((emp) {
+            final empDeptId = emp['department_id'];
+            return empDeptId == deptId;
+          }).toList();
+          print('Now found ${filteredEmployees.length} employees by department ID');
+        }
+      }
+
+      // Debug filtered employees
+      if (filteredEmployees.isNotEmpty) {
+        print('--- Filtered Employees ---');
+        for (var emp in filteredEmployees) {
+          print('  - ${emp['name']} (Dept: "${emp['department_name']}", ID: ${emp['department_id']})');
+        }
+      } else {
+        print('WARNING: No employees found for department "$selectedDeptName"');
+        print('Available departments in employee data:');
+        final allDepts = provider.allEmployees.map((e) => e['department_name']?.toString()).where((d) => d != null && d.isNotEmpty).toSet();
+        print('  $allDepts');
+      }
+    }
+
+    // For non-admin users, automatically set employee and department to themselves
+    if (!provider.isAdmin && provider.currentUserId != null) {
+      selectedEmployeeId = provider.currentUserId;
+      selectedDepartmentId = provider.currentDepartmentId ?? 1;
+      print('Non-admin user: Auto-selected employee ID: $selectedEmployeeId, Dept ID: $selectedDepartmentId');
+
+      // For non-admin, add themselves to filteredEmployees
+      if (provider.currentEmployeeName != null) {
+        filteredEmployees.add({
+          'id': provider.currentUserId!,
+          'name': provider.currentEmployeeName!,
+          'employee_code': provider.currentEmployeeCode ?? '',
+          'department_id': selectedDepartmentId,
+          'department_name': 'My Department',
+        });
+      }
     }
 
     // For admin users, fetch employees first
@@ -1465,6 +1620,14 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           _showSnackBar('No employees found. Please try again.', isError: true);
           return;
         }
+
+        // Debug: Print employee data
+        print('=== EMPLOYEE DATA LOADED ===');
+        print('Total employees loaded: ${provider.allEmployees.length}');
+        if (provider.allEmployees.isNotEmpty) {
+          print('Sample employee: ${provider.allEmployees.first}');
+        }
+
       } catch (e) {
         if (Navigator.canPop(context)) {
           Navigator.pop(context);
@@ -1474,52 +1637,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       }
     }
 
-    // Variables for form
-    String? selectedDepartment;
-    int? selectedEmployeeId;
-    String? selectedLeaveType;
-    String? selectedPayMode;
-    DateTime? fromDate;
-    DateTime? toDate;
-    int days = 0;
-    String reason = '';
-
-    void calculateDays() {
-      if (fromDate != null && toDate != null) {
-        days = toDate!.difference(fromDate!).inDays + 1;
-      }
-    }
-
-    // Get unique departments from employees
-    List<String> getDepartmentsFromEmployees() {
-      final departments = <String>{};
-      for (var employee in provider.allEmployees) {
-        final dept = employee['department_name']?.toString() ?? 'Unknown';
-        departments.add(dept);
-      }
-      return ['Select Department', ...departments.toList()..sort()];
-    }
-
-    // Get employees filtered by selected department
-    List<Map<String, dynamic>> getFilteredEmployees() {
-      if (selectedDepartment == null || selectedDepartment == 'Select Department') {
-        return provider.allEmployees;
-      }
-      return provider.allEmployees.where((emp) {
-        final empDept = emp['department_name']?.toString() ?? 'Unknown';
-        return empDept == selectedDepartment;
-      }).toList();
-    }
-
     // Now show the main dialog
     await showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            final departments = getDepartmentsFromEmployees();
-            final filteredEmployees = getFilteredEmployees();
-
             return Dialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -1546,9 +1669,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                         children: [
                           const Icon(Iconsax.note_add, color: Colors.white, size: 24),
                           const SizedBox(width: 10),
-                          const Text(
-                            'New Leave Request',
-                            style: TextStyle(
+                          Text(
+                            provider.isAdmin ? 'New Leave Request' : 'Apply for Leave',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -1573,43 +1696,123 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Department Dropdown - Only for admin
-                            if (provider.isAdmin) ...[
-                              const Text(
-                                'Select Department *',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: selectedDepartment,
-                                    isExpanded: true,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    icon: const Icon(Iconsax.arrow_down_1),
-                                    elevation: 2,
-                                    style: const TextStyle(
+                            // Employee Info - For non-admin, show their name
+                            if (!provider.isAdmin)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Employee',
+                                    style: TextStyle(
                                       fontSize: 14,
+                                      fontWeight: FontWeight.w500,
                                       color: Colors.black87,
                                     ),
-                                    hint: const Text('Select Department'),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        selectedDepartment = value;
-                                        selectedEmployeeId = null; // Reset employee selection
-                                      });
-                                    },
-                                    items: departments.map((String dept) {
-                                      return DropdownMenuItem<String>(
-                                        value: dept,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.grey[300]!),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: const BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Color(0xFF667EEA),
+                                                Color(0xFF764BA2),
+                                              ],
+                                            ),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              provider.currentEmployeeName?.substring(0, 1) ?? 'Y',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                provider.currentEmployeeName ?? 'You',
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                              if (provider.currentEmployeeCode != null)
+                                                Text(
+                                                  'ID: ${provider.currentEmployeeCode}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
+                              ),
+
+                            // Department Selection - Show for both admin and non-admin
+                            const Text(
+                              'Department *',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<int>(
+                                  value: selectedDepartmentId ?? provider.currentDepartmentId ?? 1,
+                                  isExpanded: true,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  icon: const Icon(Iconsax.arrow_down_1),
+                                  elevation: 2,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                  ),
+                                  hint: const Text('Select Department'),
+                                  onChanged: provider.isAdmin ? (value) {
+                                    print('Department changed to: $value');
+                                    setState(() {
+                                      selectedDepartmentId = value;
+                                      selectedEmployeeId = null; // Reset employee when department changes
+                                      filterEmployeesByDepartment(value);
+                                    });
+                                  } : null,
+                                  items: [
+                                    // For non-admin, show only their department
+                                    if (!provider.isAdmin)
+                                      DropdownMenuItem<int>(
+                                        value: provider.currentDepartmentId ?? 1,
                                         child: Row(
                                           children: [
                                             Container(
@@ -1624,39 +1827,65 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                                 ),
                                                 shape: BoxShape.circle,
                                               ),
-                                              child: Center(
-                                                child: Text(
-                                                  dept.substring(0, 1),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
-                                                  ),
+                                              child: const Center(
+                                                child: Icon(
+                                                  Iconsax.building,
+                                                  color: Colors.white,
+                                                  size: 16,
                                                 ),
                                               ),
                                             ),
                                             const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                dept,
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
+                                            const Text('My Department'),
                                           ],
                                         ),
-                                      );
-                                    }).toList(),
-                                  ),
+                                      ),
+                                    // For admin, show available departments
+                                    if (provider.isAdmin)
+                                      ...provider.departments.where((dept) => dept != 'All').toSet().toList().asMap().entries.map((entry) {
+                                        final index = entry.key;
+                                        final dept = entry.value;
+                                        return DropdownMenuItem<int>(
+                                          value: index + 1, // Use index + 1 to ensure unique values starting from 1
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 32,
+                                                height: 32,
+                                                decoration: const BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    colors: [
+                                                      Color(0xFF667EEA),
+                                                      Color(0xFF764BA2),
+                                                    ],
+                                                  ),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Center(
+                                                  child: Text(
+                                                    dept.substring(0, 1),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Text(dept),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                            ),
+                            const SizedBox(height: 16),
 
-                              // Employee Dropdown (filtered by department)
+                            // Employee Dropdown - Only for admin (and only show after department is selected)
+                            if (provider.isAdmin) ...[
                               const Text(
                                 'Select Employee *',
                                 style: TextStyle(
@@ -1683,20 +1912,25 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                       color: Colors.black87,
                                     ),
                                     hint: Text(
-                                      selectedDepartment == null || selectedDepartment == 'Select Department'
-                                          ? 'Select Department first'
+                                      selectedDepartmentId == null
+                                          ? 'Select Department First'
+                                          : filteredEmployees.isEmpty
+                                          ? 'No employees in this department'
                                           : 'Select Employee',
                                     ),
-                                    onChanged: (selectedDepartment == null || selectedDepartment == 'Select Department')
-                                        ? null
-                                        : (value) {
+                                    onChanged: selectedDepartmentId != null && filteredEmployees.isNotEmpty ? (value) {
                                       setState(() {
                                         selectedEmployeeId = value;
                                       });
-                                    },
+                                    } : null,
                                     items: filteredEmployees.map((employee) {
+                                      // Ensure unique employee IDs
+                                      final empId = employee['id'] as int? ?? 0;
+                                      final empName = employee['name']?.toString() ?? 'Unknown';
+                                      final empCode = employee['employee_code']?.toString() ?? '';
+
                                       return DropdownMenuItem<int>(
-                                        value: employee['id'],
+                                        value: empId,
                                         child: Row(
                                           children: [
                                             Container(
@@ -1713,7 +1947,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                               ),
                                               child: Center(
                                                 child: Text(
-                                                  employee['name'].toString().substring(0, 1),
+                                                  empName.substring(0, 1),
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,
@@ -1728,7 +1962,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    employee['name'].toString(),
+                                                    empName,
                                                     style: const TextStyle(
                                                       fontSize: 14,
                                                       fontWeight: FontWeight.w500,
@@ -1736,15 +1970,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
-                                                  Text(
-                                                    'ID: ${employee['employee_code']}',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: Colors.grey[600],
+                                                  if (empCode.isNotEmpty)
+                                                    Text(
+                                                      'ID: $empCode',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -1790,7 +2025,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                       selectedLeaveType = value;
                                     });
                                   },
-                                  items: provider.leaveTypes.map((type) {
+                                  items: provider.leaveTypes.toSet().map((type) {
                                     String displayName = type.replaceAll('_', ' ').toTitleCase();
                                     return DropdownMenuItem<String>(
                                       value: type,
@@ -1991,7 +2226,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                       selectedPayMode = value;
                                     });
                                   },
-                                  items: provider.payModes.map((mode) {
+                                  items: provider.payModes.toSet().map((mode) {
                                     return DropdownMenuItem<String>(
                                       value: mode,
                                       child: Row(
@@ -2073,15 +2308,13 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                             child: ElevatedButton(
                               onPressed: () async {
                                 // Validation
-                                if (provider.isAdmin) {
-                                  if (selectedDepartment == null || selectedDepartment == 'Select Department') {
-                                    _showSnackBar('Please select a department', isError: true);
-                                    return;
-                                  }
-                                  if (selectedEmployeeId == null) {
-                                    _showSnackBar('Please select an employee', isError: true);
-                                    return;
-                                  }
+                                if (provider.isAdmin && selectedEmployeeId == null) {
+                                  _showSnackBar('Please select an employee', isError: true);
+                                  return;
+                                }
+                                if (selectedDepartmentId == null) {
+                                  _showSnackBar('Department ID is required', isError: true);
+                                  return;
                                 }
                                 if (selectedLeaveType == null) {
                                   _showSnackBar('Please select leave type', isError: true);
@@ -2145,7 +2378,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: const Text('Submit Request'),
+                              child: Text(provider.isAdmin ? 'Submit Request' : 'Apply for Leave'),
                             ),
                           ),
                         ],
