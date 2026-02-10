@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -96,27 +98,27 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
           backgroundColor: const Color(0xFF667EEA),
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  _showDebugPanel = !_showDebugPanel;
-                });
-              },
-              icon: Icon(Icons.bug_report, color: Colors.white, size: iconSize),
-              tooltip: 'Debug Panel',
-            ),
-            IconButton(
-              onPressed: () async {
-                setState(() {
-                  _showApiDataPanel = !_showApiDataPanel;
-                });
-                if (_showApiDataPanel) {
-                  await _runApiTests(context);
-                }
-              },
-              icon: Icon(Icons.api, color: Colors.white, size: iconSize),
-              tooltip: 'API Data',
-            ),
+            // IconButton(
+            //   onPressed: () {
+            //     setState(() {
+            //       _showDebugPanel = !_showDebugPanel;
+            //     });
+            //   },
+            //   icon: Icon(Icons.bug_report, color: Colors.white, size: iconSize),
+            //   tooltip: 'Debug Panel',
+            // ),
+            // IconButton(
+            //   onPressed: () async {
+            //     setState(() {
+            //       _showApiDataPanel = !_showApiDataPanel;
+            //     });
+            //     if (_showApiDataPanel) {
+            //       await _runApiTests(context);
+            //     }
+            //   },
+            //   icon: Icon(Icons.api, color: Colors.white, size: iconSize),
+            //   tooltip: 'API Data',
+            // ),
             IconButton(
               onPressed: _showFilterDialog,
               icon: Icon(Icons.filter_alt, color: Colors.white, size: iconSize),
@@ -951,181 +953,275 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
       isLargeScreen,
     );
 
-    return Column(
-      children: [
-        // Summary Cards
-        Container(
-          padding: EdgeInsets.all(padding),
-          child: GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: isSmallScreen ? 2 : isMediumScreen ? 3 : 4,
-            childAspectRatio: isSmallScreen ? 1.2 : isMediumScreen ? 1.5 : 1.8,
-            crossAxisSpacing: padding,
-            mainAxisSpacing: padding,
-            children: [
-              _buildSummaryCard(
-                title: 'Total Salary',
-                value: '₹${_formatNumber(summary['totalSalary'] ?? 0)}',
-                icon: Icons.account_balance_wallet,
-                color: Colors.green,
-                fontSizeSmall: fontSizeSmall,
-                fontSizeMedium: fontSizeMedium,
-                isSmallScreen: isSmallScreen,
-              ),
-              _buildSummaryCard(
-                title: 'Net Salary',
-                value: '₹${_formatNumber(summary['netSalary'] ?? 0)}',
-                icon: Icons.payments,
-                color: Colors.blue,
-                fontSizeSmall: fontSizeSmall,
-                fontSizeMedium: fontSizeMedium,
-                isSmallScreen: isSmallScreen,
-              ),
-              _buildSummaryCard(
-                title: 'Employees',
-                value: '${summary['employees'] ?? 0}',
-                icon: Icons.people,
-                color: Colors.purple,
-                fontSizeSmall: fontSizeSmall,
-                fontSizeMedium: fontSizeMedium,
-                isSmallScreen: isSmallScreen,
-              ),
-              _buildSummaryCard(
-                title: 'Deductions',
-                value: '₹${_formatNumber(summary['deductions'] ?? 0)}',
-                icon: Icons.remove_circle,
-                color: Colors.red,
-                fontSizeSmall: fontSizeSmall,
-                fontSizeMedium: fontSizeMedium,
-                isSmallScreen: isSmallScreen,
-              ),
-            ],
-          ),
-        ),
+    // Calculate total table width
+    final totalTableWidth = columnWidths.reduce((a, b) => a + b) + (padding / 2 * (columnWidths.length - 1));
 
-        // Search Results Count
-        if (_searchQuery.isNotEmpty)
+    // Get available width for the table
+    final availableWidth = screenWidth - (padding * 2); // Account for margins
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Summary Cards - Now scrollable horizontally
           Container(
-            padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-            child: Row(
-              children: [
-                Icon(Icons.search, size: fontSizeMedium, color: Colors.grey),
-                SizedBox(width: padding / 2),
-                Text(
-                  '${filteredRows.length} result${filteredRows.length != 1 ? 's' : ''} for "$_searchQuery"',
-                  style: TextStyle(fontSize: fontSizeMedium, color: Colors.grey),
-                ),
-                const Spacer(),
-                Text(
-                  '${provider.salarySheet!.rows.length} total employees',
-                  style: TextStyle(fontSize: fontSizeSmall, color: Colors.grey),
+            height: 130, // Fixed height for scrollable cards
+            margin: EdgeInsets.symmetric(vertical: padding),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  SizedBox(width: padding),
+                  _buildSummaryCard(
+                    title: 'Total Salary',
+                    value: '${_formatNumber(summary['totalSalary'] ?? 0)}',
+                    icon: Icons.account_balance_wallet,
+                    color: Colors.green,
+                    fontSizeSmall: fontSizeSmall,
+                    fontSizeMedium: fontSizeMedium,
+                    isSmallScreen: isSmallScreen,
+                  ),
+                  SizedBox(width: padding),
+                  _buildSummaryCard(
+                    title: 'Net Salary',
+                    value: '${_formatNumber(summary['netSalary'] ?? 0)}',
+                    icon: Icons.payments,
+                    color: Colors.blue,
+                    fontSizeSmall: fontSizeSmall,
+                    fontSizeMedium: fontSizeMedium,
+                    isSmallScreen: isSmallScreen,
+                  ),
+                  SizedBox(width: padding),
+                  _buildSummaryCard(
+                    title: 'Employees',
+                    value: '${summary['employees'] ?? 0}',
+                    icon: Icons.people,
+                    color: Colors.purple,
+                    fontSizeSmall: fontSizeSmall,
+                    fontSizeMedium: fontSizeMedium,
+                    isSmallScreen: isSmallScreen,
+                  ),
+                  SizedBox(width: padding),
+                  _buildSummaryCard(
+                    title: 'Deductions',
+                    value: '${_formatNumber(summary['deductions'] ?? 0)}',
+                    icon: Icons.remove_circle,
+                    color: Colors.red,
+                    fontSizeSmall: fontSizeSmall,
+                    fontSizeMedium: fontSizeMedium,
+                    isSmallScreen: isSmallScreen,
+                  ),
+                  SizedBox(width: padding),
+                  // Add more summary cards if needed
+                  if ((summary['calculated'] ?? 0) > 0)
+                    _buildSummaryCard(
+                      title: 'Calculated',
+                      value: '${summary['calculated'] ?? 0}',
+                      icon: Icons.check_circle,
+                      color: Colors.orange,
+                      fontSizeSmall: fontSizeSmall,
+                      fontSizeMedium: fontSizeMedium,
+                      isSmallScreen: isSmallScreen,
+                    ),
+                  SizedBox(width: padding),
+                ],
+              ),
+            ),
+          ),
+
+          // Search Results Count
+          if (_searchQuery.isNotEmpty)
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
+              child: Row(
+                children: [
+                  Icon(Icons.search, size: fontSizeMedium, color: Colors.grey),
+                  SizedBox(width: padding / 2),
+                  Expanded(
+                    child: Text(
+                      '${filteredRows.length} result${filteredRows.length != 1 ? 's' : ''} for "$_searchQuery"',
+                      style: TextStyle(fontSize: fontSizeMedium, color: Colors.grey),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(width: padding / 2),
+                  Text(
+                    '${provider.salarySheet!.rows.length} total employees',
+                    style: TextStyle(fontSize: fontSizeSmall, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+
+          // Complete Table Container (Header + Rows + Footer) with horizontal scroll
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(borderRadius / 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: padding / 2,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-          ),
-
-        // Table Header
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-          decoration: BoxDecoration(
-            color: const Color(0xFF667EEA),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(borderRadius / 2),
-              topRight: Radius.circular(borderRadius / 2),
-            ),
-          ),
-          child: Row(
-            children: _buildTableHeader(
-              columnWidths,
-              isSmallScreen,
-              fontSizeSmall,
-              fontSizeMedium,
-              padding,
-            ),
-          ),
-        ),
-
-        // Table Rows
-        Expanded(
-          child: Scrollbar(
-            child: ListView.separated(
-              itemCount: filteredRows.length,
-              separatorBuilder: (context, index) => Divider(
-                height: 1,
-                color: Colors.grey.shade200,
-              ),
-              padding: EdgeInsets.zero,
-              itemBuilder: (context, index) {
-                final employee = filteredRows[index];
-                return Container(
-                  color: index.isEven ? Colors.white : Colors.grey.shade50,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        // You can add employee detail view here if needed
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: padding,
-                          vertical: padding / 1.5,
+            margin: EdgeInsets.all(padding),
+            child: SizedBox(
+              height: 500, // Fixed height for the entire table
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: availableWidth, // Minimum width based on available space
+                      maxWidth: max(totalTableWidth, availableWidth), // Use max of required or available width
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Table Header (FIXED - scrolls with table)
+                        Container(
+                          width: max(totalTableWidth, availableWidth), // Ensure header width matches table
+                          padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF667EEA),
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(borderRadius / 2),
+                              topRight: Radius.circular(borderRadius / 2),
+                            ),
+                          ),
+                          child: Row(
+                            children: _buildTableHeader(
+                              columnWidths,
+                              isSmallScreen,
+                              fontSizeSmall,
+                              fontSizeMedium,
+                              padding,
+                            ),
+                          ),
                         ),
-                        child: _buildTableRow(
-                          employee,
-                          columnWidths,
-                          isSmallScreen,
-                          fontSizeSmall,
-                          fontSizeMedium,
-                          padding,
+
+                        // Table Rows with vertical scroll
+                        Expanded(
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: Container(
+                                width: max(totalTableWidth, availableWidth), // Ensure rows width matches table
+                                child: Column(
+                                  children: List.generate(filteredRows.length, (index) {
+                                    final employee = filteredRows[index];
+                                    return Container(
+                                      color: index.isEven ? Colors.white : Colors.grey.shade50,
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () {
+                                            // You can add employee detail view here if needed
+                                          },
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: padding,
+                                              vertical: padding / 1.5,
+                                            ),
+                                            child: Row(
+                                              children: _buildTableRow(
+                                                employee,
+                                                columnWidths,
+                                                isSmallScreen,
+                                                fontSizeSmall,
+                                                fontSizeMedium,
+                                                padding,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+
+                        // Table Footer
+                        Container(
+                          width: max(totalTableWidth, availableWidth), // Ensure footer width matches table
+                          padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF764BA2).withOpacity(0.1),
+                            border: Border.all(color: const Color(0xFF764BA2).withOpacity(0.2)),
+                            borderRadius: BorderRadius.only(
+                              bottomLeft: Radius.circular(borderRadius / 2),
+                              bottomRight: Radius.circular(borderRadius / 2),
+                            ),
+                          ),
+                          child: Row(
+                            children: _buildTableFooter(
+                              provider,
+                              columnWidths,
+                              isSmallScreen,
+                              fontSizeSmall,
+                              fontSizeMedium,
+                              padding,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ),
-        ),
 
-        // Footer with totals
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-          decoration: BoxDecoration(
-            color: const Color(0xFF764BA2).withOpacity(0.1),
-            border: Border.all(color: const Color(0xFF764BA2).withOpacity(0.2)),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(borderRadius / 2),
-              bottomRight: Radius.circular(borderRadius / 2),
-            ),
-          ),
-          child: Row(
-            children: _buildTableFooter(
-              provider,
-              columnWidths,
-              isSmallScreen,
-              fontSizeSmall,
-              fontSizeMedium,
-              padding,
-            ),
-          ),
-        ),
-      ],
+          // Add some bottom padding
+          SizedBox(height: padding * 2),
+        ],
+      ),
     );
   }
 
+// Update _getColumnWidths to include more columns
   List<double> _getColumnWidths(
       double screenWidth,
       bool isSmallScreen,
       bool isMediumScreen,
       bool isLargeScreen,
       ) {
+    // Calculate responsive column widths based on screen size
+    final double baseWidth = screenWidth * 0.9; // Use 90% of screen width for table
+
     if (isSmallScreen) {
-      return [60, 120, 80, 60, 70, 70];
+      return [
+        baseWidth * 0.08,  // Emp ID: 8%
+        baseWidth * 0.25,  // Employee: 25%
+        baseWidth * 0.17,  // Designation: 17%
+        baseWidth * 0.13,  // Days: 13%
+        baseWidth * 0.15,  // Salary: 15%
+        baseWidth * 0.17,  // Net Salary: 17%
+      ];
     } else if (isMediumScreen) {
-      return [60, 180, 120, 70, 80, 80];
+      return [
+        baseWidth * 0.07,  // Emp ID: 7%
+        baseWidth * 0.25,  // Employee: 25%
+        baseWidth * 0.20,  // Designation: 20%
+        baseWidth * 0.12,  // Days: 12%
+        baseWidth * 0.16,  // Salary: 16%
+        baseWidth * 0.15,  // Net Salary: 15%
+      ];
     } else {
-      return [60, 200, 150, 80, 90, 90];
+      return [
+        baseWidth * 0.06,  // Emp ID: 6%
+        baseWidth * 0.24,  // Employee: 24%
+        baseWidth * 0.22,  // Designation: 22%
+        baseWidth * 0.12,  // Days: 12%
+        baseWidth * 0.16,  // Salary: 16%
+        baseWidth * 0.15,  // Net Salary: 15%
+      ];
     }
   }
 
@@ -1145,37 +1241,37 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
     return [
       SizedBox(
         width: columnWidths[0],
-        child: Text('#', style: headerTextStyle),
+        child: Text('Emp ID', style: headerTextStyle, overflow: TextOverflow.ellipsis),
       ),
-      SizedBox(width: padding / 2),
-      SizedBox(
-        width: columnWidths[1],
-        child: Text('Employee', style: headerTextStyle),
-      ),
-      SizedBox(width: padding / 2),
+      SizedBox(width: padding / 3),
       SizedBox(
         width: columnWidths[2],
-        child: Text('Designation', style: headerTextStyle),
+        child: Text('Employee', style: headerTextStyle, overflow: TextOverflow.ellipsis),
+      ),
+      SizedBox(width: padding / 12),
+      SizedBox(
+        width: columnWidths[2],
+        child: Text('Designation', style: headerTextStyle, overflow: TextOverflow.ellipsis),
       ),
       SizedBox(width: padding / 2),
       SizedBox(
         width: columnWidths[3],
-        child: Text('Days', style: headerTextStyle),
+        child: Text('Days', style: headerTextStyle, overflow: TextOverflow.ellipsis),
       ),
-      SizedBox(width: padding / 2),
+      SizedBox(width: padding / 14),
       SizedBox(
         width: columnWidths[4],
-        child: Text('Salary', style: headerTextStyle),
+        child: Text('Salary', style: headerTextStyle, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis),
       ),
-      SizedBox(width: padding / 2),
+      SizedBox(width: padding / 12),
       SizedBox(
         width: columnWidths[5],
-        child: Text('Net Salary', style: headerTextStyle),
+        child: Text('Net Salary', style: headerTextStyle, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis),
       ),
     ];
   }
 
-  Widget _buildTableRow(
+  List<Widget> _buildTableRow(
       SalaryRow employee,
       List<double> columnWidths,
       bool isSmallScreen,
@@ -1194,119 +1290,120 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
       color: employee.isCalculated ? Colors.green.shade700 : Colors.orange.shade700,
     );
 
-    return Row(
-      children: [
-        SizedBox(
-          width: columnWidths[0],
-          child: Text(
-            employee.meta.empId,
-            style: rowTextStyle.copyWith(fontWeight: FontWeight.bold),
-          ),
+    return [
+      SizedBox(
+        width: columnWidths[0],
+        child: Text(
+          employee.meta.empId,
+          style: rowTextStyle.copyWith(fontWeight: FontWeight.bold),
         ),
-        SizedBox(width: padding / 2),
-        SizedBox(
-          width: columnWidths[1],
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                employee.employee,
-                style: rowTextStyle.copyWith(fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+      ),
+      SizedBox(width: padding / 20),
+      SizedBox(
+        width: columnWidths[2],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              employee.employee,
+              style: rowTextStyle.copyWith(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+            SizedBox(height: 2),
+            Text(
+              employee.unit,
+              style: rowTextStyle.copyWith(
+                fontSize: fontSizeSmall - 1,
+                color: Colors.grey,
               ),
-              SizedBox(height: 2),
-              Text(
-                employee.unit,
-                style: rowTextStyle.copyWith(
-                  fontSize: fontSizeSmall - 1,
-                  color: Colors.grey,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ],
+        ),
+      ),
+      SizedBox(width: padding / 2),
+      SizedBox(
+        width: columnWidths[2],
+        child: Text(
+          employee.designation ?? '--',
+          style: rowTextStyle.copyWith(color: Colors.grey.shade700),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+      ),
+      SizedBox(width: padding / 2),
+      SizedBox(
+        width: columnWidths[3],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '${employee.days}',
+                  style: rowTextStyle,
                 ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ],
-          ),
-        ),
-        SizedBox(width: padding / 2),
-        SizedBox(
-          width: columnWidths[2],
-          child: Text(
-            employee.designation ?? '--',
-            style: rowTextStyle.copyWith(color: Colors.grey.shade700),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-        ),
-        SizedBox(width: padding / 2),
-        SizedBox(
-          width: columnWidths[3],
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    '${employee.days}',
-                    style: rowTextStyle,
-                  ),
-                  if (employee.late > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4.0),
-                      child: Text(
-                        'L:${employee.late}',
-                        style: TextStyle(
-                          fontSize: fontSizeSmall - 1,
-                          color: Colors.orange,
-                        ),
+                if (employee.late > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4.0),
+                    child: Text(
+                      'L:${employee.late}',
+                      style: TextStyle(
+                        fontSize: fontSizeSmall - 1,
+                        color: Colors.orange,
                       ),
                     ),
-                ],
-              ),
-              if (employee.leaves > 0)
-                Text(
-                  'H:${employee.leaves}',
-                  style: TextStyle(
-                    fontSize: fontSizeSmall - 1,
-                    color: Colors.red,
                   ),
-                ),
-            ],
-          ),
-        ),
-        SizedBox(width: padding / 2),
-        SizedBox(
-          width: columnWidths[4],
-          child: Text(
-            '₹${_formatNumber(employee.salary)}',
-            style: amountTextStyle.copyWith(color: Colors.blue.shade700),
-          ),
-        ),
-        SizedBox(width: padding / 2),
-        SizedBox(
-          width: columnWidths[5],
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+              ],
+            ),
+            if (employee.leaves > 0)
               Text(
-                '₹${_formatNumber(employee.total)}',
-                style: amountTextStyle.copyWith(
-                  color: employee.isCalculated ? Colors.green.shade700 : Colors.orange.shade700,
+                'H:${employee.leaves}',
+                style: TextStyle(
+                  fontSize: fontSizeSmall - 1,
+                  color: Colors.red,
                 ),
               ),
-              if (employee.deductions > 0)
-                Text(
-                  '-₹${_formatNumber(employee.deductions)}',
-                  style: TextStyle(
-                    fontSize: fontSizeSmall - 1,
-                    color: Colors.red,
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
-      ],
-    );
+      ),
+      SizedBox(width: padding / 2),
+      SizedBox(
+        width: columnWidths[4],
+        child: Text(
+          '${_formatNumber(employee.salary)}',
+          style: amountTextStyle.copyWith(color: Colors.blue.shade700),
+          textAlign: TextAlign.right,
+        ),
+      ),
+      SizedBox(width: padding / 2),
+      SizedBox(
+        width: columnWidths[5],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${_formatNumber(employee.total)}',
+              style: amountTextStyle.copyWith(
+                color: employee.isCalculated ? Colors.green.shade700 : Colors.orange.shade700,
+              ),
+              textAlign: TextAlign.right,
+            ),
+            if (employee.deductions > 0)
+              Text(
+                '-${_formatNumber(employee.deductions)}',
+                style: TextStyle(
+                  fontSize: fontSizeSmall - 1,
+                  color: Colors.red,
+                ),
+                textAlign: TextAlign.right,
+              ),
+          ],
+        ),
+      ),
+    ];
   }
 
   List<Widget> _buildTableFooter(
@@ -1325,7 +1422,7 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
 
     return [
       SizedBox(
-        width: columnWidths[0] + columnWidths[1] + columnWidths[2] + columnWidths[3] + (padding / 2 * 4),
+        width: columnWidths[0] + columnWidths[0] + columnWidths[2] + columnWidths[3] + (padding / 2 * 4),
         child: Text(
           'TOTAL (${provider.salarySheet!.rows.length} employees)',
           style: footerTextStyle,
@@ -1336,27 +1433,30 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
       SizedBox(
         width: columnWidths[4],
         child: Text(
-          '₹${_formatNumber(provider.salarySheet!.totals.salarySum)}',
+          '${_formatNumber(provider.salarySheet!.totals.salarySum)}',
           style: footerTextStyle.copyWith(color: Colors.blue.shade700),
+          textAlign: TextAlign.right,
         ),
       ),
       SizedBox(width: padding / 2),
       SizedBox(
         width: columnWidths[5],
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '₹${_formatNumber(provider.salarySheet!.totals.totalSum)}',
+              '${_formatNumber(provider.salarySheet!.totals.totalSum)}',
               style: footerTextStyle.copyWith(color: Colors.green.shade700),
+              textAlign: TextAlign.right,
             ),
             Text(
-              '-₹${_formatNumber(provider.salarySheet!.totals.salarySum - provider.salarySheet!.totals.totalSum)}',
+              '-${_formatNumber(provider.salarySheet!.totals.salarySum - provider.salarySheet!.totals.totalSum)}',
               style: TextStyle(
                 fontSize: fontSizeSmall,
                 color: Colors.red,
                 fontWeight: FontWeight.w600,
               ),
+              textAlign: TextAlign.right,
             ),
           ],
         ),
@@ -1373,6 +1473,7 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
     required bool isSmallScreen,
   }) {
     return Container(
+      width: isSmallScreen ? 130 : 140, // Responsive width
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(fontSizeSmall),
@@ -1390,23 +1491,47 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: fontSizeMedium * 1.5,
-              height: fontSizeMedium * 1.5,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(fontSizeSmall / 2),
-              ),
-              child: Icon(icon, size: fontSizeMedium, color: color),
+            Row(
+              children: [
+                Container(
+                  width: fontSizeMedium * 1.5,
+                  height: fontSizeMedium * 1.5,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(fontSizeSmall / 2),
+                  ),
+                  child: Icon(icon, size: fontSizeMedium, color: color),
+                ),
+                const Spacer(),
+                if (title.contains('Salary') || title.contains('Net'))
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: color.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      'RS',
+                      style: TextStyle(
+                        fontSize: fontSizeSmall,
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             SizedBox(height: fontSizeSmall),
             Text(
               value,
               style: TextStyle(
-                fontSize: isSmallScreen ? fontSizeMedium : fontSizeMedium * 1.2,
+                fontSize: isSmallScreen ? fontSizeMedium : fontSizeMedium * 1.1,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
             SizedBox(height: fontSizeSmall / 2),
             Text(
@@ -1415,13 +1540,14 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
                 fontSize: fontSizeSmall,
                 color: Colors.grey,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ],
         ),
       ),
     );
   }
-
   Widget _buildEmployeeCard(
       SalaryRow employee,
       bool isSmallScreen,
@@ -1526,14 +1652,14 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
               children: [
                 _buildStatColumn(
                   label: 'Salary',
-                  value: '₹${_formatNumber(employee.salary)}',
+                  value: '${_formatNumber(employee.salary)}',
                   color: Colors.black87,
                   fontSizeSmall: fontSizeSmall,
                   fontSizeMedium: fontSizeMedium,
                 ),
                 _buildStatColumn(
                   label: 'Net Salary',
-                  value: '₹${_formatNumber(employee.total)}',
+                  value: '${_formatNumber(employee.total)}',
                   color: const Color(0xFF667EEA),
                   fontSizeSmall: fontSizeSmall,
                   fontSizeMedium: fontSizeMedium,
