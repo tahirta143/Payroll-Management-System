@@ -15,6 +15,8 @@ import '../../provider/dashboard_provider/dashboard_summary_provider.dart';
 import '../../provider/permissions_provider/permissions.dart';
 import '../../widget/dashboard_chart/dashborad_chart.dart';
 import '../Approve_Leave/ApproveLeaveScreen.dart';
+import '../salary_sheet/salary_sheet.dart';
+import '../salary_slip/salary_slip.dart';
 import 'absents_screen/absents_screen.dart';
 import 'on_leave/on_leave.dart';
 
@@ -139,6 +141,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final p = context.watch<PermissionProvider>();
     final Size size = MediaQuery.of(context).size;
+    final screens = _getScreens(p);
+
+    // Ensure currentIndex is within bounds
+    if (_currentIndex >= screens.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {
+          _currentIndex = 0;
+        });
+      });
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
@@ -176,18 +188,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         permissionProvider: p,
         selectedIndex: _currentIndex,
         onMenuSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
+          // Ensure index is within bounds
+          if (index < screens.length) {
+            setState(() {
+              _currentIndex = index;
+            });
+          } else {
+            // If index is out of bounds, go to dashboard
+            setState(() {
+              _currentIndex = 0;
+            });
+          }
           if (MediaQuery.of(context).size.width < 768) {
             Navigator.of(context).pop();
           }
         },
+        onLogout: _handleLogout,
+        getScreenIndexForItem: (itemTitle) => _getScreenIndexForItem(itemTitle, p),
       ),
 
       body: IndexedStack(
-        index: _currentIndex,
-        children: _getScreens(p),
+        index: _currentIndex < screens.length ? _currentIndex : 0,
+        children: screens,
       ),
 
       bottomNavigationBar: _buildBottomNavigationBar(p),
@@ -198,7 +220,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final screens = _getScreens(context.read<PermissionProvider>());
 
     if (index < screens.length) {
-      if (screens[index] is SettingsScreen) {
+      Widget screen = screens[index];
+
+      if (screen is SettingsScreen) {
         return const Text(
           'Settings',
           style: TextStyle(
@@ -208,7 +232,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       }
-      if (screens[index] is AttendanceScreen) {
+      if (screen is AttendanceScreen) {
         return const Text(
           'Attendance',
           style: TextStyle(
@@ -218,7 +242,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       }
-      if (screens[index] is ApproveLeaveScreen) {
+      if (screen is ApproveLeaveScreen) {
         return const Text(
           'Leave Approval',
           style: TextStyle(
@@ -228,7 +252,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       }
-      if (screens[index] is SalaryScreen) {
+      if (screen is SalaryScreen) {
         return const Text(
           'Salary',
           style: TextStyle(
@@ -238,8 +262,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       }
+      if (screen is SalarySlipScreen) {
+        return const Text(
+          'Salary Slip',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        );
+      }
+      if (screen is SalarySheetScreen) {
+        return const Text(
+          'Salary Sheet',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        );
+      }
     }
 
+    // Default to Dashboard title
     return const Text(
       'Dashboard',
       style: TextStyle(
@@ -249,82 +294,152 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
   List<Widget> _getScreens(PermissionProvider p) {
     List<Widget> screens = [];
 
+    // 0 - Dashboard (always first)
     screens.add(_buildHomeScreen());
 
+    // 1 - Attendance
     if (p.hasPermission('can-view-attendence')) {
       screens.add(const AttendanceScreen());
     }
 
+    // 2 - Leave Approval
     if (p.hasPermission('can-edit-leave-application')) {
       screens.add(const ApproveLeaveScreen());
     }
 
+    // 3 - Salary Slip
+    screens.add(const SalarySlipScreen());
+
+    // 4 - Salary Sheet
+    screens.add(const SalarySheetScreen());
+
+    // 5 - Old Salary Screen
     if (p.hasPermission('can-view-salary')) {
       screens.add(const SalaryScreen());
     }
 
+    // 6 - Settings (always last)
     screens.add(const SettingsScreen());
+
+    // Debug output
+    print('=== SCREENS LIST ===');
+    print('Total screens: ${screens.length}');
+    for (int i = 0; i < screens.length; i++) {
+      String screenName = screens[i].runtimeType.toString();
+      print('Screen $i: $screenName');
+    }
 
     return screens;
   }
+  // Helper method to get screen index based on item title
+  int _getScreenIndexForItem(String itemTitle, PermissionProvider p) {
+    final screens = _getScreens(p);
+
+    // Map titles to their indices
+    final Map<String, int> titleToIndex = {};
+
+    for (int i = 0; i < screens.length; i++) {
+      if (i == 0) {
+        titleToIndex['Dashboard'] = i;
+      } else if (screens[i] is AttendanceScreen) {
+        titleToIndex['Staff Attendance'] = i;
+      } else if (screens[i] is ApproveLeaveScreen) {
+        titleToIndex['Approve Leave'] = i;
+      } else if (screens[i] is SalarySlipScreen) {
+        titleToIndex['Salary Slip'] = i;
+      } else if (screens[i] is SalarySheetScreen) {
+        titleToIndex['Salary Sheet'] = i;
+      } else if (screens[i] is SalaryScreen) {
+        titleToIndex['Salary'] = i;
+      } else if (screens[i] is SettingsScreen) {
+        titleToIndex['Settings'] = i;
+      }
+    }
+
+    // Return the index or 0 (Dashboard) if not found
+    return titleToIndex[itemTitle] ?? 0;
+  }
 
   int _getBottomNavIndex(int screenIndex, PermissionProvider p) {
+    // If it's the dashboard (screen 0), return bottom nav index 0
     if (screenIndex == 0) return 0;
 
     int bottomNavIndex = 1;
     int currentScreenIndex = 1;
 
+    // 1. Attendance
     if (p.hasPermission('can-view-attendence')) {
       if (currentScreenIndex == screenIndex) return bottomNavIndex;
       currentScreenIndex++;
       bottomNavIndex++;
     }
 
+    // 2. Leave Approval
     if (p.hasPermission('can-edit-leave-application')) {
       if (currentScreenIndex == screenIndex) return bottomNavIndex;
       currentScreenIndex++;
       bottomNavIndex++;
     }
 
+    // 3. Salary Slip - NOT in bottom nav (skip)
+    if (currentScreenIndex == screenIndex) return 0; // Go to home since not in bottom nav
+    currentScreenIndex++;
+
+    // 4. Salary Sheet - NOT in bottom nav (skip)
+    if (currentScreenIndex == screenIndex) return 0; // Go to home since not in bottom nav
+    currentScreenIndex++;
+
+    // 5. Salary (Old Salary Screen) - in bottom nav (only if has permission)
     if (p.hasPermission('can-view-salary')) {
       if (currentScreenIndex == screenIndex) return bottomNavIndex;
       currentScreenIndex++;
       bottomNavIndex++;
     }
 
+    // 6. Settings - Always in bottom nav
     if (currentScreenIndex == screenIndex) return bottomNavIndex;
 
     return 0;
   }
 
   int _getScreenIndex(int bottomNavIndex, PermissionProvider p) {
+    // If bottom nav index is 0, return screen index 0 (Dashboard)
     if (bottomNavIndex == 0) return 0;
 
     int screenIndex = 1;
     int currentBottomNavIndex = 1;
 
+    // 1. Attendance
     if (p.hasPermission('can-view-attendence')) {
       if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
       screenIndex++;
       currentBottomNavIndex++;
     }
 
+    // 2. Leave Approval
     if (p.hasPermission('can-edit-leave-application')) {
       if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
       screenIndex++;
       currentBottomNavIndex++;
     }
 
+    // 3. Salary Slip - NOT in bottom nav (skip - screenIndex increases)
+    screenIndex++;
+
+    // 4. Salary Sheet - NOT in bottom nav (skip - screenIndex increases)
+    screenIndex++;
+
+    // 5. Salary (Old Salary Screen)
     if (p.hasPermission('can-view-salary')) {
       if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
       screenIndex++;
       currentBottomNavIndex++;
     }
 
+    // 6. Settings
     if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
 
     return 0;
@@ -338,6 +453,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     ];
 
+    // Add attendance item if permission exists
     if (p.hasPermission('can-view-attendence')) {
       items.add(
         const BottomNavigationBarItem(
@@ -347,6 +463,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
+    // Add leave approval item if permission exists
     if (p.hasPermission('can-edit-leave-application')) {
       items.add(
         const BottomNavigationBarItem(
@@ -356,6 +473,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
+    // Add salary item if permission exists (old salary screen)
     if (p.hasPermission('can-view-salary')) {
       items.add(
         const BottomNavigationBarItem(
@@ -365,6 +483,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
+    // Always add settings
     items.add(
       const BottomNavigationBarItem(
         icon: Icon(Iconsax.setting, size: 22),
@@ -372,6 +491,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
 
+    // Get current bottom nav index based on current screen index
     int currentBottomNavIndex = _getBottomNavIndex(_currentIndex, p);
 
     return Container(
@@ -407,7 +527,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
   Widget _buildHomeScreen() {
     final Size size = MediaQuery.of(context).size;
     final p = context.read<PermissionProvider>();
@@ -631,8 +750,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               'All Time',
               style: TextStyle(
                 fontSize: 12,
-                fontWeight:
-                _dateController.text == 'All Time' ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: _dateController.text == 'All Time'
+                    ? FontWeight.w600
+                    : FontWeight.w500,
                 color: _dateController.text == 'All Time'
                     ? const Color(0xFF667EEA)
                     : Colors.grey[600],
@@ -733,7 +853,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               ElevatedButton(
                 onPressed: () => provider.fetchDashboardSummary(
-                  date: _dateController.text == 'All Time' ? null : _dateController.text,
+                  date: _dateController.text == 'All Time'
+                      ? null
+                      : _dateController.text,
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF667EEA),
@@ -816,7 +938,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             child: Row(
               children: [
-                Icon(Iconsax.info_circle, color: Colors.orange[700], size: 20),
+                Icon(Iconsax.info_circle,
+                    color: Colors.orange[700], size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -878,9 +1001,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Present Card
             _buildClickableStatCard(
               icon: Iconsax.calendar_tick,
-              title: isDateSpecific ? 'Attendance$dateSuffix' : 'Today Attendance$dateSuffix',
+              title: isDateSpecific
+                  ? 'Attendance$dateSuffix'
+                  : 'Today Attendance$dateSuffix',
               value: '${summary.presentCount}',
-              subtitle: isNoDataYet ? 'Not marked yet' : '${summary.presentPercentage.toStringAsFixed(1)}%',
+              subtitle: isNoDataYet
+                  ? 'Not marked yet'
+                  : '${summary.presentPercentage.toStringAsFixed(1)}%',
               color: isNoDataYet ? Colors.grey : const Color(0xFF2196F3),
               onTap: () {
                 Navigator.push(
@@ -899,7 +1026,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Iconsax.calendar_remove,
               title: 'On Leave$dateSuffix',
               value: '${summary.leaveCount}',
-              subtitle: isNoDataYet ? 'Not marked yet' : '${summary.leavePercentage.toStringAsFixed(1)}%',
+              subtitle: isNoDataYet
+                  ? 'Not marked yet'
+                  : '${summary.leavePercentage.toStringAsFixed(1)}%',
               color: isNoDataYet ? Colors.grey : const Color(0xFFFF9800),
               onTap: () {
                 Navigator.push(
@@ -918,7 +1047,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Iconsax.calendar_remove,
               title: 'Absent$dateSuffix',
               value: '${summary.absentCount}',
-              subtitle: isNoDataYet ? 'Not marked yet' : '${summary.absentPercentage.toStringAsFixed(1)}%',
+              subtitle: isNoDataYet
+                  ? 'Not marked yet'
+                  : '${summary.absentPercentage.toStringAsFixed(1)}%',
               color: isNoDataYet ? Colors.grey : const Color(0xFFF44336),
               onTap: () {
                 Navigator.push(
@@ -936,6 +1067,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ],
     );
   }
+
   Widget _buildClickableStatCard({
     required IconData icon,
     required String title,
@@ -943,14 +1075,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String? subtitle,
     required Color color,
     required VoidCallback onTap,
-    bool isDisabled = false, // Add this parameter
+    bool isDisabled = false,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        splashColor: isDisabled ? Colors.transparent : color.withOpacity(0.1),
+        splashColor:
+        isDisabled ? Colors.transparent : color.withOpacity(0.1),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -970,7 +1103,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: isDisabled ? Colors.grey[200] : color.withOpacity(0.1),
+                  color:
+                  isDisabled ? Colors.grey[200] : color.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -1081,7 +1215,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: color.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(10),
@@ -1160,7 +1295,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       children: [
         Container(
-          margin: EdgeInsets.symmetric(horizontal: screenWidth > 600 ? 20 : 16),
+          margin:
+          EdgeInsets.symmetric(horizontal: screenWidth > 600 ? 20 : 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -1198,10 +1334,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     IconButton(
                       icon: Icon(
                         Icons.refresh,
-                        color: provider.isLoading ? Colors.grey : const Color(0xFF667EEA),
+                        color: provider.isLoading
+                            ? Colors.grey
+                            : const Color(0xFF667EEA),
                         size: 18,
                       ),
-                      onPressed: provider.isLoading ? null : () {
+                      onPressed: provider.isLoading
+                          ? null
+                          : () {
                         provider.fetchAttendanceData();
                       },
                     ),
@@ -1297,7 +1437,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildChartWidget(ChartProvider provider, double screenWidth) {
     return ChartWidget(
       chartData: provider.chartData,
-      chartTitle: provider.isAdmin ? 'Team Attendance Overview' : 'My Attendance Overview',
+      chartTitle: provider.isAdmin
+          ? 'Team Attendance Overview'
+          : 'My Attendance Overview',
       chartHeight: screenWidth > 600 ? 350 : 300,
       presentColor: const Color(0xFF4CAF50),
       absentColor: const Color(0xFFF44336),
@@ -1306,12 +1448,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
       showGridLines: true,
     );
   }
+
+  // Correct logout handler method
+  void _handleLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Iconsax.logout, color: Colors.red),
+              SizedBox(width: 12),
+              Text(
+                'Logout',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF667EEA),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to logout?',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black87,
+            ),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final auth =
+                Provider.of<AuthProvider>(context, listen: false);
+                final dashboardProvider =
+                Provider.of<DashboardSummaryProvider>(context,
+                    listen: false);
+
+                Navigator.of(dialogContext).pop();
+
+                await auth.logout();
+                await dashboardProvider.logout();
+
+                Navigator.of(context, rootNavigator: true)
+                    .pushNamedAndRemoveUntil(
+                  '/login',
+                      (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class SidebarDrawer extends StatelessWidget {
   final PermissionProvider permissionProvider;
   final int selectedIndex;
   final Function(int) onMenuSelected;
+  final Function(BuildContext) onLogout;
+  final Function(String) getScreenIndexForItem;
   final Function? onDrawerClose;
 
   const SidebarDrawer({
@@ -1319,75 +1544,107 @@ class SidebarDrawer extends StatelessWidget {
     required this.permissionProvider,
     required this.selectedIndex,
     required this.onMenuSelected,
+    required this.onLogout,
+    required this.getScreenIndexForItem,
     this.onDrawerClose,
   });
-
-  int _getScreenIndex(String itemTitle) {
-    if (itemTitle == 'Dashboard') return 0;
-
-    if (itemTitle == 'Settings') {
-      int index = 1;
-
-      if (permissionProvider.hasPermission('can-view-attendence')) index++;
-      if (permissionProvider.hasPermission('can-edit-leave-application')) index++;
-      if (permissionProvider.hasPermission('can-view-salary')) index++;
-
-      return index;
-    }
-
-    List<String> availableScreens = ['Dashboard'];
-
-    if (permissionProvider.hasPermission('can-view-attendence')) {
-      availableScreens.add('Staff Attendance');
-    }
-    if (permissionProvider.hasPermission('can-edit-leave-application')) {
-      availableScreens.add('Approve Leave');
-    }
-    if (permissionProvider.hasPermission('can-view-salary')) {
-      availableScreens.add('Salary');
-    }
-    availableScreens.add('Settings');
-
-    return availableScreens.indexOf(itemTitle);
-  }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context, listen: true);
 
-    final List<Map<String, dynamic>> menuItems = [
+    // Check if user is admin
+    final isAdmin = permissionProvider.hasPermission('can-view-salary-sheet') ||
+        permissionProvider.userRole.toLowerCase().contains('admin');
+
+    // Define all menu items that could appear in drawer
+    final List<Map<String, dynamic>> allMenuItems = [
       {
         'icon': Iconsax.dcube,
         'title': 'Dashboard',
         'permission': 'can-view-dashboard',
+        'requiresPermission': true,
       },
       {
         'icon': Iconsax.finger_cricle,
         'title': 'Staff Attendance',
         'permission': 'can-view-attendence',
+        'requiresPermission': true,
       },
       {
         'icon': Iconsax.tick_circle,
         'title': 'Approve Leave',
         'permission': 'can-edit-leave-application',
+        'requiresPermission': true,
+      },
+      {
+        'icon': Iconsax.document_text,
+        'title': 'Salary Slip',
+        'permission': 'can-view-salary-slip',
+        'requiresPermission': true,
+        'description': 'View your salary slips',
+      },
+      {
+        'icon': Iconsax.document_copy,
+        'title': 'Salary Sheet',
+        'permission': 'can-view-salary-sheet',
+        'requiresPermission': true,
+        'isAdminOnly': true,
+        'description': 'Admin: View all salary data',
       },
       {
         'icon': Iconsax.wallet_money,
         'title': 'Salary',
         'permission': 'can-view-salary',
+        'requiresPermission': true,
       },
       {
         'icon': Iconsax.setting,
         'title': 'Settings',
         'permission': 'always-available',
+        'requiresPermission': false,
       },
       {
         'icon': Iconsax.logout,
         'title': 'Logout',
         'permission': 'can-logout',
         'isLogout': true,
+        'requiresPermission': false,
       },
     ];
+
+    // Filter menu items based on permissions
+    List<Map<String, dynamic>> menuItems = [];
+
+    for (var item in allMenuItems) {
+      if (item['isLogout'] == true) {
+        menuItems.add(item);
+        continue;
+      }
+
+      if (!item['requiresPermission']) {
+        menuItems.add(item);
+        continue;
+      }
+
+      if (item['title'] == 'Salary Sheet') {
+        // Show Salary Sheet only for admin users
+        if (isAdmin) {
+          menuItems.add(item);
+        }
+        continue;
+      }
+
+      if (item['title'] == 'Salary Slip') {
+        // Show Salary Slip for all users (assuming can-view-salary-slip is given to all)
+        menuItems.add(item);
+        continue;
+      }
+
+      if (permissionProvider.hasPermission(item['permission'])) {
+        menuItems.add(item);
+      }
+    }
 
     return Drawer(
       width: 280,
@@ -1405,6 +1662,7 @@ class SidebarDrawer extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
+              // Header
               Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
@@ -1462,9 +1720,11 @@ class SidebarDrawer extends StatelessWidget {
                 ),
               ),
 
+              // Menu Items
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                   children: [
                     ...menuItems.map((item) {
                       if (item['isLogout'] == true) {
@@ -1472,31 +1732,18 @@ class SidebarDrawer extends StatelessWidget {
                           icon: item['icon'],
                           title: item['title'],
                           hasPermission: true,
-                          onTap: () => _handleLogout(context),
+                          onTap: () => onLogout(context),
                           isSelected: false,
                           isLogout: true,
+                          description: item['description'],
+                          isAdminOnly: item['isAdminOnly'] == true,
                         );
                       }
 
-                      if (item['permission'] == 'always-available') {
-                        final screenIndex = _getScreenIndex(item['title']);
-                        return _drawerItem(
-                          icon: item['icon'],
-                          title: item['title'],
-                          hasPermission: true,
-                          onTap: () {
-                            onMenuSelected(screenIndex);
-                            if (onDrawerClose != null) onDrawerClose!();
-                          },
-                          isSelected: selectedIndex == screenIndex,
-                        );
-                      }
+                      // Use the provided function to get the correct index
+                      final screenIndex = getScreenIndexForItem(item['title']);
+                      final isSelected = selectedIndex == screenIndex;
 
-                      if (!permissionProvider.hasPermission(item['permission'])) {
-                        return const SizedBox.shrink();
-                      }
-
-                      final screenIndex = _getScreenIndex(item['title']);
                       return _drawerItem(
                         icon: item['icon'],
                         title: item['title'],
@@ -1505,18 +1752,22 @@ class SidebarDrawer extends StatelessWidget {
                           onMenuSelected(screenIndex);
                           if (onDrawerClose != null) onDrawerClose!();
                         },
-                        isSelected: selectedIndex == screenIndex,
+                        isSelected: isSelected,
+                        description: item['description'],
+                        isAdminOnly: item['isAdminOnly'] == true,
                       );
                     }).toList(),
                   ],
                 ),
               ),
 
+              // User Profile Section
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.1),
-                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.2))),
+                  border:
+                  Border(top: BorderSide(color: Colors.white.withOpacity(0.2))),
                 ),
                 child: Row(
                   children: [
@@ -1525,7 +1776,8 @@ class SidebarDrawer extends StatelessWidget {
                       height: 48,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+                        border: Border.all(
+                            color: Colors.white.withOpacity(0.4), width: 2),
                         gradient: const LinearGradient(
                           colors: [Colors.white, Colors.white70],
                           begin: Alignment.topLeft,
@@ -1553,10 +1805,37 @@ class SidebarDrawer extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            auth.userEmail.isNotEmpty ? auth.userEmail : 'user@company.com',
+                            auth.userEmail.isNotEmpty
+                                ? auth.userEmail
+                                : 'user@company.com',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isAdmin
+                                  ? Colors.green.withOpacity(0.2)
+                                  : Colors.blue.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isAdmin ? Colors.green : Colors.blue,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              isAdmin ? 'Admin' : 'Staff',
+                              style: TextStyle(
+                                color: isAdmin
+                                    ? Colors.green[100]
+                                    : Colors.blue[100],
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -1579,6 +1858,8 @@ class SidebarDrawer extends StatelessWidget {
     required VoidCallback onTap,
     bool isSelected = false,
     bool isLogout = false,
+    String? description,
+    bool isAdminOnly = false,
   }) {
     if (!hasPermission) return const SizedBox.shrink();
 
@@ -1612,7 +1893,8 @@ class SidebarDrawer extends StatelessWidget {
         boxShadow: isSelected || isLogout
             ? [
           BoxShadow(
-            color: (isLogout ? Colors.red : Colors.white).withOpacity(0.2),
+            color: (isLogout ? Colors.red : Colors.white)
+                .withOpacity(0.2),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1646,21 +1928,77 @@ class SidebarDrawer extends StatelessWidget {
                       width: 1,
                     ),
                   ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 20,
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: Icon(
+                          icon,
+                          color: iconColor,
+                          size: 20,
+                        ),
+                      ),
+                      if (isAdminOnly && !isLogout)
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: iconColor,
-                      fontSize: 15,
-                      fontWeight: isSelected || isLogout ? FontWeight.w600 : FontWeight.w500,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: iconColor,
+                          fontSize: 15,
+                          fontWeight: isSelected || isLogout
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                        ),
+                      ),
+                      if (description != null && !isLogout) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            color: iconColor.withOpacity(0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                      if (isAdminOnly && !isLogout) ...[
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Admin',
+                            style: TextStyle(
+                              color: Colors.green[100],
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 if (isSelected && !isLogout)
@@ -1690,83 +2028,6 @@ class SidebarDrawer extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-
-  void _handleLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Iconsax.logout, color: Colors.red),
-              SizedBox(width: 12),
-              Text(
-                'Logout',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF667EEA),
-                ),
-              ),
-            ],
-          ),
-          content: const Text(
-            'Are you sure you want to logout?',
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.black87,
-            ),
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final auth = Provider.of<AuthProvider>(context, listen: false);
-                final dashboardProvider =
-                Provider.of<DashboardSummaryProvider>(context, listen: false);
-
-                Navigator.of(dialogContext).pop();
-                if (onDrawerClose != null) onDrawerClose!();
-
-                await auth.logout();
-                await dashboardProvider.logout();
-
-                Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
-                  '/login',
-                      (route) => false,
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text(
-                'Logout',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

@@ -71,11 +71,18 @@ class AttendanceProvider extends ChangeNotifier {
   bool get isUser => _userRole == UserRole.user;
 
   // Statistics - Only show for admin
-  int get totalPresent => isAdmin ? _attendance.where((a) => a.isPresent).length : 0;
-  int get totalLate => isAdmin ? _attendance.where((a) => a.lateMinutes > 0).length : 0;
-  int get totalAbsent => isAdmin ? _attendance.where((a) => !a.isPresent).length : 0;
-  int get totalOvertime => isAdmin ? _attendance.where((a) => a.overtimeMinutes > 0).length : 0;
+  // Update ALL statistics getters to work for both admin and staff
+  int get totalPresent => _attendance.where((a) => a.isPresent).length;
+  int get totalLate => _attendance.where((a) => a.lateMinutes > 0).length;
+  int get totalAbsent {
+    // Count records where both timeIn and timeOut are empty or status contains 'absent'
+    return _attendance.where((a) {
+      return (a.timeIn.isEmpty && a.timeOut.isEmpty) ||
+          a.status.toLowerCase().contains('absent');
+    }).length;
+  }
 
+  int get totalOvertime => _attendance.where((a) => a.overtimeMinutes > 0).length;
   // Get employees by selected department - FIXED VERSION
   List<Employee> get filteredEmployees {
     if (_selectedDepartmentFilter == 'All' || _selectedDepartmentFilter.isEmpty) {
@@ -256,13 +263,22 @@ class AttendanceProvider extends ChangeNotifier {
       // Initialize user data first
       await _initializeUserData();
 
-      // Fetch all data in parallel
-      await Future.wait([
-        fetchAttendance(),
-        fetchEmployees(),
-        fetchDepartments(),
-        fetchDutyShifts(),
-      ]);
+      // Check if user is admin
+      if (isAdmin) {
+        // For admin: fetch all data
+        await Future.wait([
+          fetchAttendance(),
+          fetchEmployees(),
+          fetchDepartments(),
+          fetchDutyShifts(),
+        ]);
+      } else {
+        // For staff: fetch only their own attendance and basic info
+        await Future.wait([
+          fetchAttendance(), // This will now handle staff filtering
+          fetchEmployees(), // Still fetch employees for reference
+        ]);
+      }
 
     } catch (e) {
       _error = 'Failed to load data: $e';
@@ -273,7 +289,7 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // GET - Fetch all attendance
+  // GET - Fetch all attendance (handles both admin and staff)
   Future<void> fetchAttendance() async {
     try {
       _isLoadingAttendance = true;
@@ -328,44 +344,8 @@ class AttendanceProvider extends ChangeNotifier {
         _extractMonthsFromData();
 
         // If user is not admin, filter to show only their own attendance
-        if (!isAdmin && _userId != 0) {
-          final List<Attendance> filteredList = [];
-
-          for (final attendance in _attendance) {
-            bool matches = false;
-
-            // Method 1: Compare employeeId as int
-            if (attendance.employeeId == _userId) {
-              matches = true;
-            }
-            // Method 2: Compare as strings (in case of type mismatch)
-            else if (attendance.employeeId.toString() == _userId.toString()) {
-              matches = true;
-            }
-            // Method 3: Compare employee codes
-            else if (_employeeCode.isNotEmpty &&
-                attendance.empId.isNotEmpty &&
-                attendance.empId.toLowerCase() == _employeeCode.toLowerCase()) {
-              matches = true;
-            }
-            // Method 4: Compare by name (partial match as fallback)
-            else if (_userName.isNotEmpty &&
-                attendance.employeeName.isNotEmpty &&
-                attendance.employeeName.toLowerCase().contains(_userName.toLowerCase())) {
-              matches = true;
-            }
-
-            if (matches) {
-              filteredList.add(attendance);
-            }
-          }
-
-          _attendance = filteredList;
-
-          // If no matches found, try alternative matching strategies
-          if (_attendance.isEmpty) {
-            await _tryAlternativeMatching();
-          }
+        if (!isAdmin) {
+          await _filterStaffAttendance();
         }
 
         // Extract unique departments and employees
@@ -397,6 +377,260 @@ class AttendanceProvider extends ChangeNotifier {
       _isLoadingAttendance = false;
       notifyListeners();
     }
+  }
+
+  // Method to filter attendance for staff users
+  // Update the _filterStaffAttendance method
+  Future<void> _filterStaffAttendance() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Try to get employee ID from multiple sources
+      final employeeId = prefs.getString('employee_id') ??
+          prefs.getString('emp_id') ??
+          prefs.getInt('user_id')?.toString() ??
+          '';
+
+      final employeeCode = prefs.getString('employee_code') ??
+          prefs.getString('emp_code') ??
+          '';
+
+      final userName = prefs.getString('employee_name') ??
+          prefs.getString('user_name') ??
+          '';
+
+      print('=== STAFF FILTERING DEBUG ===');
+      print('Employee ID from prefs: $employeeId');
+      print('Employee Code from prefs: $employeeCode');
+      print('User Name from prefs: $userName');
+      print('Total attendance records before filtering: ${_attendance.length}');
+
+      if (employeeId.isEmpty && employeeCode.isEmpty) {
+        print('No employee ID or code found for staff user');
+        _attendance = [];
+        return;
+      }
+
+      final List<Attendance> filteredList = [];
+
+      for (final attendance in _attendance) {
+        bool matches = false;
+
+        // Method 1: Compare employeeId as string
+        if (employeeId.isNotEmpty && attendance.employeeId.toString() == employeeId) {
+          matches = true;
+          print('Matched by employeeId: ${attendance.employeeId} == $employeeId');
+        }
+        // Method 2: Compare employee codes
+        else if (employeeCode.isNotEmpty &&
+            attendance.empId.isNotEmpty &&
+            attendance.empId.toLowerCase() == employeeCode.toLowerCase()) {
+          matches = true;
+          print('Matched by empId: ${attendance.empId} == $employeeCode');
+        }
+        // Method 3: Compare by name (exact match)
+        else if (userName.isNotEmpty &&
+            attendance.employeeName.isNotEmpty &&
+            attendance.employeeName.toLowerCase() == userName.toLowerCase()) {
+          matches = true;
+          print('Matched by name: ${attendance.employeeName} == $userName');
+        }
+
+        if (matches) {
+          filteredList.add(attendance);
+          print('Added record: ${attendance.employeeName} - ${attendance.date}');
+        }
+      }
+
+      _attendance = filteredList;
+
+      print('Staff attendance filtered: ${_attendance.length} records found');
+
+      // If no matches found, print debug info
+      if (_attendance.isEmpty) {
+        print('=== NO MATCHES FOUND DEBUG ===');
+        print('Trying alternative matching...');
+
+        // Print first few records for debugging
+        final sampleSize = min(5, _attendance.length);
+        for (int i = 0; i < sampleSize; i++) {
+          final record = _attendance[i];
+          print('Record $i:');
+          print('  Employee ID: ${record.employeeId}');
+          print('  Emp Code: ${record.empId}');
+          print('  Employee Name: ${record.employeeName}');
+        }
+
+        await _tryAlternativeMatching();
+      }
+
+    } catch (e) {
+      print('Error filtering staff attendance: $e');
+      _attendance = [];
+    }
+  }
+  // ADD THIS METHOD: Fetch attendance for specific employee
+  Future<void> fetchAttendanceForEmployee(String employeeId) async {
+    try {
+      _isLoadingAttendance = true;
+      _error = '';
+      notifyListeners();
+
+      final token = await _getToken();
+
+      // Try different endpoints based on employee ID format
+      String endpoint;
+
+      if (int.tryParse(employeeId) != null) {
+        // If employeeId is numeric
+        endpoint = '${GlobalUrls.baseurl}/api/attendance?employee_id=$employeeId';
+      } else {
+        // If employeeId is string (employee code)
+        endpoint = '${GlobalUrls.baseurl}/api/attendance?emp_id=$employeeId';
+      }
+
+      print('Fetching attendance from: $endpoint');
+
+      final response = await http.get(
+        Uri.parse(endpoint),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic data = json.decode(response.body);
+        List<dynamic> attendanceList = [];
+
+        if (data is Map) {
+          if (data.containsKey('attendance')) {
+            attendanceList = data['attendance'] as List<dynamic>;
+          } else if (data.containsKey('data')) {
+            attendanceList = data['data'] as List<dynamic>;
+          } else if (data.containsKey('employee_attendance')) {
+            attendanceList = data['employee_attendance'] as List<dynamic>;
+          }
+        } else if (data is List) {
+          attendanceList = data;
+        }
+
+        if (attendanceList.isEmpty) {
+          // Try alternative endpoints
+          await _tryAlternativeEmployeeEndpoints(employeeId, token);
+        } else {
+          // Parse attendance
+          _attendance = attendanceList
+              .map((json) => Attendance.fromJson(json))
+              .toList();
+
+          // SORT attendance by date ASCENDING (oldest first)
+          _attendance.sort((a, b) => a.date.compareTo(b.date));
+
+          // Extract unique months for filtering
+          _extractMonthsFromData();
+
+          // Extract unique departments and employees
+          _extractFilters();
+
+          // Apply current filters
+          _applyFilters();
+
+          print('Employee attendance fetched successfully: ${_attendance.length} records');
+        }
+      } else if (response.statusCode == 404) {
+        // Try alternative endpoints
+        await _tryAlternativeEmployeeEndpoints(employeeId, token);
+      } else if (response.statusCode == 401) {
+        throw Exception('Unauthorized - Please login again');
+      } else if (response.statusCode == 403) {
+        throw Exception('Forbidden - You don\'t have permission to view attendance');
+      } else {
+        throw Exception('Failed to load attendance: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error in fetchAttendanceForEmployee: $e');
+      _error = e.toString();
+      _attendance = [];
+      _filteredAttendance = [];
+      _availableMonths = ['All'];
+    } finally {
+      _isLoadingAttendance = false;
+      notifyListeners();
+    }
+  }
+
+  // Try alternative endpoints for employee attendance
+  Future<void> _tryAlternativeEmployeeEndpoints(String employeeId, String token) async {
+    final endpoints = [
+      '${GlobalUrls.baseurl}/api/employees/$employeeId/attendance',
+      '${GlobalUrls.baseurl}/api/employee/$employeeId/attendance',
+      '${GlobalUrls.baseurl}/api/attendance/employee/$employeeId',
+      '${GlobalUrls.baseurl}/api/attendance/emp/$employeeId',
+      '${GlobalUrls.baseurl}/api/attendance?user_id=$employeeId',
+    ];
+
+    for (var endpoint in endpoints) {
+      try {
+        print('Trying alternative endpoint: $endpoint');
+
+        final response = await http.get(
+          Uri.parse(endpoint),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final dynamic data = json.decode(response.body);
+          List<dynamic> attendanceList = [];
+
+          if (data is Map) {
+            if (data.containsKey('attendance')) {
+              attendanceList = data['attendance'] as List<dynamic>;
+            } else if (data.containsKey('data')) {
+              attendanceList = data['data'] as List<dynamic>;
+            } else if (data.containsKey('employee_attendance')) {
+              attendanceList = data['employee_attendance'] as List<dynamic>;
+            }
+          } else if (data is List) {
+            attendanceList = data;
+          }
+
+          if (attendanceList.isNotEmpty) {
+            // Parse attendance
+            _attendance = attendanceList
+                .map((json) => Attendance.fromJson(json))
+                .toList();
+
+            // SORT attendance by date ASCENDING (oldest first)
+            _attendance.sort((a, b) => a.date.compareTo(b.date));
+
+            // Extract unique months for filtering
+            _extractMonthsFromData();
+
+            // Extract unique departments and employees
+            _extractFilters();
+
+            // Apply current filters
+            _applyFilters();
+
+            print('Found attendance via alternative endpoint: $endpoint');
+            print('Total records: ${_attendance.length}');
+            return;
+          }
+        }
+      } catch (e) {
+        print('Error trying endpoint $endpoint: $e');
+        continue;
+      }
+    }
+
+    // If all endpoints fail, throw error
+    throw Exception('No attendance data found for employee ID: $employeeId');
   }
 
   // Method to extract months from attendance data
@@ -458,6 +692,7 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   // Update the _applyFilters method
+  // Update the _applyFilters method to ensure admin sees all data when no filters are selected
   void _applyFilters() {
     _filteredAttendance = _attendance.where((attendance) {
       // Search filter
@@ -478,24 +713,32 @@ class AttendanceProvider extends ChangeNotifier {
               attendance.departmentName == _selectedDepartmentFilter;
 
       // Employee filter (only for admin)
-      // Show all when no employee selected or "All" departments
       final matchesEmployee =
           !isAdmin || // If not admin, always true
               _selectedDepartmentFilter == 'All' ||
               _selectedEmployeeFilter.isEmpty ||
               attendance.employeeName == _selectedEmployeeFilter;
 
-      // Month filter (only for admin)
+      // Month filter (works for both admin and staff)
       bool matchesMonth = true;
-      if (isAdmin && _selectedMonthFilter != 'All') {
+      if (_selectedMonthFilter != 'All') {
         final recordMonth = _formatMonthForFilter(attendance.date);
         matchesMonth = recordMonth == _selectedMonthFilter;
       }
 
       return matchesSearch && matchesDepartment && matchesEmployee && matchesMonth;
     }).toList();
-  }
 
+    // Debug: Print filter results
+    print('=== FILTER DEBUG ===');
+    print('Is Admin: $isAdmin');
+    print('Total records: ${_attendance.length}');
+    print('Filtered records: ${_filteredAttendance.length}');
+    print('Search query: $_searchQuery');
+    print('Department filter: $_selectedDepartmentFilter');
+    print('Employee filter: $_selectedEmployeeFilter');
+    print('Month filter: $_selectedMonthFilter');
+  }
   // Department filter setter
   void setDepartmentFilter(String department) {
     if (isAdmin) {
@@ -516,20 +759,44 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   // Try alternative matching methods when standard methods fail
+  // Update the _tryAlternativeMatching method
   Future<void> _tryAlternativeMatching() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      final additionalIds = [
-        prefs.getInt('employee_id'),
-        prefs.getInt('emp_id'),
-      ].whereType<int>().toList();
+      // Handle both int and string employee IDs
+      final additionalIds = <String>[];
+
+      // Try to get int values
+      final intId = prefs.getInt('employee_id');
+      if (intId != null) {
+        additionalIds.add(intId.toString());
+      }
+
+      final intEmpId = prefs.getInt('emp_id');
+      if (intEmpId != null) {
+        additionalIds.add(intEmpId.toString());
+      }
+
+      // Try to get string values
+      final stringEmpId = prefs.getString('employee_id');
+      if (stringEmpId != null && stringEmpId.isNotEmpty) {
+        additionalIds.add(stringEmpId);
+      }
+
+      final stringId = prefs.getString('emp_id');
+      if (stringId != null && stringId.isNotEmpty) {
+        additionalIds.add(stringId);
+      }
 
       final additionalCodes = [
         prefs.getString('emp_code'),
-        prefs.getString('employee_id'),
         prefs.getString('staff_id'),
       ].whereType<String>().where((code) => code.isNotEmpty).toList();
+
+      print('=== ALTERNATIVE MATCHING DEBUG ===');
+      print('Additional IDs to try: $additionalIds');
+      print('Additional Codes to try: $additionalCodes');
 
       if (additionalIds.isNotEmpty || additionalCodes.isNotEmpty) {
         final List<Attendance> filteredList = [];
@@ -537,9 +804,11 @@ class AttendanceProvider extends ChangeNotifier {
         for (final attendance in _attendance) {
           bool matches = false;
 
+          // Try additional IDs (as strings)
           for (var id in additionalIds) {
-            if (attendance.employeeId == id) {
+            if (attendance.employeeId.toString() == id) {
               matches = true;
+              print('Alternative match by ID: ${attendance.employeeId} == $id');
               break;
             }
           }
@@ -548,6 +817,7 @@ class AttendanceProvider extends ChangeNotifier {
             for (var code in additionalCodes) {
               if (attendance.empId.toLowerCase() == code.toLowerCase()) {
                 matches = true;
+                print('Alternative match by code: ${attendance.empId} == $code');
                 break;
               }
             }
@@ -560,7 +830,12 @@ class AttendanceProvider extends ChangeNotifier {
 
         if (filteredList.isNotEmpty) {
           _attendance = filteredList;
+          print('Alternative matching found ${filteredList.length} records');
+        } else {
+          print('Alternative matching found no records');
         }
+      } else {
+        print('No alternative IDs or codes to try');
       }
     } catch (e) {
       print('Error in alternative matching: $e');
@@ -641,6 +916,9 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   // Helper method to parse employee from map
+  // Update the _parseEmployeeMap method in your AttendanceProvider
+
+// Helper method to parse employee from map
   Employee _parseEmployeeMap(Map<String, dynamic> data) {
     try {
       final id = _parseInt(data['id']) ??
@@ -659,12 +937,28 @@ class AttendanceProvider extends ChangeNotifier {
           data['staff_id']?.toString() ??
           'N/A';
 
-      // Clean department name - this is IMPORTANT
-      String department = data['department']?.toString() ??
-          data['department_name']?.toString() ??
-          data['dept']?.toString() ??
-          data['department_id']?.toString() ??
-          'Unknown Department';
+      // FIX: Handle department which might be a Map or a string
+      String department = 'Unknown Department';
+
+      if (data['department'] != null) {
+        if (data['department'] is Map) {
+          // Department is a Map, extract the name
+          final deptMap = data['department'] as Map<String, dynamic>;
+          department = deptMap['name']?.toString() ?? 'Unknown Department';
+        } else if (data['department'] is String) {
+          // Department is already a string
+          department = data['department'] as String;
+        }
+      } else if (data['department_name'] != null) {
+        // Try department_name field
+        department = data['department_name'].toString();
+      } else if (data['dept'] != null) {
+        // Try dept field
+        department = data['dept'].toString();
+      } else if (data['department_id'] != null) {
+        // Try department_id field
+        department = data['department_id'].toString();
+      }
 
       // Trim and clean department name
       department = department.trim();
@@ -685,7 +979,6 @@ class AttendanceProvider extends ChangeNotifier {
       );
     }
   }
-
   // Helper to parse integer from dynamic value
   int? _parseInt(dynamic value) {
     if (value == null) return null;

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../model/attendance_model/attendance_model.dart';
 import '../../provider/attendance_provider/attendance_provider.dart';
+import '../../provider/Auth_provider/Auth_provider.dart'; // Add this import
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -16,11 +19,14 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   final TextEditingController _searchController = TextEditingController();
   late AttendanceProvider _provider;
+  String _employeeId = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      _employeeId = authProvider.employeeId;
       _provider = Provider.of<AttendanceProvider>(context, listen: false);
       _provider.fetchAllData();
     });
@@ -40,10 +46,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
     final isLargeScreen = screenWidth >= 900;
 
+    final authProvider = Provider.of<AuthProvider>(context);
+    final isStaff = !authProvider.isAdmin;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Attendance',
+          isStaff ? 'My Attendance' : 'Attendance',
           style: TextStyle(
             fontSize: isSmallScreen ? 20 : (isMediumScreen ? 22 : 24),
             fontWeight: FontWeight.bold,
@@ -76,7 +85,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ),
                         SizedBox(width: isSmallScreen ? 4 : 6),
                         Text(
-                          provider.isAdmin ? 'Admin' : 'User',
+                          provider.isAdmin ? 'Admin' : 'Staff',
                           style: TextStyle(
                             fontSize: isSmallScreen ? 12 : 14,
                             color: Colors.white,
@@ -92,7 +101,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       Iconsax.refresh,
                       size: isSmallScreen ? 20 : 24,
                     ),
-                    onPressed: () => provider.fetchAttendance(),
+                    onPressed: () => _provider.fetchAllData(),
                     tooltip: 'Refresh',
                   ),
                   SizedBox(width: isSmallScreen ? 8 : 16),
@@ -120,12 +129,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           child: Column(
             children: [
               // Search Section
-              _buildSearchSection(),
+              _buildSearchSection(isStaff),
 
               // Statistics Cards (Admin only)
               Consumer<AttendanceProvider>(
                 builder: (context, provider, child) {
-                  return provider.isAdmin ? _buildStatisticsCards(provider) : const SizedBox.shrink();
+                  return !isStaff ? _buildStatisticsCards(provider) : const SizedBox.shrink();
                 },
               ),
 
@@ -151,7 +160,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                     ],
                   ),
-                  child: _buildAttendanceList(),
+                  child: _buildAttendanceList(isStaff),
                 ),
               ),
             ],
@@ -161,7 +170,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       // Floating Action Button (Admin only)
       floatingActionButton: Consumer<AttendanceProvider>(
         builder: (context, provider, child) {
-          return provider.isAdmin
+          return !isStaff
               ? FloatingActionButton(
             onPressed: () {
               provider.navigateToAddScreen(context);
@@ -179,14 +188,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildSearchSection() {
+  Widget _buildSearchSection(bool isStaff) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
 
     return Consumer<AttendanceProvider>(
       builder: (context, provider, child) {
-        final isAdmin = provider.isAdmin;
-
         return Container(
           margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
           padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -214,9 +221,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   controller: _searchController,
                   onChanged: (value) => provider.setSearchQuery(value),
                   decoration: InputDecoration(
-                    hintText: isAdmin
-                        ? 'Search by employee name or ID...'
-                        : 'Search your attendance...',
+                    hintText: isStaff
+                        ? 'Search your attendance...'
+                        : 'Search by employee name or ID...',
                     hintStyle: TextStyle(
                       color: Colors.grey[500],
                       fontSize: isSmallScreen ? 13 : 14,
@@ -250,10 +257,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
               SizedBox(height: isSmallScreen ? 12 : 16),
 
-              // Filter Row (Admin only)
-              if (isAdmin) ...[
+              // Filter Row
+              if (isStaff)
+              // For staff: Show only month filter
+                _buildMonthFilter(provider)
+              else
+              // For admin: Show all filters
                 _buildFilterRow(provider),
-              ],
             ],
           ),
         );
@@ -685,6 +695,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           onChanged: (String? value) {
             if (value != null) {
               provider.setMonthFilter(value);
+              // Refresh data with new month filter
+              provider.fetchAllData();
             }
           },
           items: [
@@ -803,7 +815,60 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenWidth < 600;
     final isVerySmallScreen = screenWidth < 400;
-    final isLargeScreen = screenWidth >= 900;
+
+    // Calculate statistics from the CURRENT FILTERED attendance data
+    int presentCount = 0;
+    int lateCount = 0;
+    int absentCount = 0;
+    int totalRecords = provider.attendance.length;
+
+    for (var attendance in provider.attendance) {
+      if (attendance.isPresent) {
+        presentCount++;
+        if (attendance.lateMinutes > 0) {
+          lateCount++;
+        }
+      } else {
+        // Check if it's absent
+        if (attendance.timeIn.isEmpty && attendance.timeOut.isEmpty) {
+          absentCount++;
+        } else if (attendance.status.toLowerCase().contains('absent')) {
+          absentCount++;
+        } else if (!attendance.isPresent) {
+          // If not present and not explicitly absent, count as "Not Marked"
+          // For now, we'll count these as absent too
+          absentCount++;
+        }
+      }
+    }
+
+    // Debug output
+    print('=== ATTENDANCE STATISTICS ===');
+    print('Filtered records: $totalRecords');
+    print('Present: $presentCount');
+    print('Late (subset of present): $lateCount');
+    print('Absent/Not Marked: $absentCount');
+
+    if (provider.attendance.isNotEmpty) {
+      print('Sample record analysis:');
+      for (int i = 0; i < min(3, provider.attendance.length); i++) {
+        final record = provider.attendance[i];
+        print('  Record ${i + 1}:');
+        print('    Date: ${record.date}');
+        print('    Employee: ${record.employeeName}');
+        print('    TimeIn: "${record.timeIn}"');
+        print('    TimeOut: "${record.timeOut}"');
+        print('    Status: ${record.status}');
+        print('    isPresent: ${record.isPresent}');
+        print('    lateMinutes: ${record.lateMinutes}');
+      }
+    }
+
+    // Don't show statistics if no records
+    if (totalRecords == 0) {
+      print('No attendance records to show statistics for');
+      return const SizedBox.shrink();
+    }
 
     // Calculate responsive height based on screen size
     final cardHeight = isVerySmallScreen
@@ -831,20 +896,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             {
               'icon': Iconsax.tick_circle,
               'title': 'Present',
-              'count': provider.totalPresent.toString(),
+              'count': presentCount.toString(),
               'color': const Color(0xFF4CAF50),
+              'subtitle': totalRecords > 0 ? '${((presentCount / totalRecords) * 100).toStringAsFixed(0)}%' : '0%',
             },
             {
               'icon': Iconsax.clock,
               'title': 'Late',
-              'count': provider.totalLate.toString(),
+              'count': lateCount.toString(),
               'color': const Color(0xFFFF9800),
+              'subtitle': presentCount > 0 ? '${((lateCount / presentCount) * 100).toStringAsFixed(0)}% of present' : '0%',
             },
             {
               'icon': Iconsax.close_circle,
               'title': 'Absent',
-              'count': provider.totalAbsent.toString(),
+              'count': absentCount.toString(),
               'color': const Color(0xFFF44336),
+              'subtitle': totalRecords > 0 ? '${((absentCount / totalRecords) * 100).toStringAsFixed(0)}%' : '0%',
             },
           ];
 
@@ -909,6 +977,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                SizedBox(height: isVerySmallScreen ? 1 : 2),
+                Text(
+                  stat['subtitle'] as String,
+                  style: TextStyle(
+                    fontSize: isVerySmallScreen ? 8 : (isSmallScreen ? 9 : 10),
+                    color: Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           );
@@ -916,8 +994,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
     );
   }
-
-  Widget _buildAttendanceList() {
+  Widget _buildAttendanceList(bool isStaff) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenWidth < 600;
@@ -955,7 +1032,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
                 SizedBox(height: isSmallScreen ? 12 : 16),
                 ElevatedButton(
-                  onPressed: () => provider.fetchAttendance(),
+                  onPressed: () => provider.fetchAllData(),
                   child: Text(
                     'Retry',
                     style: TextStyle(
@@ -980,9 +1057,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
                 SizedBox(height: isSmallScreen ? 12 : 16),
                 Text(
-                  provider.isAdmin
-                      ? 'No attendance records found'
-                      : 'No attendance records for you',
+                  isStaff
+                      ? 'No attendance records found for you'
+                      : 'No attendance records found',
                   style: TextStyle(
                     fontSize: isSmallScreen ? 14 : 16,
                     color: Colors.grey[500],
@@ -993,9 +1070,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 20 : 32),
                   child: Text(
-                    provider.isAdmin
-                        ? 'Try adding new attendance records'
-                        : 'Contact admin if you think this is an error',
+                    isStaff
+                        ? 'Your attendance will appear here once marked'
+                        : 'Try adding new attendance records',
                     style: TextStyle(
                       fontSize: isSmallScreen ? 12 : 14,
                       color: Colors.grey[400],
@@ -1094,7 +1171,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     ),
                   ),
                   // Actions (Admin only)
-                  if (provider.isAdmin)
+                  if (!isStaff)
                     SizedBox(
                       width: isVerySmallScreen ? 20 : (isSmallScreen ? 30 : 40),
                       child: Text(
@@ -1120,7 +1197,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   final attendance = provider.attendance[index];
                   final serialNo = index + 1;
                   return GestureDetector(
-                    child: _buildTableRow(attendance, provider.isAdmin, serialNo),
+                    child: _buildTableRow(attendance, !isStaff, serialNo, isStaff),
                   );
                 },
               ),
@@ -1131,7 +1208,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildTableRow(Attendance attendance, bool isAdmin, int serialNo) {
+  Widget _buildTableRow(Attendance attendance, bool showActions, int serialNo, bool isStaff) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
     final isVerySmallScreen = screenWidth < 400;
@@ -1170,13 +1247,30 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             // Date Column
             Expanded(
               flex: isVerySmallScreen ? 2 : (isSmallScreen ? 2 : 3),
-              child: Text(
-                _formatDate(attendance.date),
-                style: TextStyle(
-                  fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
-                  color: Colors.black87,
-                ),
-                textAlign: TextAlign.left,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _formatDate(attendance.date),
+                    style: TextStyle(
+                      fontSize: isVerySmallScreen ? 10 : (isSmallScreen ? 11 : 12),
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (!isStaff && attendance.employeeName.isNotEmpty) ...[
+                    SizedBox(height: 2),
+                    Text(
+                      attendance.employeeName,
+                      style: TextStyle(
+                        fontSize: isVerySmallScreen ? 8 : (isSmallScreen ? 9 : 10),
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
               ),
             ),
             // Time In Column
@@ -1326,6 +1420,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
               ),
             ),
+            // Actions (Admin only)
+            // if (showActions)
+            //   SizedBox(
+            //     width: isVerySmallScreen ? 20 : (isSmallScreen ? 30 : 40),
+            //     child: Row(
+            //       mainAxisAlignment: MainAxisAlignment.center,
+            //       children: [
+            //         IconButton(
+            //           icon: Icon(
+            //             Iconsax.edit,
+            //             size: isVerySmallScreen ? 12 : (isSmallScreen ? 14 : 16),
+            //             color: Colors.grey[600],
+            //           ),
+            //           onPressed: () {
+            //             // Edit functionality
+            //           },
+            //           padding: EdgeInsets.zero,
+            //           constraints: const BoxConstraints(),
+            //         ),
+            //       ],
+            //     ),
+            //   ),
           ],
         ),
       ),
