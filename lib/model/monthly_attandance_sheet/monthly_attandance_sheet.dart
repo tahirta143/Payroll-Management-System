@@ -1,54 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
-// ==================== MAIN REPORT MODEL ====================
-
-class EmployeeMonthlyReport {
-  final Employee employee;
-  final String month;
-  final Settings settings;
-  final Salary salary;
-  final List<dynamic> advances;
-  final SalarySummary salarySummary;
-  final List<DayRecord> days;
-
-  EmployeeMonthlyReport({
-    required this.employee,
-    required this.month,
-    required this.settings,
-    required this.salary,
-    required this.advances,
-    required this.salarySummary,
-    required this.days,
-  });
-
-  factory EmployeeMonthlyReport.fromJson(Map<String, dynamic> json) {
-    return EmployeeMonthlyReport(
-      employee: Employee.fromJson(json['employee']),
-      month: json['month'],
-      settings: Settings.fromJson(json['settings']),
-      salary: Salary.fromJson(json['salary']),
-      advances: json['advances'] ?? [],
-      salarySummary: SalarySummary.fromJson(json['salary_summary']),
-      days: (json['days'] as List)
-          .map((day) => DayRecord.fromJson(day))
-          .toList(),
-    );
-  }
-
-  // Calculate attendance statistics
-  AttendanceStats get statistics {
-    return AttendanceStats.fromDayRecords(days);
-  }
-}
-
-// ==================== EMPLOYEE MODEL ====================
-
+// lib/models/attendance_models.dart
 class Employee {
   final int id;
   final String name;
   final String empId;
-  final dynamic machineCode;
+  final String? machineCode;
   final int departmentId;
   final String departmentName;
   final int dutyShiftId;
@@ -71,21 +26,19 @@ class Employee {
 
   factory Employee.fromJson(Map<String, dynamic> json) {
     return Employee(
-      id: json['id'],
-      name: json['name'],
-      empId: json['emp_id'],
+      id: json['id'] ?? 0,
+      name: json['name'] ?? '',
+      empId: json['emp_id'] ?? '',
       machineCode: json['machine_code'],
-      departmentId: json['department_id'],
-      departmentName: json['department_name'],
-      dutyShiftId: json['duty_shift_id'],
-      dutyShiftName: json['duty_shift_name'],
-      shiftStart: json['shift_start'],
-      shiftEnd: json['shift_end'],
+      departmentId: json['department_id'] ?? 0,
+      departmentName: json['department_name'] ?? '',
+      dutyShiftId: json['duty_shift_id'] ?? 0,
+      dutyShiftName: json['duty_shift_name'] ?? '',
+      shiftStart: json['shift_start'] ?? '',
+      shiftEnd: json['shift_end'] ?? '',
     );
   }
 }
-
-// ==================== SETTINGS MODEL ====================
 
 class Settings {
   final String maxLateTime;
@@ -104,16 +57,14 @@ class Settings {
 
   factory Settings.fromJson(Map<String, dynamic> json) {
     return Settings(
-      maxLateTime: json['max_late_time'],
-      halfDayDeductionPercent: json['half_day_deduction_percent'],
-      fullDayDeductionPercent: json['full_day_deduction_percent'],
-      overtimeStartAfter: json['overtime_start_after'],
-      overtimeRate: json['overtime_rate'],
+      maxLateTime: json['max_late_time'] ?? '09:15:00',
+      halfDayDeductionPercent: json['half_day_deduction_percent'] ?? 1,
+      fullDayDeductionPercent: json['full_day_deduction_percent'] ?? 5,
+      overtimeStartAfter: json['overtime_start_after'] ?? '18:15:00',
+      overtimeRate: json['overtime_rate'] ?? 200,
     );
   }
 }
-
-// ==================== SALARY MODEL ====================
 
 class Salary {
   final int id;
@@ -132,16 +83,14 @@ class Salary {
 
   factory Salary.fromJson(Map<String, dynamic> json) {
     return Salary(
-      id: json['id'],
-      netSalary: json['net_salary'],
-      grossSalary: json['gross_salary'],
-      allowOvertime: json['allow_overtime'],
-      lateComingDeduction: json['late_coming_deduction'],
+      id: json['id'] ?? 0,
+      netSalary: json['net_salary'] ?? 0,
+      grossSalary: json['gross_salary'] ?? 0,
+      allowOvertime: json['allow_overtime'] ?? false,
+      lateComingDeduction: json['late_coming_deduction'] ?? false,
     );
   }
 }
-
-// ==================== SALARY SUMMARY MODEL ====================
 
 class SalarySummary {
   final int baseNetSalary;
@@ -176,26 +125,47 @@ class SalarySummary {
 
   factory SalarySummary.fromJson(Map<String, dynamic> json) {
     return SalarySummary(
-      baseNetSalary: json['base_net_salary'],
-      halfDayCount: json['half_day_count'],
-      halfDayDeductionPercent: json['half_day_deduction_percent'],
-      halfDayDeductionTotal: json['half_day_deduction_total'],
-      fullAbsentCount: json['full_absent_count'],
-      fullDayDeductionPercent: json['full_day_deduction_percent'],
-      fullDayDeductionTotal: json['full_day_deduction_total'],
-      overtimeMinutesTotal: json['overtime_minutes_total'],
-      overtimeRate: json['overtime_rate'],
-      overtimeAmountTotal: json['overtime_amount_total'],
-      advanceAmountTotal: json['advance_amount_total'],
-      netPayableBeforeAdvance: json['net_payable_before_advance'],
-      netPayable: json['net_payable'],
+      baseNetSalary: json['base_net_salary'] ?? 0,
+      halfDayCount: json['half_day_count'] ?? 0,
+      halfDayDeductionPercent: json['half_day_deduction_percent'] ?? 0,
+      halfDayDeductionTotal: json['half_day_deduction_total'] ?? 0,
+      fullAbsentCount: json['full_absent_count'] ?? 0,
+      fullDayDeductionPercent: json['full_day_deduction_percent'] ?? 0,
+      fullDayDeductionTotal: json['full_day_deduction_total'] ?? 0,
+      overtimeMinutesTotal: json['overtime_minutes_total'] ?? 0,
+      overtimeRate: json['overtime_rate'] ?? 0,
+      overtimeAmountTotal: json['overtime_amount_total'] ?? 0,
+      advanceAmountTotal: json['advance_amount_total'] ?? 0,
+      netPayableBeforeAdvance: json['net_payable_before_advance'] ?? 0,
+      netPayable: json['net_payable'] ?? 0,
     );
   }
 }
 
-// ==================== DAY RECORD MODEL ====================
+class Holiday {
+  final int id;
+  final bool allDepartments;
+  final int? departmentId;
+  final String reason;
 
-class DayRecord {
+  Holiday({
+    required this.id,
+    required this.allDepartments,
+    this.departmentId,
+    required this.reason,
+  });
+
+  factory Holiday.fromJson(Map<String, dynamic> json) {
+    return Holiday(
+      id: json['id'] ?? 0,
+      allDepartments: json['all_departments'] ?? false,
+      departmentId: json['department_id'],
+      reason: json['reason'] ?? '',
+    );
+  }
+}
+
+class AttendanceDay {
   final String date;
   final String weekday;
   final String status;
@@ -217,9 +187,9 @@ class DayRecord {
   final int fullDayDeductionAmount;
   final dynamic leave;
   final Holiday? holiday;
-  final Absent? absent;
+  final dynamic absent;
 
-  DayRecord({
+  AttendanceDay({
     required this.date,
     required this.weekday,
     required this.status,
@@ -244,11 +214,11 @@ class DayRecord {
     this.absent,
   });
 
-  factory DayRecord.fromJson(Map<String, dynamic> json) {
-    return DayRecord(
-      date: json['date'],
-      weekday: json['weekday'],
-      status: json['status'],
+  factory AttendanceDay.fromJson(Map<String, dynamic> json) {
+    return AttendanceDay(
+      date: json['date'] ?? '',
+      weekday: json['weekday'] ?? '',
+      status: json['status'] ?? '',
       timeIn: json['time_in'],
       timeOut: json['time_out'],
       durationMinutes: json['duration_minutes'],
@@ -267,261 +237,88 @@ class DayRecord {
       fullDayDeductionAmount: json['full_day_deduction_amount'] ?? 0,
       leave: json['leave'],
       holiday: json['holiday'] != null ? Holiday.fromJson(json['holiday']) : null,
-      absent: json['absent'] != null ? Absent.fromJson(json['absent']) : null,
+      absent: json['absent'],
     );
-  }
-
-  // Helper Methods
-  String getStatusDisplay() {
-    if (isFullAbsent) return 'Absent';
-    if (holiday != null) return holiday!.reason;
-    if (isHalfDay) return 'Half Day';
-    if (lateMinutes > 0) return 'Late';
-    if (status == 'present') return 'Present';
-    return status;
-  }
-
-  Color getStatusColor() {
-    if (isFullAbsent) return Colors.red;
-    if (holiday != null) return Colors.blue;
-    if (isHalfDay) return Colors.orange;
-    if (lateMinutes > 0) return Colors.purple;
-    if (status == 'present') return Colors.green;
-    return Colors.grey;
-  }
-
-  IconData getStatusIcon() {
-    if (isFullAbsent) return Icons.close;
-    if (holiday != null) return Icons.celebration;
-    if (isHalfDay) return Icons.access_time;
-    if (lateMinutes > 0) return Icons.warning;
-    if (status == 'present') return Icons.check_circle;
-    return Icons.help;
-  }
-
-  bool get isPresent => status == 'present';
-
-  String getFormattedDate() {
-    try {
-      return DateFormat('dd MMM yyyy').format(DateTime.parse(date));
-    } catch (e) {
-      return date;
-    }
-  }
-
-  String getFormattedTimeIn() {
-    if (timeIn == null) return '-';
-    try {
-      final parts = timeIn!.split(':');
-      final hour = int.parse(parts[0]);
-      final minute = parts[1];
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final hour12 = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-      return '$hour12:$minute $period';
-    } catch (e) {
-      return timeIn!;
-    }
-  }
-
-  String getFormattedTimeOut() {
-    if (timeOut == null) return '-';
-    try {
-      final parts = timeOut!.split(':');
-      final hour = int.parse(parts[0]);
-      final minute = parts[1];
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final hour12 = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-      return '$hour12:$minute $period';
-    } catch (e) {
-      return timeOut!;
-    }
-  }
-
-  String getFormattedDuration() {
-    return durationLabel ?? '-';
-  }
-
-  String getFormattedLate() {
-    return lateLabel ?? (lateMinutes > 0 ? '${lateMinutes}m' : '-');
-  }
-
-  String getFormattedEarly() {
-    return earlyLabel ?? (earlyMinutes > 0 ? '${earlyMinutes}m' : '-');
-  }
-
-  String getFormattedOvertime() {
-    return overtimeLabel ?? (overtimeMinutes > 0 ? '${overtimeMinutes}m' : '-');
   }
 }
 
-// ==================== HOLIDAY MODEL ====================
+class MonthlyReport {
+  final Employee employee;
+  final String month;
+  final Settings settings;
+  final Salary salary;
+  final List<dynamic> advances;
+  final SalarySummary salarySummary;
+  final List<AttendanceDay> days;
 
-class Holiday {
-  final int id;
-  final bool allDepartments;
-  final dynamic departmentId;
-  final String reason;
-
-  Holiday({
-    required this.id,
-    required this.allDepartments,
-    this.departmentId,
-    required this.reason,
+  MonthlyReport({
+    required this.employee,
+    required this.month,
+    required this.settings,
+    required this.salary,
+    required this.advances,
+    required this.salarySummary,
+    required this.days,
   });
 
-  factory Holiday.fromJson(Map<String, dynamic> json) {
-    return Holiday(
-      id: json['id'],
-      allDepartments: json['all_departments'],
-      departmentId: json['department_id'],
-      reason: json['reason'],
+  factory MonthlyReport.fromJson(Map<String, dynamic> json) {
+    return MonthlyReport(
+      employee: Employee.fromJson(json['employee'] ?? {}),
+      month: json['month'] ?? '',
+      settings: Settings.fromJson(json['settings'] ?? {}),
+      salary: Salary.fromJson(json['salary'] ?? {}),
+      advances: json['advances'] ?? [],
+      salarySummary: SalarySummary.fromJson(json['salary_summary'] ?? {}),
+      days: (json['days'] as List? ?? [])
+          .map((day) => AttendanceDay.fromJson(day))
+          .toList(),
     );
   }
 }
-
-// ==================== ABSENT MODEL ====================
-
-class Absent {
-  final int id;
-  final String? reason;
-
-  Absent({
-    required this.id,
-    this.reason,
-  });
-
-  factory Absent.fromJson(Map<String, dynamic> json) {
-    return Absent(
-      id: json['id'],
-      reason: json['reason'],
-    );
-  }
-}
-
-// ==================== DEPARTMENT MODEL (For Dropdown) ====================
 
 class Department {
   final int id;
   final String name;
 
-  Department({required this.id, required this.name});
+  Department({
+    required this.id,
+    required this.name,
+  });
 
   factory Department.fromJson(Map<String, dynamic> json) {
     return Department(
-      id: json['id'],
-      name: json['name'],
+      id: json['id'] ?? 0,
+      name: json['name']?.toString() ??
+          json['department_name']?.toString() ??
+          'Unknown Department',
     );
   }
 }
 
-// ==================== EMPLOYEE LIST ITEM MODEL (For Dropdown) ====================
-
-// Add this class to your monthly_attandance_sheet.dart file
-// or create a new file for these models
-
-class EmployeeListItem {
+class User {
   final int id;
   final String name;
-  final String empId;
-  final int departmentId;
-  final String departmentName;
+  final String email;
+  final String role;
+  final int? employeeId;
 
-  EmployeeListItem({
+  User({
     required this.id,
     required this.name,
-    required this.empId,
-    required this.departmentId,
-    required this.departmentName,
+    required this.email,
+    required this.role,
+    this.employeeId,
   });
 
-  factory EmployeeListItem.fromJson(Map<String, dynamic> json) {
-    return EmployeeListItem(
-      id: json['id'],
-      name: json['name'],
-      empId: json['emp_id'],
-      departmentId: json['department_id'] ?? 0,
-      departmentName: json['department_name'] ?? '',
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      id: json['id'] ?? 0,
+      name: json['name'] ?? '',
+      email: json['email'] ?? '',
+      role: json['role'] ?? 'employee',
+      employeeId: json['employee_id'],
     );
   }
-}
 
-// class Department {
-//   final int id;
-//   final String name;
-//
-//   Department({required this.id, required this.name});
-//
-//   factory Department.fromJson(Map<String, dynamic> json) {
-//     return Department(
-//       id: json['id'],
-//       name: json['name'],
-//     );
-//   }
-// }
-
-// ==================== ATTENDANCE STATISTICS MODEL ====================
-
-class AttendanceStats {
-  final int totalRecords;
-  final int presentCount;
-  final int lateCount;
-  final int absentCount;
-  final int halfDayCount;
-  final int holidayCount;
-  final int totalWorkingDays;
-  final double attendancePercentage;
-
-  AttendanceStats({
-    required this.totalRecords,
-    required this.presentCount,
-    required this.lateCount,
-    required this.absentCount,
-    required this.halfDayCount,
-    required this.holidayCount,
-    required this.totalWorkingDays,
-    required this.attendancePercentage,
-  });
-
-  factory AttendanceStats.fromDayRecords(List<DayRecord> days) {
-    int present = 0;
-    int late = 0;
-    int absent = 0;
-    int halfDay = 0;
-    int holiday = 0;
-
-    for (var day in days) {
-      if (day.holiday != null) {
-        holiday++;
-      } else if (day.isFullAbsent) {
-        absent++;
-      } else if (day.status == 'present') {
-        present++;
-        if (day.lateMinutes > 0) {
-          late++;
-        }
-        if (day.isHalfDay) {
-          halfDay++;
-        }
-      }
-    }
-
-    final totalWorkingDays = days.where((d) =>
-    d.status == 'present' || d.isFullAbsent
-    ).length;
-
-    final attendancePercentage = totalWorkingDays > 0
-        ? (present / totalWorkingDays * 100)
-        : 0.0;
-
-    return AttendanceStats(
-      totalRecords: days.length,
-      presentCount: present,
-      lateCount: late,
-      absentCount: absent,
-      halfDayCount: halfDay,
-      holidayCount: holiday,
-      totalWorkingDays: totalWorkingDays,
-      attendancePercentage: double.parse(attendancePercentage.toStringAsFixed(1)),
-    );
-  }
+  bool get isAdmin => role.toLowerCase() == 'admin';
 }

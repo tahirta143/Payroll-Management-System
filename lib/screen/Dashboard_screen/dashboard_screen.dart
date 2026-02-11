@@ -320,7 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (p.hasPermission('can-view-salary')) {
       screens.add(const SalaryScreen());
     }
-screens.add(EmployeeReportScreen());
+screens.add(MonthlyAttendanceScreen());
     // 6 - Settings (always last)
     screens.add(const SettingsScreen());
 
@@ -353,7 +353,7 @@ screens.add(EmployeeReportScreen());
         titleToIndex['Salary Sheet'] = i;
       } else if (screens[i] is SalaryScreen) {
         titleToIndex['Salary'] = i;
-      } else if (screens[i] is EmployeeReportScreen) {
+      } else if (screens[i] is MonthlyAttendanceScreen) {
         titleToIndex['Monthly Attendance'] = i;
       } else if (screens[i] is SettingsScreen) {
         titleToIndex['Settings'] = i;

@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AbsentProvider()),
         ChangeNotifierProvider(create: (_) => SalarySlipProvider()),
         ChangeNotifierProvider(create: (_) => SalarySheetProvider()),
-        ChangeNotifierProvider(create: (context) => EmployeeReportProvider()),
+        ChangeNotifierProvider(create: (context) => MonthlyReportProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

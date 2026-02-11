@@ -1,469 +1,614 @@
+// lib/providers/monthly_attandance_sheet_provider/monthly_att_provider.dart
 import 'dart:convert';
-import 'dart:math';
+import 'dart:math' as Math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-import 'package:payroll_app/Utility/global_url.dart';
-// import '../../model/employee_monthly_report/employee_monthly_report.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../model/monthly_attandance_sheet/monthly_attandance_sheet.dart';
+import '../../Utility/global_url.dart';
 
-class EmployeeReportProvider with ChangeNotifier {
-  final String baseUrl = GlobalUrls.baseurl;
+class MonthlyReportProvider extends ChangeNotifier {
+  static const String baseUrl = GlobalUrls.baseurl;
 
-  EmployeeMonthlyReport? _report;
+  // User info
+  bool _isAdmin = false;
+  int? _currentEmployeeId;
+  String? _currentUserName;
+  String? _token;
+
+  // Data State
+  MonthlyReport? _currentReport;
+  List<Employee> _employees = [];
   List<Department> _departments = [];
-  List<EmployeeListItem> _employees = [];
-  List<EmployeeListItem> _allEmployees = [];
 
+  // UI State
   bool _isLoading = false;
-  bool _isDepartmentsLoading = false;
-  bool _isEmployeesLoading = false;
   String? _error;
-  String? _authToken;
+
+  // Filters
+  String _selectedMonth = _getCurrentMonth();
+  int? _selectedEmployeeId;
+  int? _selectedDepartmentId;
 
   // Getters
-  EmployeeMonthlyReport? get report => _report;
+  bool get isAdmin => _isAdmin;
+  int? get currentEmployeeId => _currentEmployeeId;
+  String? get currentUserName => _currentUserName;
+  MonthlyReport? get currentReport => _currentReport;
+  List<Employee> get employees => _employees;
   List<Department> get departments => _departments;
-  List<EmployeeListItem> get employees => _employees;
   bool get isLoading => _isLoading;
-  bool get isDepartmentsLoading => _isDepartmentsLoading;
-  bool get isEmployeesLoading => _isEmployeesLoading;
   String? get error => _error;
+  String get selectedMonth => _selectedMonth;
+  int? get selectedEmployeeId => _selectedEmployeeId;
+  int? get selectedDepartmentId => _selectedDepartmentId;
 
-  // Set token
-  void setToken(String? token) {
-    _authToken = token;
+  static String _getCurrentMonth() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}';
   }
 
-  // Get token from provider (same as AttendanceProvider)
+  // ==================== GET TOKEN ====================
   Future<String> _getToken() async {
-    if (_authToken != null && _authToken!.isNotEmpty) {
-      return _authToken!;
-    }
-    throw Exception('No authentication token found');
-  }
-
-  // Headers (EXACT same as AttendanceProvider)
-  Future<Map<String, String>> _headers() async {
-    final token = await _getToken();
-    return {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-  }
-
-  // ==================== FETCH EMPLOYEE MONTHLY REPORT ====================
-
-  Future<void> fetchEmployeeReport({
-    required int employeeId,
-    required String month,
-  }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
     try {
-      final headers = await _headers();
-      final url = '$baseUrl/api/employee-monthly-report?employee_id=$employeeId&month=$month';
-      debugPrint('📱 Fetching employee report: $url');
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      if (token.isEmpty) {
+        print('❌ No authentication token found in SharedPreferences');
+        // List all keys for debugging
+        final allKeys = prefs.getKeys();
+        print('📋 Available SharedPreferences keys: $allKeys');
+        throw Exception('No authentication token found');
+      }
+      print('✅ Token found: ${token.substring(0, Math.min(20, token.length))}...');
+      return token;
+    } catch (e) {
+      print('❌ Failed to get token: $e');
+      throw Exception('Failed to get token: $e');
+    }
+  }
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: headers,
-      );
 
-      debugPrint('📊 Report API Status: ${response.statusCode}');
+  // Add this method to your MonthlyReportProvider for debugging
+  Future<void> debugPrintSharedPreferences() async {
+    print('🔍 ========== DEBUG SHARED PREFERENCES ==========');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final allKeys = prefs.getKeys();
 
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        _report = EmployeeMonthlyReport.fromJson(jsonData);
-        _error = null;
-        debugPrint('✅ Report loaded for ${_report!.employee.name}');
-      } else if (response.statusCode == 401) {
-        _error = 'Unauthorized - Please login again';
-        _report = null;
-      } else if (response.statusCode == 404) {
-        _error = 'No attendance record found for this employee';
-        _report = null;
-      } else {
-        _error = 'Failed to load report. Status: ${response.statusCode}';
-        _report = null;
+      for (var key in allKeys) {
+        var value = prefs.get(key);
+        // Truncate long strings for readability
+        if (value is String && value.length > 100) {
+          value = '${value.substring(0, 100)}...';
+        }
+        print('  $key: $value');
       }
     } catch (e) {
-      _error = _getErrorMessage(e);
-      _report = null;
-      debugPrint('❌ Error fetching report: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      print('❌ Error reading SharedPreferences: $e');
     }
+    print('🔍 ========== END DEBUG ==========');
   }
-
-  // ==================== FETCH DEPARTMENTS (EXACT SAME AS ATTENDANCE PROVIDER) ====================
-
-  Future<void> fetchDepartments() async {
-    _isDepartmentsLoading = true;
-    _error = null;
-    notifyListeners();
+  // ==================== INITIALIZE FROM AUTH ====================
+  Future<void> initializeFromAuth() async {
+    print('🚀 ========== INITIALIZE FROM AUTH START ==========');
+    _setLoading(true);
+    _clearError();
 
     try {
-      final headers = await _headers();
-      final url = '$baseUrl/api/departments';
-      debugPrint('📱 Fetching departments: $url');
+      final prefs = await SharedPreferences.getInstance();
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: headers,
-      );
+      // Get token
+      _token = await _getToken();
+      print('✅ Token obtained');
 
-      debugPrint('📊 Departments API Status: ${response.statusCode}');
+      // Get user role - AuthProvider saves as 'user_role'
+      final userRole = prefs.getString('user_role')?.toLowerCase() ?? '';
+      print('👤 User role: "$userRole"');
 
-      if (response.statusCode == 200) {
-        final dynamic data = json.decode(response.body);
-        List<dynamic> departmentsList = [];
+      _isAdmin = userRole.contains('admin') ||
+          userRole.contains('administrator') ||
+          userRole == 'admin';
+      print('👑 Is Admin: $_isAdmin');
 
-        // Parse response - EXACT same as AttendanceProvider
-        if (data is Map) {
-          if (data.containsKey('departments') && data['departments'] is List) {
-            departmentsList = data['departments'] as List<dynamic>;
-          } else if (data.containsKey('data') && data['data'] is List) {
-            departmentsList = data['data'] as List<dynamic>;
-          }
-        } else if (data is List) {
-          departmentsList = data;
-        }
+      // Get employee ID for non-admin - AuthProvider saves as 'employee_id'
+      if (!_isAdmin) {
+        // Try multiple possible key names that AuthProvider might be using
+        final employeeIdStr = prefs.getString('employee_id') ??
+            prefs.getString('employee_code') ??
+            prefs.getString('emp_id') ??
+            prefs.getString('user_id') ??
+            '';
 
-        _departments = [];
+        _currentEmployeeId = int.tryParse(employeeIdStr);
+        _selectedEmployeeId = _currentEmployeeId;
+        print('👨‍💼 Employee ID from prefs: "$employeeIdStr"');
+        print('👨‍💼 Parsed Employee ID: $_currentEmployeeId');
 
-        for (var dept in departmentsList) {
-          if (dept is Map<String, dynamic>) {
+        // If employee ID is still null, try to get from userData JSON
+        if (_currentEmployeeId == null) {
+          final userDataString = prefs.getString('userData');
+          if (userDataString != null) {
             try {
-              // EXACT same parsing as AttendanceProvider
-              final id = dept['id'] ?? dept['department_id'];
-              final name = dept['name'] ?? dept['department_name'];
-
-              if (id != null && name != null) {
-                _departments.add(Department(
-                  id: id is int ? id : int.tryParse(id.toString()) ?? 0,
-                  name: name.toString().trim(),
-                ));
-              }
+              final userData = jsonDecode(userDataString);
+              final empId = userData['employee_id'] ??
+                  userData['emp_id'] ??
+                  userData['id'] ??
+                  userData['user_id'] ??
+                  '';
+              _currentEmployeeId = int.tryParse(empId.toString());
+              _selectedEmployeeId = _currentEmployeeId;
+              print('👨‍💼 Employee ID from userData: $_currentEmployeeId');
             } catch (e) {
-              debugPrint('Error parsing department: $e');
-              continue;
+              print('❌ Error parsing userData: $e');
             }
           }
         }
-
-        debugPrint('✅ Loaded ${_departments.length} departments');
-        for (var dept in _departments) {
-          debugPrint('Department: ${dept.id} - ${dept.name}');
-        }
-
-      } else if (response.statusCode == 401) {
-        _error = 'Unauthorized - Please login again';
-      } else {
-        _error = 'Failed to load departments. Status: ${response.statusCode}';
       }
+
+      // Get user name - AuthProvider saves as 'user_name'
+      _currentUserName = prefs.getString('user_name') ??
+          prefs.getString('employee_name') ??
+          prefs.getString('name') ??
+          'User';
+      print('📛 User Name: $_currentUserName');
+
+      // Load data based on role
+      if (_isAdmin) {
+        print('🔄 Admin: Loading employees and departments...');
+        await Future.wait([
+          fetchEmployees(),
+          fetchDepartments(),
+        ]);
+        print('✅ Admin data loaded - Employees: ${_employees.length}, Departments: ${_departments.length}');
+      } else if (_currentEmployeeId != null) {
+        print('🔄 NON-ADMIN: Loading report for employee ID: $_currentEmployeeId');
+        // IMPORTANT: Load the report immediately
+        await loadReport(
+          employeeId: _currentEmployeeId,
+          month: _selectedMonth,
+        );
+        print('✅ Report loaded for non-admin user');
+      } else {
+        print('❌ CRITICAL: Non-admin user but no employee ID found!');
+        // Try to load user data from SharedPreferences for debugging
+        final allKeys = prefs.getKeys();
+        print('📋 All SharedPreferences keys: $allKeys');
+        for (var key in allKeys) {
+          print('  $key: ${prefs.get(key)}');
+        }
+      }
+
     } catch (e) {
-      _error = 'Error fetching departments: $e';
-      debugPrint('⚠️ Error fetching departments: $e');
+      print('❌ Error: $e');
+      _setError('Failed to initialize: ${e.toString()}');
     } finally {
-      _isDepartmentsLoading = false;
-      notifyListeners();
+      _setLoading(false);
+      print('🏁 ========== INITIALIZE FROM AUTH END ==========');
     }
   }
-
-  // ==================== FETCH EMPLOYEES (EXACT SAME AS ATTENDANCE PROVIDER) ====================
+  // ==================== FETCH EMPLOYEES ====================
+  // In your MonthlyReportProvider class, replace the fetchEmployees method:
 
   Future<void> fetchEmployees() async {
-    _isEmployeesLoading = true;
-    _error = null;
-    notifyListeners();
+    if (!_isAdmin) return;
+
+    print('👥 ========== FETCH EMPLOYEES ==========');
 
     try {
-      final headers = await _headers();
-      final url = '$baseUrl/api/employees';
-      debugPrint('📱 Fetching employees: $url');
+      final token = await _getToken();
+      final url = Uri.parse('$baseUrl/api/employees');
+      print('🌐 URL: $url');
 
       final response = await http.get(
-        Uri.parse(url),
-        headers: headers,
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
       );
 
-      debugPrint('📊 Employees API Status: ${response.statusCode}');
+      print('📡 Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final dynamic data = json.decode(response.body);
         List<dynamic> employeesList = [];
 
-        // Parse response - EXACT same as AttendanceProvider
+        // Handle different response formats
         if (data is Map) {
-          if (data.containsKey('employees') && data['employees'] is List) {
-            employeesList = data['employees'] as List<dynamic>;
-          } else if (data.containsKey('data') && data['data'] is List) {
-            employeesList = data['data'] as List<dynamic>;
+          if (data.containsKey('data') && data['data'] is List) {
+            employeesList = data['data'];
+            print('✅ Found data key');
+          } else if (data.containsKey('employees') && data['employees'] is List) {
+            employeesList = data['employees'];
+            print('✅ Found employees key');
+          } else if (data.containsKey('results') && data['results'] is List) {
+            employeesList = data['results'];
+            print('✅ Found results key');
           }
         } else if (data is List) {
           employeesList = data;
+          print('✅ Response is List');
         }
 
-        _allEmployees = [];
+        print('📊 Raw employees: ${employeesList.length}');
 
-        for (var emp in employeesList) {
-          if (emp is Map<String, dynamic>) {
-            try {
-              // Use EXACT same parsing method as AttendanceProvider
-              final employee = _parseEmployeeMap(emp);
-              if (employee.id != 0) {
-                _allEmployees.add(employee);
+        _employees = [];
+        final Map<int, Employee> uniqueEmployeesMap = {}; // Add this line
+
+        for (var item in employeesList) {
+          try {
+            final employee = _parseEmployee(item);
+            if (employee.id != 0) {
+              // Only add if ID is not already present
+              if (!uniqueEmployeesMap.containsKey(employee.id)) {
+                uniqueEmployeesMap[employee.id] = employee;
               }
-            } catch (e) {
-              debugPrint('Error parsing employee: $e');
-              continue;
             }
+          } catch (e) {
+            print('⚠️ Error parsing employee: $e');
           }
         }
 
-        debugPrint('✅ Loaded ${_allEmployees.length} employees');
-
-        // Debug: Print first few employees
-        for (var emp in _allEmployees.take(5)) {
-          debugPrint('Employee: ${emp.name}, ID: ${emp.id}, Dept: ${emp.departmentName} (${emp.departmentId})');
-        }
-
-        // Set initial employees list (all employees)
-        _employees = List.from(_allEmployees);
-
-      } else if (response.statusCode == 401) {
-        _error = 'Unauthorized - Please login again';
+        _employees = uniqueEmployeesMap.values.toList(); // Convert map to list
+        print('✅ Loaded ${_employees.length} unique employees');
+        notifyListeners();
       } else {
-        _error = 'Failed to load employees. Status: ${response.statusCode}';
+        print('❌ Failed: ${response.statusCode}');
+        _setError('Failed to load employees');
       }
     } catch (e) {
-      _error = 'Error fetching employees: $e';
-      debugPrint('⚠️ Error fetching employees: $e');
-    } finally {
-      _isEmployeesLoading = false;
-      notifyListeners();
+      print('❌ Error: $e');
+      _setError('Failed to load employees: $e');
     }
   }
 
-  // ==================== PARSE EMPLOYEE MAP (EXACT SAME AS ATTENDANCE PROVIDER) ====================
+  // ==================== FETCH DEPARTMENTS ====================
+  Future<void> fetchDepartments() async {
+    if (!_isAdmin) return;
 
-  EmployeeListItem _parseEmployeeMap(Map<String, dynamic> data) {
+    print('🏢 ========== FETCH DEPARTMENTS ==========');
+
     try {
-      // Parse ID - EXACT same as AttendanceProvider
-      final id = _parseInt(data['id']) ??
-          _parseInt(data['employee_id']) ??
-          _parseInt(data['user_id']) ?? 0;
+      final token = await _getToken();
+      final url = Uri.parse('$baseUrl/api/departments');
+      print('🌐 URL: $url');
 
-      // Parse Name - EXACT same as AttendanceProvider
-      final name = data['name']?.toString() ??
-          data['full_name']?.toString() ??
-          data['employee_name']?.toString() ??
-          data['first_name']?.toString() ??
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      print('📡 Status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final dynamic data = json.decode(response.body);
+        List<dynamic> departmentsList = [];
+
+        // Handle different response formats
+        if (data is Map) {
+          if (data.containsKey('data') && data['data'] is List) {
+            departmentsList = data['data'];
+            print('✅ Found data key');
+          } else if (data.containsKey('departments') && data['departments'] is List) {
+            departmentsList = data['departments'];
+            print('✅ Found departments key');
+          } else if (data.containsKey('results') && data['results'] is List) {
+            departmentsList = data['results'];
+            print('✅ Found results key');
+          }
+        } else if (data is List) {
+          departmentsList = data;
+          print('✅ Response is List');
+        }
+
+        print('📊 Raw departments: ${departmentsList.length}');
+
+        _departments = [];
+        for (var item in departmentsList) {
+          try {
+            final department = Department(
+              id: item['id'] ?? 0,
+              name: item['name']?.toString() ??
+                  item['department_name']?.toString() ??
+                  'Unknown',
+            );
+            if (department.id != 0 && department.name != 'Unknown') {
+              _departments.add(department);
+            }
+          } catch (e) {
+            print('⚠️ Error parsing department: $e');
+          }
+        }
+
+        print('✅ Loaded ${_departments.length} departments');
+        notifyListeners();
+      } else {
+        print('❌ Failed: ${response.statusCode}');
+        _setError('Failed to load departments');
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      _setError('Failed to load departments: $e');
+    }
+  }
+
+  // ==================== PARSE EMPLOYEE ====================
+  Employee _parseEmployee(dynamic data) {
+    try {
+      final Map<String, dynamic> json = data is Map
+          ? Map<String, dynamic>.from(data)
+          : {};
+
+      // Parse ID
+      int id = 0;
+      if (json['id'] != null) {
+        id = json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0;
+      } else if (json['employee_id'] != null) {
+        id = json['employee_id'] is int ? json['employee_id'] : int.tryParse(json['employee_id'].toString()) ?? 0;
+      }
+
+      // Parse Name
+      String name = json['name']?.toString() ??
+          json['full_name']?.toString() ??
+          json['employee_name']?.toString() ??
           'Unknown';
 
-      // Parse Employee ID - EXACT same as AttendanceProvider
-      final empId = data['emp_id']?.toString() ??
-          data['employee_code']?.toString() ??
-          data['code']?.toString() ??
-          data['staff_id']?.toString() ??
+      // Parse Employee ID
+      String empId = json['emp_id']?.toString() ??
+          json['employee_code']?.toString() ??
+          json['code']?.toString() ??
           'N/A';
 
-      // Parse Department - EXACT same as AttendanceProvider
+      // Parse Department
       String departmentName = 'Unknown Department';
       int departmentId = 0;
 
-      if (data['department'] != null) {
-        if (data['department'] is Map) {
-          final deptMap = data['department'] as Map<String, dynamic>;
-          departmentName = deptMap['name']?.toString() ?? 'Unknown Department';
+      if (json['department'] != null) {
+        if (json['department'] is Map) {
+          final deptMap = json['department'] as Map;
+          departmentName = deptMap['name']?.toString() ?? 'Unknown';
           departmentId = deptMap['id'] ?? 0;
-        } else if (data['department'] is String) {
-          departmentName = data['department'] as String;
+        } else if (json['department'] is String) {
+          departmentName = json['department'] as String;
         }
-      } else if (data['department_name'] != null) {
-        departmentName = data['department_name'].toString();
-      } else if (data['dept'] != null) {
-        departmentName = data['dept'].toString();
-      } else if (data['department_id'] != null) {
-        departmentId = _parseInt(data['department_id']) ?? 0;
+      } else if (json['department_name'] != null) {
+        departmentName = json['department_name'].toString();
+      } else if (json['dept_name'] != null) {
+        departmentName = json['dept_name'].toString();
       }
 
-      // Try to find department ID from departments list if we have name but no ID
-      if (departmentId == 0 && departmentName.isNotEmpty && _departments.isNotEmpty) {
-        final dept = _departments.firstWhere(
-              (d) => d.name.trim().toLowerCase() == departmentName.trim().toLowerCase(),
-          orElse: () => Department(id: 0, name: ''),
-        );
-        departmentId = dept.id;
+      if (json['department_id'] != null) {
+        departmentId = json['department_id'] is int
+            ? json['department_id']
+            : int.tryParse(json['department_id'].toString()) ?? 0;
       }
 
-      return EmployeeListItem(
+      // Default shift values
+      int dutyShiftId = 1;
+      String dutyShiftName = 'Morning Shift';
+      String shiftStart = '09:00:00';
+      String shiftEnd = '18:00:00';
+
+      return Employee(
         id: id,
         name: name.trim(),
         empId: empId.trim(),
+        machineCode: json['machine_code']?.toString(),
         departmentId: departmentId,
         departmentName: departmentName.trim(),
+        dutyShiftId: dutyShiftId,
+        dutyShiftName: dutyShiftName,
+        shiftStart: shiftStart,
+        shiftEnd: shiftEnd,
       );
     } catch (e) {
-      debugPrint('Error in _parseEmployeeMap: $e');
-      return EmployeeListItem(
+      print('❌ Parse error: $e');
+      return Employee(
         id: 0,
         name: 'Error',
         empId: 'N/A',
         departmentId: 0,
         departmentName: 'Error',
+        dutyShiftId: 1,
+        dutyShiftName: 'Morning Shift',
+        shiftStart: '09:00:00',
+        shiftEnd: '18:00:00',
       );
     }
   }
 
-  // ==================== FETCH BOTH DEPARTMENTS AND EMPLOYEES ====================
+  // ==================== LOAD REPORT ====================
+  Future<void> loadReport({
+    int? employeeId,
+    String? month,
+  }) async {
+    print('📊 ========== LOAD REPORT ==========');
 
-  Future<void> fetchDepartmentsAndEmployees() async {
-    _isDepartmentsLoading = true;
-    _isEmployeesLoading = true;
-    _error = null;
-    notifyListeners();
+    _setLoading(true);
+    _clearError();
+
+    final targetEmployeeId = employeeId ?? _selectedEmployeeId;
+    final targetMonth = month ?? _selectedMonth;
+
+    if (targetEmployeeId == null) {
+      _setError('Please select an employee');
+      _setLoading(false);
+      return;
+    }
 
     try {
-      // First fetch departments
-      await fetchDepartments();
+      final token = await _getToken();
+      final url = Uri.parse('$baseUrl/api/employee-monthly-report')
+          .replace(queryParameters: {
+        'employee_id': targetEmployeeId.toString(),
+        'month': targetMonth,
+      });
 
-      // Then fetch employees (departments list is needed for ID matching)
-      await fetchEmployees();
+      print('🌐 URL: $url');
 
-      // Match department IDs with names
-      _matchDepartmentIdsWithNames();
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
 
+      print('📡 Status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _currentReport = MonthlyReport.fromJson(data);
+        print('✅ Report loaded for ${_currentReport!.employee.name}');
+        _setError(null);
+      } else {
+        _setError('Failed to load report: ${response.statusCode}');
+      }
     } catch (e) {
-      debugPrint('⚠️ Error in fetchDepartmentsAndEmployees: $e');
+      _setError('Failed to load report: ${e.toString()}');
     } finally {
-      _isDepartmentsLoading = false;
-      _isEmployeesLoading = false;
+      _setLoading(false);
+    }
+  }
+
+  // ==================== FILTER METHODS ====================
+  void setSelectedMonth(String month) {
+    _selectedMonth = month;
+    if (!_isAdmin && _currentEmployeeId != null) {
+      loadReport();
+    }
+    notifyListeners();
+  }
+
+  void setSelectedEmployeeId(int? employeeId) {
+    _selectedEmployeeId = employeeId;
+    notifyListeners();
+  }
+
+  void setSelectedDepartmentId(int? departmentId) {
+    _selectedDepartmentId = departmentId;
+    if (departmentId != null && _isAdmin) {
+      _filterEmployeesByDepartment(departmentId);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _filterEmployeesByDepartment(int departmentId) async {
+    if (_employees.isNotEmpty) {
+      final filtered = _employees
+          .where((e) => e.departmentId == departmentId)
+          .toList();
+
+      if (filtered.isNotEmpty) {
+        _employees = filtered;
+      }
+
+      if (_selectedEmployeeId != null &&
+          !_employees.any((e) => e.id == _selectedEmployeeId)) {
+        _selectedEmployeeId = null;
+      }
       notifyListeners();
     }
   }
 
-  // ==================== MATCH DEPARTMENT IDS WITH NAMES ====================
-
-  void _matchDepartmentIdsWithNames() {
-    if (_departments.isEmpty || _allEmployees.isEmpty) return;
-
-    // Create department name to ID map
-    final deptNameToId = <String, int>{};
-    for (var dept in _departments) {
-      deptNameToId[dept.name.trim().toLowerCase()] = dept.id;
+  void applyFilters() {
+    if (_selectedEmployeeId != null) {
+      loadReport();
+    } else {
+      _setError('Please select an employee');
     }
-
-    // Update employees with missing department IDs
-    for (var i = 0; i < _allEmployees.length; i++) {
-      final emp = _allEmployees[i];
-      if (emp.departmentId == 0 && emp.departmentName.isNotEmpty) {
-        final deptId = deptNameToId[emp.departmentName.trim().toLowerCase()];
-        if (deptId != null) {
-          _allEmployees[i] = EmployeeListItem(
-            id: emp.id,
-            name: emp.name,
-            empId: emp.empId,
-            departmentId: deptId,
-            departmentName: emp.departmentName,
-          );
-        }
-      }
-    }
-
-    _employees = List.from(_allEmployees);
-    debugPrint('✅ Matched department IDs with names');
   }
 
-  // ==================== FILTER EMPLOYEES BY DEPARTMENT ====================
+  void clearFilters() {
+    _selectedEmployeeId = _isAdmin ? null : _currentEmployeeId;
+    _selectedDepartmentId = null;
+    _selectedMonth = _getCurrentMonth();
 
-  void filterEmployeesByDepartment(int? departmentId) {
-    debugPrint('🔍 Filtering by department ID: $departmentId');
-    debugPrint('📊 Total all employees: ${_allEmployees.length}');
-
-    if (_allEmployees.isEmpty) {
-      _employees = [];
-    } else if (departmentId == null) {
-      _employees = List.from(_allEmployees);
-      debugPrint('✅ Showing all employees: ${_employees.length}');
-    } else {
-      // Filter by department ID
-      _employees = _allEmployees
-          .where((emp) => emp.departmentId == departmentId)
-          .toList();
-
-      // If no matches by ID, try matching by department name
-      if (_employees.isEmpty) {
-        final dept = _departments.firstWhere(
-              (d) => d.id == departmentId,
-          orElse: () => Department(id: 0, name: ''),
-        );
-
-        if (dept.name.isNotEmpty) {
-          _employees = _allEmployees
-              .where((emp) =>
-          emp.departmentName.trim().toLowerCase() == dept.name.trim().toLowerCase())
-              .toList();
-          debugPrint('🎯 Filtered by department name: ${_employees.length}');
-        }
-      } else {
-        debugPrint('🎯 Filtered employees for dept $departmentId: ${_employees.length}');
-      }
+    if (_isAdmin) {
+      fetchEmployees();
+      fetchDepartments();
+    } else if (_currentEmployeeId != null) {
+      loadReport();
     }
+
+    _clearError();
     notifyListeners();
-  }
-
-  // ==================== HELPER METHODS ====================
-
-  int? _parseInt(dynamic value) {
-    if (value == null) return null;
-    if (value is int) return value;
-    if (value is String) {
-      final parsed = int.tryParse(value);
-      if (parsed != null) return parsed;
-    }
-    return null;
-  }
-
-  String _getErrorMessage(dynamic error) {
-    final errorStr = error.toString();
-    if (errorStr.contains('SocketException')) {
-      return 'No internet connection. Please check your network';
-    } else if (errorStr.contains('TimeoutException')) {
-      return 'Request timeout. Please try again';
-    } else if (errorStr.contains('401')) {
-      return 'Unauthorized. Please login again';
-    } else {
-      return 'Error: $errorStr';
-    }
   }
 
   // ==================== UTILITY METHODS ====================
+  Future<void> loadReportForCurrentUser() async {
+    if (!_isAdmin && _currentEmployeeId != null) {
+      _selectedEmployeeId = _currentEmployeeId;
+      await loadReport();
+    }
+  }
 
-  void clearReport() {
-    _report = null;
+  Future<void> refreshData() async {
+    if (_isAdmin) {
+      await Future.wait([
+        fetchEmployees(),
+        fetchDepartments(),
+      ]);
+    }
+    if (_selectedEmployeeId != null) {
+      await loadReport();
+    }
+  }
+
+  List<AttendanceDay> getPresentDays() {
+    return _currentReport?.days
+        .where((day) => day.status == 'present')
+        .toList() ?? [];
+  }
+
+  List<AttendanceDay> getAbsentDays() {
+    return _currentReport?.days
+        .where((day) => day.status == 'absent')
+        .toList() ?? [];
+  }
+
+  List<AttendanceDay> getHolidayDays() {
+    return _currentReport?.days
+        .where((day) => day.status == 'holiday')
+        .toList() ?? [];
+  }
+
+  int getTotalWorkingDays() {
+    return _currentReport?.days
+        .where((day) =>
+    day.status == 'present' ||
+        day.status == 'absent' ||
+        day.isHalfDay)
+        .length ?? 0;
+  }
+
+  // ==================== PRIVATE METHODS ====================
+  void _setLoading(bool loading) {
+    _isLoading = loading;
     notifyListeners();
   }
 
-  void clearError() {
+  void _setError(String? error) {
+    _error = error;
+    notifyListeners();
+  }
+
+  void _clearError() {
     _error = null;
-    notifyListeners();
   }
 
-  void reset() {
-    _report = null;
-    _departments = [];
+  void clearData() {
+    _currentReport = null;
     _employees = [];
-    _allEmployees = [];
+    _departments = [];
+    _selectedEmployeeId = _isAdmin ? null : _currentEmployeeId;
+    _selectedDepartmentId = null;
+    _selectedMonth = _getCurrentMonth();
     _error = null;
-    _isLoading = false;
-    _isDepartmentsLoading = false;
-    _isEmployeesLoading = false;
     notifyListeners();
   }
 }
