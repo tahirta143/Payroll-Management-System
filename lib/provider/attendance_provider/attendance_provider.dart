@@ -684,11 +684,11 @@ class AttendanceProvider extends ChangeNotifier {
 
   // Month Filter Setter
   void setMonthFilter(String month) {
-    if (isAdmin) {
+
       _selectedMonthFilter = month;
       _applyFilters();
       notifyListeners();
-    }
+
   }
 
   // Update the _applyFilters method

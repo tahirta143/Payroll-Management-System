@@ -45,7 +45,7 @@ class LeaveProvider extends ChangeNotifier {
 
   // Debug mode
   bool _debugMode = true;
-
+  String? _lastCreatedLeaveId;
   List<ApproveLeave> get leaves => _filteredLeaves;
   List<ApproveLeave> get allLeaves => _leaves;
   bool get isLoading => _isLoading;
@@ -69,7 +69,13 @@ class LeaveProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get allEmployees => _allEmployees;
   List<String> get payModes => _payModes;
   List<String> get leaveTypes => _leaveTypes;
-
+  String? get lastCreatedLeaveId => _lastCreatedLeaveId;
+// Add this method to LeaveProvider
+  void setCurrentDepartmentId(int? deptId) {
+    _currentDepartmentId = deptId;
+    print('Updated current department ID to: $_currentDepartmentId');
+    notifyListeners();
+  }
   // Call this method after user logs in to set their role and ID
   Future<void> initializeUserData() async {
     try {
@@ -181,13 +187,14 @@ class LeaveProvider extends ChangeNotifier {
   }
 
   // Generate a unique leave_id
+  // Generate a unique leave_id that matches API expected format: LV-123456789
   String _generateLeaveId() {
     final now = DateTime.now();
-    final timestamp = now.millisecondsSinceEpoch.toString();
-    final random = (1000 + DateTime.now().microsecond % 9000).toString();
-    return 'LV${timestamp.substring(timestamp.length - 8)}$random';
+    final random = Random();
+    // Generate 9 random digits
+    final randomNum = random.nextInt(900000000) + 100000000;
+    return 'LV-$randomNum'; // ✅ Format: LV-432980326
   }
-
   Future<void> fetchLeaves() async {
     try {
       _isLoading = true;
@@ -547,7 +554,6 @@ class LeaveProvider extends ChangeNotifier {
     String? reason,
   }) async {
     try {
-      // Only admin can submit leave for other employees
       if (!_isAdmin) {
         throw Exception('Only admin users can submit leaves for other employees');
       }
@@ -574,12 +580,16 @@ class LeaveProvider extends ChangeNotifier {
         throw Exception('Selected employee not found');
       }
 
-      // Get department ID from selected employee
-      int? departmentId = selectedEmployee['department_id'] ?? 1;
+      int? departmentId = selectedEmployee['department_id'];
+      if (departmentId == null || departmentId == 0) {
+        departmentId = _currentDepartmentId ?? 1;
+      }
 
-      // Prepare the request body
+      // ✅ FIX: Generate a leave_id (server will still generate its own, but API requires this field)
+      final generatedLeaveId = _generateLeaveId();
+
       final requestBody = {
-        'leave_id': _generateLeaveId(),
+        'leave_id': generatedLeaveId, // ✅ ADD THIS - API requires this field
         'date': DateTime.now().toIso8601String().split('T')[0],
         'department_id': departmentId,
         'employee_id': selectedEmployeeId,
@@ -589,12 +599,13 @@ class LeaveProvider extends ChangeNotifier {
         'days': days,
         'pay_mode': payMode.toLowerCase().replaceAll(' ', '_'),
         'reason': reason ?? '',
-        'submitted_by_role': 'admin', // Fixed role
+        'submitted_by_role': 'admin',
         'submitted_by': _currentUserId,
         'status': 'pending',
       };
 
-      print('Admin submitting leave request: $requestBody');
+      print('=== ADMIN LEAVE SUBMISSION ===');
+      print('Request Body: $requestBody');
 
       final response = await http.post(
         Uri.parse('https://api.afaqmis.com/api/leaves'),
@@ -606,39 +617,41 @@ class LeaveProvider extends ChangeNotifier {
         body: jsonEncode(requestBody),
       );
 
-      print('Submit leave response status: ${response.statusCode}');
-      print('Submit leave response body: ${response.body}');
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Refresh the leaves list to include the new leave
+        final responseData = json.decode(response.body);
+
+        // STORE THE REAL LEAVE ID FROM API (might be different from what we sent)
+        _lastCreatedLeaveId = responseData['leave_id']?.toString() ?? generatedLeaveId;
+
+        print('✅ ADMIN: Leave created with ID: $_lastCreatedLeaveId');
+
         await fetchLeaves();
 
-        _successMessage = 'Leave request submitted successfully!';
+        _successMessage = 'Leave request submitted successfully! Leave ID: $_lastCreatedLeaveId';
         return true;
-      } else if (response.statusCode == 500) {
-        print('=== SERVER ERROR 500 DETAILS ===');
-        print('Request Body: $requestBody');
-        print('Response Body: ${response.body}');
-
-        throw Exception('Server error: Please try again or contact administrator.');
       } else {
-        final errorData = json.decode(response.body);
-        final errorMessage = errorData['message'] ??
-            errorData['error'] ??
-            'Failed to submit leave request: ${response.statusCode}';
-        throw Exception(errorMessage);
+        // Handle error response
+        try {
+          final errorData = json.decode(response.body);
+          final errorMessage = errorData['message'] ?? errorData['error'] ?? 'Failed to submit leave';
+          throw Exception(errorMessage);
+        } catch (e) {
+          throw Exception('Failed to submit leave: ${response.statusCode}');
+        }
       }
     } catch (e) {
       _error = e.toString();
-      print('Error submitting leave: $e');
+      print('Error in submitLeave: $e');
       return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
-
-  // Submit leave for non-admin users (they can only submit for themselves)
+  // Update the problematic section (around line 679)
   Future<bool> submitLeaveForSelf({
     required String natureOfLeave,
     required DateTime fromDate,
@@ -660,60 +673,84 @@ class LeaveProvider extends ChangeNotifier {
         throw Exception('No authentication token found');
       }
 
-      // Check if we have all required user data
-      if (_currentUserId == null) {
-        throw Exception('User ID not found. Please login again.');
-      }
+      // Get employee ID and department ID from userData
+      int? employeeId;
+      int? departmentId;
 
-      // If department ID is not set, try to get it from user data
-      if (_currentDepartmentId == null) {
-        print('Warning: Department ID not found, trying to extract from user data...');
+      final userDataString = prefs.getString('userData');
+      if (userDataString != null) {
+        try {
+          final userData = jsonDecode(userDataString);
 
-        final userDataString = prefs.getString('userData');
-        if (userDataString != null) {
-          try {
-            final userData = jsonDecode(userDataString);
-            if (userData['department'] != null) {
-              if (userData['department'] is Map) {
-                _currentDepartmentId = userData['department']['id'];
-              } else {
-                _currentDepartmentId = userData['department_id'];
-              }
-              print('Extracted department ID from userData: $_currentDepartmentId');
+          // ❌ DON'T use 'id' - that's the user ID, not employee ID
+          // ✅ Use 'employee_id' or fetch from employees table
+          dynamic employeeIdRaw = userData['employee_id'] ?? userData['emp_id'];
+
+          if (employeeIdRaw != null) {
+            // If it's a string like "EMP-15", extract the number
+            if (employeeIdRaw is String && employeeIdRaw.startsWith('EMP-')) {
+              employeeId = int.tryParse(employeeIdRaw.substring(4));
+            } else {
+              employeeId = employeeIdRaw is String
+                  ? int.tryParse(employeeIdRaw)
+                  : employeeIdRaw.toInt();
             }
-          } catch (e) {
-            print('Error extracting department from userData: $e');
           }
-        }
 
-        // If still not set, use default
-        if (_currentDepartmentId == null) {
-          _currentDepartmentId = 1; // Default department ID
-          print('Using default department ID: $_currentDepartmentId');
+          // Extract department ID
+          if (userData['department'] is Map) {
+            departmentId = userData['department']['id']?.toInt();
+          }
+          if (departmentId == null) {
+            departmentId = userData['department_id']?.toInt() ??
+                userData['dept_id']?.toInt();
+          }
+        } catch (e) {
+          print('Error parsing userData: $e');
         }
       }
 
-      // Prepare the request body - CRITICAL FIX: Use 'employee' role instead of _userRole
+      // ❌ DON'T fallback to _currentUserId - that's the auth user ID
+      // Instead, fetch the actual employee ID from employees table
+      if (employeeId == null) {
+        // Fetch the employee record using the user's email or username
+        employeeId = await _fetchEmployeeIdFromDatabase(token);
+      }
+
+      departmentId ??= _currentDepartmentId;
+
+      if (employeeId == null || employeeId == 0) {
+        throw Exception('Employee ID is required. Please contact administrator.');
+      }
+      if (departmentId == null || departmentId == 0) {
+        throw Exception('Department ID is required. Please contact administrator.');
+      }
+
+      // Generate a leave_id (API requires this field)
+      final generatedLeaveId = _generateLeaveId();
+
+      // ✅ FIXED: Use 'emp_id' with "EMP-" prefix format
       final requestBody = {
-        'leave_id': _generateLeaveId(),
+        'leave_id': generatedLeaveId,
         'date': DateTime.now().toIso8601String().split('T')[0],
-        'department_id': _currentDepartmentId,
-        'employee_id': _currentUserId,
+        'department_id': departmentId,
+        'employee_id': employeeId,  // ✅ Use 'emp_id' with EMP- prefix
         'nature_of_leave': natureOfLeave,
         'from_date': fromDate.toIso8601String().split('T')[0],
         'to_date': toDate.toIso8601String().split('T')[0],
         'days': days,
         'pay_mode': payMode.toLowerCase().replaceAll(' ', '_'),
         'reason': reason ?? '',
-        'submitted_by_role': 'employee', // FIXED: Changed from _userRole to 'employee'
-        'submitted_by': _currentUserId,
+        'submitted_by_role': 'employee',
+        'submitted_by': employeeId,
         'status': 'pending',
       };
 
-      print('Non-admin submitting leave request for self: $requestBody');
+      print('=== NON-ADMIN LEAVE SUBMISSION ===');
+      print('Request Body: $requestBody');
 
       final response = await http.post(
-        Uri.parse('https://api.afaqmis.com/api/leaves'),
+        Uri.parse('http://10.0.2.2:5000/api/leaves'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -722,44 +759,30 @@ class LeaveProvider extends ChangeNotifier {
         body: jsonEncode(requestBody),
       );
 
-      print('Submit leave response status: ${response.statusCode}');
-      print('Submit leave response body: ${response.body}');
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Refresh the leaves list to include the new leave
+        final responseData = json.decode(response.body);
+        _lastCreatedLeaveId = responseData['leave_id']?.toString() ?? generatedLeaveId;
+        print('✅ NON-ADMIN: Leave created with ID: $_lastCreatedLeaveId');
+
         await fetchLeaves();
-
-        _successMessage = 'Leave request submitted successfully!';
+        _successMessage = 'Leave request submitted successfully! Leave ID: $_lastCreatedLeaveId';
         return true;
-      } else if (response.statusCode == 500) {
-        print('=== SERVER ERROR 500 DETAILS ===');
-        print('Request Body: $requestBody');
-        print('Response Body: ${response.body}');
-
-        // Try to parse error
+      } else {
         try {
           final errorData = json.decode(response.body);
-          final errorMessage = errorData['message'] ?? errorData['error'] ?? 'Server Error 500';
-
-          if (errorMessage.toLowerCase().contains('role') ||
-              errorMessage.toLowerCase().contains('permission')) {
-            throw Exception('Permission denied. Please contact administrator.');
-          } else {
-            throw Exception('Server error: $errorMessage');
-          }
+          final errorMessage = errorData['message'] ?? errorData['error'] ?? 'Failed to submit leave';
+          throw Exception(errorMessage);
         } catch (e) {
-          throw Exception('Server error occurred. Please try again.');
+          throw Exception('Failed to submit leave: ${response.statusCode}');
         }
-      } else {
-        final errorData = json.decode(response.body);
-        final errorMessage = errorData['message'] ??
-            errorData['error'] ??
-            'Failed to submit leave request: ${response.statusCode}';
-        throw Exception(errorMessage);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       _error = e.toString();
-      print('Error submitting leave: $e');
+      print('Error in submitLeaveForSelf: $e');
+      print('Stack trace: $stackTrace');
       return false;
     } finally {
       _isLoading = false;
@@ -767,6 +790,46 @@ class LeaveProvider extends ChangeNotifier {
     }
   }
 
+// Add this helper method to fetch the actual employee ID
+  Future<int?> _fetchEmployeeIdFromDatabase(String token) async {
+    try {
+      // Use the current user's email or username to find their employee record
+      final prefs = await SharedPreferences.getInstance();
+      final userDataString = prefs.getString('userData');
+
+      if (userDataString != null) {
+        final userData = jsonDecode(userDataString);
+        final email = userData['email'];
+        final username = userData['username'];
+
+        // Fetch employees and find the one matching this user
+        final response = await http.get(
+          Uri.parse('http://10.0.2.2:5000/api/employees'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          final List<dynamic> employees = data['employees'] ?? [];
+
+          // Try to match by email or name
+          for (var emp in employees) {
+            if (emp['email'] == email ||
+                emp['name'] == userData['name'] ||
+                emp['username'] == username) {
+              return emp['id']?.toInt();
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching employee ID: $e');
+    }
+    return null;
+  }
   void _extractFilters() {
     // Extract unique departments
     final departmentSet = _leaves
@@ -791,14 +854,25 @@ class LeaveProvider extends ChangeNotifier {
 
     // Extract unique employees - only for admin
     if (_isAdmin) {
+      // FIX: Ensure employee names are unique
       final employeeSet = _leaves
           .where((leave) => leave.employeeName.isNotEmpty)
           .map((leave) => leave.employeeName)
-          .toSet();
-      _employees = ['All', ...employeeSet.toList()..sort()];
+          .toSet();  // Using Set to ensure uniqueness
+
+      // Convert to list and sort
+      final uniqueEmployees = employeeSet.toList()..sort();
+
+      // For admin users
+      _employees = ['All', ...uniqueEmployees];
     } else {
       // For non-admin, show only themselves
-      _employees = ['All', _currentEmployeeName ?? 'My Leaves'];
+      // FIX: Ensure only one "My Leaves" option
+      if (_currentEmployeeName != null && _currentEmployeeName!.isNotEmpty) {
+        _employees = ['All', _currentEmployeeName!];
+      } else {
+        _employees = ['All', 'My Leaves'];
+      }
       _selectedEmployeeFilter = _currentEmployeeName ?? 'My Leaves';
     }
 
@@ -806,7 +880,6 @@ class LeaveProvider extends ChangeNotifier {
     print('Departments: $_departments');
     print('Employees: $_employees');
   }
-
   void _applyFilters() {
     _filteredLeaves = _leaves.where((leave) {
       // Search filter
@@ -889,6 +962,66 @@ class LeaveProvider extends ChangeNotifier {
     _selectedStatusFilter = status;
     _applyFilters();
     notifyListeners();
+  }
+
+
+  // debug logs
+  Future<void> debugUserDataForLeave() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      print('=== DEBUG USER DATA FOR LEAVE ===');
+
+      // Check token
+      final token = prefs.getString('token');
+      print('Token exists: ${token != null && token.isNotEmpty}');
+
+      // Check userData
+      final userDataString = prefs.getString('userData');
+      print('UserData exists: ${userDataString != null}');
+
+      if (userDataString != null) {
+        try {
+          final userData = jsonDecode(userDataString);
+          print('Full UserData: $userData');
+
+          // Check all possible fields
+          final possibleIdFields = ['id', 'employee_id', 'user_id', 'emp_id', 'staff_id'];
+          final possibleDeptFields = ['department', 'department_id', 'dept_id'];
+
+          print('=== ID FIELDS ===');
+          for (var field in possibleIdFields) {
+            print('$field: ${userData[field]}');
+          }
+
+          print('=== DEPARTMENT FIELDS ===');
+          for (var field in possibleDeptFields) {
+            print('$field: ${userData[field]}');
+          }
+
+          // Check department structure
+          if (userData['department'] != null) {
+            print('Department field type: ${userData['department'].runtimeType}');
+            if (userData['department'] is Map) {
+              print('Department Map: ${userData['department']}');
+            }
+          }
+        } catch (e) {
+          print('Error parsing userData: $e');
+        }
+      }
+
+      print('=== PROVIDER STATE ===');
+      print('Current User ID: $_currentUserId');
+      print('Current Department ID: $_currentDepartmentId');
+      print('Current Employee Name: $_currentEmployeeName');
+      print('Current Employee Code: $_currentEmployeeCode');
+      print('User Role: $_userRole');
+      print('isAdmin: $_isAdmin');
+      print('============================');
+    } catch (e) {
+      print('Error in debugUserDataForLeave: $e');
+    }
   }
 
   Future<void> approveLeave(int leaveId) async {

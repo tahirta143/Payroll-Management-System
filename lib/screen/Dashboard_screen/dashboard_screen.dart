@@ -15,6 +15,7 @@ import '../../provider/dashboard_provider/dashboard_summary_provider.dart';
 import '../../provider/permissions_provider/permissions.dart';
 import '../../widget/dashboard_chart/dashborad_chart.dart';
 import '../Approve_Leave/ApproveLeaveScreen.dart';
+import '../monthly_attandance_sheet/monthly_attandance_sheet.dart';
 import '../salary_sheet/salary_sheet.dart';
 import '../salary_slip/salary_slip.dart';
 import 'absents_screen/absents_screen.dart';
@@ -319,7 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (p.hasPermission('can-view-salary')) {
       screens.add(const SalaryScreen());
     }
-
+screens.add(EmployeeReportScreen());
     // 6 - Settings (always last)
     screens.add(const SettingsScreen());
 
@@ -337,8 +338,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Helper method to get screen index based on item title
   int _getScreenIndexForItem(String itemTitle, PermissionProvider p) {
     final screens = _getScreens(p);
-
-    // Map titles to their indices
     final Map<String, int> titleToIndex = {};
 
     for (int i = 0; i < screens.length; i++) {
@@ -347,21 +346,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       } else if (screens[i] is AttendanceScreen) {
         titleToIndex['Staff Attendance'] = i;
       } else if (screens[i] is ApproveLeaveScreen) {
-        titleToIndex['Approve Leave'] = i;
+        titleToIndex['Leave'] = i;
       } else if (screens[i] is SalarySlipScreen) {
         titleToIndex['Salary Slip'] = i;
       } else if (screens[i] is SalarySheetScreen) {
         titleToIndex['Salary Sheet'] = i;
       } else if (screens[i] is SalaryScreen) {
         titleToIndex['Salary'] = i;
+      } else if (screens[i] is EmployeeReportScreen) {
+        titleToIndex['Monthly Attendance'] = i;
       } else if (screens[i] is SettingsScreen) {
         titleToIndex['Settings'] = i;
       }
     }
 
-    // Return the index or 0 (Dashboard) if not found
     return titleToIndex[itemTitle] ?? 0;
   }
+
 
   int _getBottomNavIndex(int screenIndex, PermissionProvider p) {
     // If it's the dashboard (screen 0), return bottom nav index 0
@@ -396,7 +397,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       currentScreenIndex++;
       bottomNavIndex++;
     }
-
+    // 6. Monthly Attendance - NOT in bottom nav (skip)
+    if (currentScreenIndex == screenIndex) return 0; // Go to home since not in bottom nav
+    currentScreenIndex++;
     // 6. Settings - Always in bottom nav
     if (currentScreenIndex == screenIndex) return bottomNavIndex;
 
@@ -435,12 +438,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       currentBottomNavIndex++;
     }
 
-    // 6. Settings
+    // 6. Monthly Attendance - NOT in bottom nav (skip - screenIndex increases)
+    screenIndex++;
+
+    // 7. Settings - Always in bottom nav
     if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
 
     return 0;
   }
-
   Widget _buildBottomNavigationBar(PermissionProvider p) {
     List<BottomNavigationBarItem> items = [
       const BottomNavigationBarItem(
@@ -1490,6 +1495,14 @@ class SidebarDrawer extends StatelessWidget {
         'permission': 'can-view-salary',
         'requiresPermission': true,
       },
+      {
+        'icon': Iconsax.calendar_edit,
+        'title': 'Monthly Attendance',
+        'permission': 'can-view-attendence', // Or use appropriate permission
+        'requiresPermission': false, // Show for all users
+        'description': 'View monthly attendance report',
+      },
+
       {
         'icon': Iconsax.setting,
         'title': 'Settings',

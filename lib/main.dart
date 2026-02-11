@@ -6,6 +6,7 @@ import 'package:payroll_app/provider/chart_provider/chart_provider.dart';
 import 'package:payroll_app/provider/dashboard_provider/dashboard_summary_provider.dart';
 import 'package:payroll_app/provider/employee_salary_provider/employee_salary_provider.dart';
 import 'package:payroll_app/provider/leave_approve_provider/leave_approve.dart';
+import 'package:payroll_app/provider/monthly_attandance_sheet_provider/monthly_att_provider.dart';
 import 'package:payroll_app/provider/permissions_provider/permissions.dart';
 import 'package:payroll_app/provider/salary_sheet_provider/salary_sheet_provider.dart';
 import 'package:payroll_app/provider/salary_slip_provider/salary_slip_provider.dart';
@@ -35,6 +36,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AbsentProvider()),
         ChangeNotifierProvider(create: (_) => SalarySlipProvider()),
         ChangeNotifierProvider(create: (_) => SalarySheetProvider()),
+        ChangeNotifierProvider(create: (context) => EmployeeReportProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

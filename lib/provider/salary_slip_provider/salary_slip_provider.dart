@@ -45,10 +45,99 @@ class SalarySlipProvider extends ChangeNotifier {
   }
 
   // Get current logged-in employee ID
+  // Update the _getCurrentEmployeeId() method in SalarySlipProvider:
+  // Get current logged-in employee ID
   Future<int> _getCurrentEmployeeId() async {
     final prefs = await SharedPreferences.getInstance();
-    final empIdString = prefs.getString('employee_id') ?? '0';
-    return int.tryParse(empIdString) ?? 0;
+
+    // 1. Try 'employee_id' (String then int)
+    String? employeeIdStr = prefs.getString('employee_id');
+    if (employeeIdStr != null && employeeIdStr.isNotEmpty) {
+      final id = int.tryParse(employeeIdStr);
+      if (id != null) {
+        print('✅ Found employee ID in SharedPreferences[employee_id] (String): $id');
+        return id;
+      }
+    }
+    
+    // 2. Try 'employee_id' as int? (some apps save it as int)
+    /* 
+       Note: SharedPreferences throws if you try to getInt on a String value 
+       or getString on an int value. So we have to be careful. 
+       Ideally, we should know the type. But assuming mixed usage:
+    */
+    try {
+        final employeeIdInt = prefs.getInt('employee_id');
+        if (employeeIdInt != null) {
+            print('✅ Found employee ID in SharedPreferences[employee_id] (int): $employeeIdInt');
+            return employeeIdInt;
+        }
+    } catch (_) {}
+
+    // 3. Try 'emp_id' (String then int)
+    String? empIdStr = prefs.getString('emp_id');
+    if (empIdStr != null && empIdStr.isNotEmpty) {
+      final id = int.tryParse(empIdStr);
+      if (id != null) {
+        print('✅ Found employee ID in SharedPreferences[emp_id] (String): $id');
+        return id;
+      }
+    }
+    
+    try {
+        final empIdInt = prefs.getInt('emp_id');
+        if (empIdInt != null) {
+            print('✅ Found employee ID in SharedPreferences[emp_id] (int): $empIdInt');
+            return empIdInt;
+        }
+    } catch (_) {}
+
+    // 4. Try userData json
+    final userDataString = prefs.getString('userData');
+    if (userDataString != null) {
+      try {
+        final userData = json.decode(userDataString);
+        // Check employee_id first
+        if (userData['employee_id'] != null) {
+             final val = userData['employee_id'];
+             if (val is int) return val;
+             if (val is String) {
+                 final parsed = int.tryParse(val);
+                 if (parsed != null) return parsed;
+             }
+        }
+        // Then emp_id
+        if (userData['emp_id'] != null) {
+             final val = userData['emp_id'];
+             if (val is int) return val;
+             if (val is String) {
+                 final parsed = int.tryParse(val);
+                 if (parsed != null) return parsed;
+             }
+        }
+        // Finally id (which might be user id, but if others fail...)
+        if (userData['id'] != null) {
+             final val = userData['id'];
+             if (val is int) return val;
+             if (val is String) {
+                 final parsed = int.tryParse(val);
+                 if (parsed != null) return parsed;
+             }
+        }
+      } catch (e) {
+        print('❌ Error parsing userData: $e');
+      }
+    }
+
+    // 5. Fallback to 'user_id' (last resort)
+    final userId = prefs.getInt('user_id');
+    if (userId != null) {
+        print('⚠️ Using user_id as fallback: $userId');
+        return userId;
+    }
+
+    print('❌ Warning: Could not find employee ID, defaulting to 0');
+    return 0;
   }
 
   // Load employees for admin dropdown - UPDATED METHOD

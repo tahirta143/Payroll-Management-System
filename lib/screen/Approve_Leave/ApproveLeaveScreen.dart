@@ -187,14 +187,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
   }
 
   Widget _buildSearchFilterSection(LeaveProvider provider) {
-    // Debug: Print filter section info
-    print('=== FILTER SECTION ===');
-    print('isAdmin: ${provider.isAdmin}');
-    print('employees count: ${provider.employees.length}');
-    print('departments count: ${provider.departments.length}');
-    print('current user name: ${provider.currentEmployeeName}');
-    print('current department ID: ${provider.currentDepartmentId}');
-
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
@@ -371,9 +363,8 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                 ),
               if (provider.isAdmin) const SizedBox(width: 8),
 
-              // Department Filter - Show for all users
-              // Department Filter - Show for all users
-              Expanded(
+              // Department Filter - ONLY SHOW FOR ADMIN
+              if (provider.isAdmin) Expanded(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
@@ -426,7 +417,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           provider.setDepartmentFilter(value);
                         }
                       },
-                      items: provider.departments.toSet().map((String value) { // ADD .toSet() HERE
+                      items: provider.departments.toSet().map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Container(
@@ -492,7 +483,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              if (provider.isAdmin) const SizedBox(width: 8),
 
               // Status Filter - Always show
               Expanded(
@@ -1454,11 +1445,25 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
 
   // UPDATED: New Leave Dialog with proper handling for admin vs non-admin
   // UPDATED: New Leave Dialog with proper handling for admin vs non-admin
+  // COMPLETE UPDATED: New Leave Dialog with proper handling for admin and non-admin
   Future<void> _showNewLeaveDialog(BuildContext context, LeaveProvider provider) async {
     print('=== SHOW NEW LEAVE DIALOG START ===');
     print('User is admin: ${provider.isAdmin}');
     print('User Name: ${provider.currentEmployeeName}');
     print('Department ID: ${provider.currentDepartmentId}');
+
+    // Local fallback generator (only used for display)
+    // Generate a unique leave_id that matches API expected format
+    String _generateLeaveId() {
+      final now = DateTime.now();
+      final timestamp = now.millisecondsSinceEpoch.toString();
+      final random = (1000 + DateTime.now().microsecond % 9000).toString();
+      // Format: LV-12345678 (matching your example: LV-432980326)
+      return 'LV-${timestamp.substring(timestamp.length - 9)}';
+    }
+
+    // Generate a temporary display ID
+    final tempDisplayLeaveId = _generateLeaveId();
 
     // Variables for form
     int? selectedEmployeeId;
@@ -1479,7 +1484,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       }
     }
 
-    // Function to filter employees by department - FIXED VERSION
+    // Function to filter employees by department - for admin only
     void filterEmployeesByDepartment(int? departmentIndex) {
       if (departmentIndex == null || provider.allEmployees.isEmpty) {
         filteredEmployees = [];
@@ -1510,26 +1515,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       final selectedDeptName = departmentList[departmentIndex - 1];
       print('Selected department name: "$selectedDeptName"');
 
-      // Debug: Print all employees with their department info
-      print('--- All Employees with Department Info ---');
-      for (var emp in provider.allEmployees) {
-        print('Employee: ${emp['name']}, Dept ID: ${emp['department_id']}, Dept Name: "${emp['department_name']}"');
-      }
-
       // Filter employees by department name
       filteredEmployees = provider.allEmployees.where((emp) {
         final empDeptName = emp['department_name']?.toString() ?? '';
-        final empDeptId = emp['department_id']?.toString() ?? '';
-        final empName = emp['name']?.toString() ?? '';
-
-        // Check if department name matches
-        final matches = empDeptName == selectedDeptName;
-
-        if (empDeptName.isNotEmpty) {
-          print('Comparing: Employee "$empName" (Dept: "$empDeptName", ID: $empDeptId) with "$selectedDeptName"');
-        }
-
-        return matches;
+        return empDeptName == selectedDeptName;
       }).toList();
 
       print('Filtered ${filteredEmployees.length} employees for department "$selectedDeptName"');
@@ -1538,7 +1527,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       if (filteredEmployees.isEmpty) {
         print('No matches by department name, trying to get department ID mapping...');
 
-        // Try to get department ID from leaves data
         int? deptId;
         final leaves = provider.allLeaves;
         for (var leave in leaves) {
@@ -1566,9 +1554,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         }
       } else {
         print('WARNING: No employees found for department "$selectedDeptName"');
-        print('Available departments in employee data:');
-        final allDepts = provider.allEmployees.map((e) => e['department_name']?.toString()).where((d) => d != null && d.isNotEmpty).toSet();
-        print('  $allDepts');
       }
     }
 
@@ -1576,7 +1561,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     if (!provider.isAdmin && provider.currentUserId != null) {
       selectedEmployeeId = provider.currentUserId;
       selectedDepartmentId = provider.currentDepartmentId ?? 1;
-      print('Non-admin user: Auto-selected employee ID: $selectedEmployeeId, Dept ID: $selectedDepartmentId');
+      print('NON-ADMIN: Auto-selected employee ID: $selectedEmployeeId, Dept ID: $selectedDepartmentId');
 
       // For non-admin, add themselves to filteredEmployees
       if (provider.currentEmployeeName != null) {
@@ -1593,6 +1578,8 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     // For admin users, fetch employees first
     if (provider.isAdmin) {
       // Show loading indicator
+      if (!context.mounted) return;
+
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -1612,35 +1599,40 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         await provider.fetchAllEmployeesForDropdown();
 
         // Close loading dialog
-        if (Navigator.canPop(context)) {
+        if (context.mounted && Navigator.canPop(context)) {
           Navigator.pop(context);
         }
 
         if (provider.allEmployees.isEmpty) {
-          _showSnackBar('No employees found. Please try again.', isError: true);
+          if (context.mounted) {
+            _showSnackBar('No employees found. Please try again.', isError: true);
+          }
           return;
         }
 
-        // Debug: Print employee data
-        print('=== EMPLOYEE DATA LOADED ===');
+        print('=== ADMIN: EMPLOYEE DATA LOADED ===');
         print('Total employees loaded: ${provider.allEmployees.length}');
         if (provider.allEmployees.isNotEmpty) {
           print('Sample employee: ${provider.allEmployees.first}');
         }
 
       } catch (e) {
-        if (Navigator.canPop(context)) {
+        if (context.mounted && Navigator.canPop(context)) {
           Navigator.pop(context);
         }
-        _showSnackBar('Failed to load employees: $e', isError: true);
+        if (context.mounted) {
+          _showSnackBar('Failed to load employees: $e', isError: true);
+        }
         return;
       }
     }
 
     // Now show the main dialog
+    if (!context.mounted) return;
+
     await showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
             return Dialog(
@@ -1650,7 +1642,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.9,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  maxHeight: MediaQuery.of(context).size.height * 0.9,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1696,6 +1688,90 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            // Leave ID Field - Temporary ID for display
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF667EEA).withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFF667EEA).withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF667EEA).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Iconsax.document_text,
+                                      color: Color(0xFF667EEA),
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Text(
+                                              'Reference ID',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: const Text(
+                                                'Temporary',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.orange,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          tempDisplayLeaveId,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF667EEA),
+                                          ),
+                                        ),
+                                        Text(
+                                          'Server will assign final ID after submission',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
                             // Employee Info - For non-admin, show their name
                             if (!provider.isAdmin)
                               Column(
@@ -1733,7 +1809,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                           ),
                                           child: Center(
                                             child: Text(
-                                              provider.currentEmployeeName?.substring(0, 1) ?? 'Y',
+                                              provider.currentEmployeeName?.substring(0, 1).toUpperCase() ?? 'U',
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.bold,
@@ -1800,19 +1876,32 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                     color: Colors.black87,
                                   ),
                                   hint: const Text('Select Department'),
-                                  onChanged: provider.isAdmin ? (value) {
+                                  onChanged: (value) {
                                     print('Department changed to: $value');
                                     setState(() {
                                       selectedDepartmentId = value;
-                                      selectedEmployeeId = null; // Reset employee when department changes
-                                      filterEmployeesByDepartment(value);
+                                      // Update provider with selected department ID
+                                      provider.setCurrentDepartmentId(value);
+
+                                      if (provider.isAdmin) {
+                                        selectedEmployeeId = null; // Reset employee when department changes
+                                        filterEmployeesByDepartment(value);
+                                      }
                                     });
-                                  } : null,
+                                  },
                                   items: [
-                                    // For non-admin, show only their department
-                                    if (!provider.isAdmin)
-                                      DropdownMenuItem<int>(
-                                        value: provider.currentDepartmentId ?? 1,
+                                    // Get unique departments list
+                                    ...provider.departments
+                                        .where((dept) => dept != 'All')
+                                        .toSet()
+                                        .toList()
+                                        .asMap()
+                                        .entries
+                                        .map((entry) {
+                                      final index = entry.key;
+                                      final dept = entry.value;
+                                      return DropdownMenuItem<int>(
+                                        value: index + 1,
                                         child: Row(
                                           children: [
                                             Container(
@@ -1827,64 +1916,39 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                                 ),
                                                 shape: BoxShape.circle,
                                               ),
-                                              child: const Center(
-                                                child: Icon(
-                                                  Iconsax.building,
-                                                  color: Colors.white,
-                                                  size: 16,
+                                              child: Center(
+                                                child: Text(
+                                                  dept.substring(0, 1).toUpperCase(),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                             const SizedBox(width: 10),
-                                            const Text('My Department'),
+                                            Expanded(
+                                              child: Text(
+                                                dept,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.black87,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
                                           ],
                                         ),
-                                      ),
-                                    // For admin, show available departments
-                                    if (provider.isAdmin)
-                                      ...provider.departments.where((dept) => dept != 'All').toSet().toList().asMap().entries.map((entry) {
-                                        final index = entry.key;
-                                        final dept = entry.value;
-                                        return DropdownMenuItem<int>(
-                                          value: index + 1, // Use index + 1 to ensure unique values starting from 1
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                width: 32,
-                                                height: 32,
-                                                decoration: const BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [
-                                                      Color(0xFF667EEA),
-                                                      Color(0xFF764BA2),
-                                                    ],
-                                                  ),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Center(
-                                                  child: Text(
-                                                    dept.substring(0, 1),
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Text(dept),
-                                            ],
-                                          ),
-                                        );
-                                      }).toList(),
+                                      );
+                                    }).toList(),
                                   ],
                                 ),
                               ),
                             ),
                             const SizedBox(height: 16),
 
-                            // Employee Dropdown - Only for admin (and only show after department is selected)
+                            // Employee Dropdown - ONLY FOR ADMIN (and only show after department is selected)
                             if (provider.isAdmin) ...[
                               const Text(
                                 'Select Employee *',
@@ -1917,14 +1981,20 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                           : filteredEmployees.isEmpty
                                           ? 'No employees in this department'
                                           : 'Select Employee',
+                                      style: TextStyle(
+                                        color: selectedDepartmentId == null || filteredEmployees.isEmpty
+                                            ? Colors.grey
+                                            : Colors.black87,
+                                      ),
                                     ),
-                                    onChanged: selectedDepartmentId != null && filteredEmployees.isNotEmpty ? (value) {
+                                    onChanged: selectedDepartmentId != null && filteredEmployees.isNotEmpty
+                                        ? (value) {
                                       setState(() {
                                         selectedEmployeeId = value;
                                       });
-                                    } : null,
+                                    }
+                                        : null,
                                     items: filteredEmployees.map((employee) {
-                                      // Ensure unique employee IDs
                                       final empId = employee['id'] as int? ?? 0;
                                       final empName = employee['name']?.toString() ?? 'Unknown';
                                       final empCode = employee['employee_code']?.toString() ?? '';
@@ -1934,8 +2004,8 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                         child: Row(
                                           children: [
                                             Container(
-                                              width: 32,
-                                              height: 32,
+                                              width: 36,
+                                              height: 36,
                                               decoration: const BoxDecoration(
                                                 gradient: LinearGradient(
                                                   colors: [
@@ -1947,16 +2017,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                               ),
                                               child: Center(
                                                 child: Text(
-                                                  empName.substring(0, 1),
+                                                  empName.isNotEmpty ? empName.substring(0, 1).toUpperCase() : '?',
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
+                                                    fontSize: 14,
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(width: 10),
+                                            const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1966,6 +2036,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                                     style: const TextStyle(
                                                       fontSize: 14,
                                                       fontWeight: FontWeight.w500,
+                                                      color: Colors.black87,
                                                     ),
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
@@ -2029,7 +2100,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                     String displayName = type.replaceAll('_', ' ').toTitleCase();
                                     return DropdownMenuItem<String>(
                                       value: type,
-                                      child: Text(displayName),
+                                      child: Text(
+                                        displayName,
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
                                     );
                                   }).toList(),
                                 ),
@@ -2068,6 +2142,19 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                             initialDate: DateTime.now(),
                                             firstDate: DateTime.now(),
                                             lastDate: DateTime.now().add(const Duration(days: 365)),
+                                            builder: (context, child) {
+                                              return Theme(
+                                                data: Theme.of(context).copyWith(
+                                                  colorScheme: const ColorScheme.light(
+                                                    primary: Color(0xFF667EEA),
+                                                    onPrimary: Colors.white,
+                                                    surface: Colors.white,
+                                                    onSurface: Colors.black,
+                                                  ),
+                                                ),
+                                                child: child!,
+                                              );
+                                            },
                                           );
                                           if (selectedDate != null) {
                                             setState(() {
@@ -2086,11 +2173,13 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                             children: [
                                               const Icon(Iconsax.calendar_1, size: 18, color: Colors.grey),
                                               const SizedBox(width: 8),
-                                              Text(
-                                                fromDate == null ? 'Select Date' : _formatDate(fromDate!),
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: fromDate == null ? Colors.grey : Colors.black87,
+                                              Expanded(
+                                                child: Text(
+                                                  fromDate == null ? 'Select Date' : _formatDate(fromDate!),
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: fromDate == null ? Colors.grey : Colors.black87,
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -2120,6 +2209,19 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                             initialDate: fromDate ?? DateTime.now(),
                                             firstDate: fromDate ?? DateTime.now(),
                                             lastDate: DateTime.now().add(const Duration(days: 365)),
+                                            builder: (context, child) {
+                                              return Theme(
+                                                data: Theme.of(context).copyWith(
+                                                  colorScheme: const ColorScheme.light(
+                                                    primary: Color(0xFF667EEA),
+                                                    onPrimary: Colors.white,
+                                                    surface: Colors.white,
+                                                    onSurface: Colors.black,
+                                                  ),
+                                                ),
+                                                child: child!,
+                                              );
+                                            },
                                           );
                                           if (selectedDate != null) {
                                             setState(() {
@@ -2138,11 +2240,13 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                             children: [
                                               const Icon(Iconsax.calendar_1, size: 18, color: Colors.grey),
                                               const SizedBox(width: 8),
-                                              Text(
-                                                toDate == null ? 'Select Date' : _formatDate(toDate!),
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: toDate == null ? Colors.grey : Colors.black87,
+                                              Expanded(
+                                                child: Text(
+                                                  toDate == null ? 'Select Date' : _formatDate(toDate!),
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: toDate == null ? Colors.grey : Colors.black87,
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -2158,41 +2262,37 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
 
                             // Days Counter
                             if (days > 0)
-                              Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF667EEA).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: const Color(0xFF667EEA).withOpacity(0.3),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF667EEA).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFF667EEA).withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'Total Days:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF667EEA),
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text(
-                                          'Total Days:',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF667EEA),
-                                          ),
-                                        ),
-                                        Text(
-                                          '$days ${days == 1 ? 'Day' : 'Days'}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            color: Color(0xFF667EEA),
-                                          ),
-                                        ),
-                                      ],
+                                    Text(
+                                      '$days ${days == 1 ? 'Day' : 'Days'}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: Color(0xFF667EEA),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                ],
+                                  ],
+                                ),
                               ),
+                            if (days > 0) const SizedBox(height: 16),
 
                             // Pay Mode Dropdown
                             const Text(
@@ -2237,7 +2337,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                             size: 18,
                                           ),
                                           const SizedBox(width: 8),
-                                          Text(mode),
+                                          Text(
+                                            mode,
+                                            style: const TextStyle(fontSize: 14),
+                                          ),
                                         ],
                                       ),
                                     );
@@ -2268,6 +2371,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                   contentPadding: EdgeInsets.all(12),
                                   border: InputBorder.none,
                                   hintText: 'Enter reason for leave...',
+                                  hintStyle: TextStyle(color: Colors.grey),
                                 ),
                                 onChanged: (value) {
                                   reason = value;
@@ -2299,31 +2403,44 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
+                                side: BorderSide(color: Colors.grey[400]!),
                               ),
-                              child: const Text('Cancel'),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(fontSize: 14),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () async {
-                                // Validation
+                                // ============= VALIDATION =============
+                                // Admin: Check if employee selected
                                 if (provider.isAdmin && selectedEmployeeId == null) {
                                   _showSnackBar('Please select an employee', isError: true);
                                   return;
                                 }
+
+                                // Check department
                                 if (selectedDepartmentId == null) {
-                                  _showSnackBar('Department ID is required', isError: true);
+                                  _showSnackBar('Please select department', isError: true);
                                   return;
                                 }
+
+                                // Check leave type
                                 if (selectedLeaveType == null) {
                                   _showSnackBar('Please select leave type', isError: true);
                                   return;
                                 }
+
+                                // Check pay mode
                                 if (selectedPayMode == null) {
                                   _showSnackBar('Please select pay mode', isError: true);
                                   return;
                                 }
+
+                                // Check dates
                                 if (fromDate == null) {
                                   _showSnackBar('Please select from date', isError: true);
                                   return;
@@ -2341,33 +2458,91 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                   return;
                                 }
 
+                                // ============= DEBUG LOG =============
+                                print('=== LEAVE SUBMISSION DEBUG ===');
+                                print('User Type: ${provider.isAdmin ? "ADMIN" : "NON-ADMIN"}');
+                                print('Reference ID: $tempDisplayLeaveId');
+                                print('Selected Employee ID: $selectedEmployeeId');
+                                print('Selected Department ID: $selectedDepartmentId');
+                                print('Selected Leave Type: $selectedLeaveType');
+                                print('Pay Mode: $selectedPayMode');
+                                print('From Date: $fromDate');
+                                print('To Date: $toDate');
+                                print('Days: $days');
+                                print('Reason: $reason');
+
+                                // ============= SUBMIT =============
                                 bool success;
 
-                                // Call appropriate method based on user role
-                                if (provider.isAdmin) {
-                                  success = await provider.submitLeave(
-                                    selectedEmployeeId: selectedEmployeeId!,
-                                    natureOfLeave: selectedLeaveType!,
-                                    fromDate: fromDate!,
-                                    toDate: toDate!,
-                                    days: days,
-                                    payMode: selectedPayMode!,
-                                    reason: reason.isNotEmpty ? reason : null,
-                                  );
-                                } else {
-                                  success = await provider.submitLeaveForSelf(
-                                    natureOfLeave: selectedLeaveType!,
-                                    fromDate: fromDate!,
-                                    toDate: toDate!,
-                                    days: days,
-                                    payMode: selectedPayMode!,
-                                    reason: reason.isNotEmpty ? reason : null,
-                                  );
-                                }
+                                // Show loading indicator
+                                if (!context.mounted) return;
 
-                                if (success && mounted) {
-                                  _showSnackBar('Leave request submitted successfully!');
-                                  Navigator.pop(context);
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (context) => const AlertDialog(
+                                    content: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        CircularProgressIndicator(),
+                                        SizedBox(width: 16),
+                                        Text('Submitting leave request...'),
+                                      ],
+                                    ),
+                                  ),
+                                );
+
+                                try {
+                                  // Set department ID in provider
+                                  if (selectedDepartmentId != null) {
+                                    provider.setCurrentDepartmentId(selectedDepartmentId);
+                                  }
+
+                                  // Call appropriate method based on user role
+                                  if (provider.isAdmin) {
+                                    success = await provider.submitLeave(
+                                      selectedEmployeeId: selectedEmployeeId!,
+                                      natureOfLeave: selectedLeaveType!,
+                                      fromDate: fromDate!,
+                                      toDate: toDate!,
+                                      days: days,
+                                      payMode: selectedPayMode!,
+                                      reason: reason.isNotEmpty ? reason : null,
+                                    );
+                                  } else {
+                                    success = await provider.submitLeaveForSelf(
+                                      natureOfLeave: selectedLeaveType!,
+                                      fromDate: fromDate!,
+                                      toDate: toDate!,
+                                      days: days,
+                                      payMode: selectedPayMode!,
+                                      reason: reason.isNotEmpty ? reason : null,
+                                    );
+                                  }
+
+                                  // Close loading dialog
+                                  if (context.mounted && Navigator.canPop(context)) {
+                                    Navigator.pop(context);
+                                  }
+
+                                  // Handle result
+                                  if (success && context.mounted) {
+                                    // Show success message
+                                    final successMessage = provider.successMessage.isNotEmpty
+                                        ? provider.successMessage
+                                        : 'Leave request submitted successfully!';
+
+                                    _showSnackBar(successMessage);
+                                    Navigator.pop(context); // Close the form dialog
+                                  }
+                                } catch (e) {
+                                  // Close loading dialog
+                                  if (context.mounted && Navigator.canPop(context)) {
+                                    Navigator.pop(context);
+                                  }
+                                  if (context.mounted) {
+                                    _showSnackBar('Error: $e', isError: true);
+                                  }
                                 }
                               },
                               style: ElevatedButton.styleFrom(
@@ -2378,7 +2553,13 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: Text(provider.isAdmin ? 'Submit Request' : 'Apply for Leave'),
+                              child: Text(
+                                provider.isAdmin ? 'Submit Request' : 'Apply for Leave',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -2394,9 +2575,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     );
 
     print('=== SHOW NEW LEAVE DIALOG END ===');
-  }
-}
-
+  }}
 extension StringExtension on String {
   String toTitleCase() {
     return split(' ').map((word) {
