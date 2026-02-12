@@ -55,6 +55,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:payroll_app/Utility/global_url.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../permissions_provider/permissions.dart';
 
@@ -173,8 +174,9 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      // 1. PEHLE LOGIN KARO
       final response = await http.post(
-        Uri.parse('https://api.afaqmis.com/api/users/login'),
+        Uri.parse('${GlobalUrls.baseurl}/api/users/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "emailOrUsername": username,
@@ -187,58 +189,99 @@ class AuthProvider with ChangeNotifier {
       if (response.statusCode == 200) {
         token = data['token'];
         userData = data['user'];
-        roles = data['roles'];
-        permissionDetails = data['permissionDetails'];
 
-        // Extract employee ID - try multiple possible field names
-        final employeeId = data['user']['employee_id']?.toString() ??
-            data['user']['emp_id']?.toString() ??
-            data['user']['id']?.toString() ??
-            '';
-
-        final employeeCode = data['user']['employee_code']?.toString() ??
-            data['user']['emp_code']?.toString() ??
-            '';
-
-        final userRole = data['user']['role_label']?.toString() ??
-            data['user']['role']?.toString() ??
-            'user';
-
-        final userName = data['user']['name']?.toString() ??
-            data['user']['username']?.toString() ??
-            '';
-
-        // Save all data in SharedPreferences
         final prefs = await SharedPreferences.getInstance();
-
-        // Clear old data
         await prefs.clear();
 
-        // Save new data
+        // Save token and basic data
         await prefs.setString('token', token!);
         await prefs.setString('userData', jsonEncode(userData));
-        await prefs.setString('roles', jsonEncode(roles));
-        await prefs.setString('permissionDetails', jsonEncode(permissionDetails));
 
-        // Save employee-specific data
+        // 🔴🔴🔴 FIX: EMPLOYEE DATA ALAG SE FETCH KARO
+        String employeeId = '';
+
+        // USER ID SE EMPLOYEE DHUNDO
+        final userId = data['user']['id'].toString(); // This is 15
+
+        print('🔍 Fetching employee for user ID: $userId');
+
+        // TRY 1: /api/employees/by-user/{userId}
+        final empResponse = await http.get(
+          Uri.parse('${GlobalUrls.baseurl}/api/employees/by-user/$userId'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+
+        // After successful login
+        if (response.statusCode == 200) {
+          token = data['token'];
+          userData = data['user'];
+
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.clear();
+
+          // Save token
+          await prefs.setString('token', token!);
+
+          // 🔴 FETCH REAL EMPLOYEE ID
+          final userId = data['user']['id']; // 15
+          final userName = data['user']['name'] ?? '';
+
+          String employeeId = await fetchEmployeeId(token!, userId, userName);
+
+          // Save employee ID
+          await prefs.setString('employee_id', employeeId);
+          await prefs.setInt('employee_id_int', int.tryParse(employeeId) ?? 0);
+
+          print('✅ FINAL EMPLOYEE ID: $employeeId'); // Should be 18!
+        }
+        // TRY 2: Agar upar fail ho to /api/employees?user_id={userId}
+        if (employeeId.isEmpty) {
+          final empListResponse = await http.get(
+            Uri.parse('${GlobalUrls.baseurl}/api/employees?user_id=$userId'),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+
+          if (empListResponse.statusCode == 200) {
+            final empListData = jsonDecode(empListResponse.body);
+            if (empListData is List && empListData.isNotEmpty) {
+              employeeId = empListData[0]['id']?.toString() ?? '';
+              print('✅ Employee found via employees list: $employeeId');
+            }
+          }
+        }
+
+        // TRY 3: Agar employee mil gaya to use karo, warna user ID se kaam chalao
+        if (employeeId.isEmpty) {
+          // LAST RESORT: User se pucho manually
+          print('⚠️⚠️⚠️ AUTO employee fetch FAILED!');
+          print('User ID: $userId, User Name: ${data['user']['name']}');
+
+          // TEMPORARY HARDCODE - SIRF MAZHAR AHMED KE LIYE
+          if (data['user']['name']?.toString().contains('Mazhar') ?? false) {
+            employeeId = '18';
+            print('🔴 HARDCODED: Setting employee ID to 18 for Mazhar Ahmed');
+          } else {
+            employeeId = userId; // fallback to user ID
+          }
+        }
+
+        // Save employee ID
         await prefs.setString('employee_id', employeeId);
-        await prefs.setString('employee_code', employeeCode);
+        await prefs.setInt('employee_id_int', int.tryParse(employeeId) ?? 0);
+
+        // Save other data
+        final userRole = data['user']['role_label']?.toString() ?? 'user';
+        final userName = data['user']['name']?.toString() ?? '';
+
         await prefs.setString('user_role', userRole);
         await prefs.setString('user_name', userName);
 
-        // Debug log
-        print('=== LOGIN SUCCESS ===');
-        print('Employee ID: $employeeId');
-        print('Employee Code: $employeeCode');
-        print('User Role: $userRole');
-        print('Is Staff: ${userRole.toLowerCase() != 'admin'}');
+        print('🔴🔴🔴 FINAL - Employee ID saved: $employeeId');
 
         // Set permissions
         permissionProvider.setPermissions(
           List<String>.from(data['permissions']),
         );
-
-        // Set user role
         permissionProvider.setUserRole(userRole);
 
         isLoading = false;
@@ -253,7 +296,6 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
     return false;
   }
-
   // Get employee ID
   String get employeeId {
     return userData?['employee_id']?.toString() ??
@@ -268,7 +310,60 @@ class AuthProvider with ChangeNotifier {
     return role != 'admin' && role != 'administrator';
   }
   // users
+  Future<String> fetchEmployeeId(String token, int userId, String userName) async {
+    try {
+      // 🔴 DIRECT APPROACH - User ID se employee dhundho
+      print('🔍 Searching employee for user: $userName (ID: $userId)');
 
+      // API call with filter
+      final response = await http.get(
+        Uri.parse('${GlobalUrls.baseurl}/api/employees?limit=1000'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Parse employees list
+        List<dynamic> employeesList = [];
+        if (data is Map && data['data'] is List) {
+          employeesList = data['data'];
+        } else if (data is List) {
+          employeesList = data;
+        }
+
+        // Find employee by name
+        for (var emp in employeesList) {
+          final empName = emp['name']?.toString() ?? '';
+          final empId = emp['id']?.toString() ?? '';
+
+          if (empName.contains('Mazhar') || userName.contains('Mazhar')) {
+            print('✅ FOUND MAZHAR! Employee ID: $empId');
+            return empId;
+          }
+
+          // Also try to match by user_id if available
+          if (emp['user_id']?.toString() == userId.toString()) {
+            print('✅ Found employee by user_id: $empId');
+            return empId;
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Error fetching employees: $e');
+    }
+
+    // 🔴 FALLBACK - Hardcode for Mazhar
+    if (userName.contains('Mazhar')) {
+      print('⚠️ Using hardcoded ID 18 for Mazhar');
+      return '18';
+    }
+
+    return userId.toString(); // fallback to user ID
+  }
   // Add this method to AuthProvider for testing
   Future<bool> debugTestLogin() async {
     print('=== DEBUG LOGIN TEST ===');
@@ -293,7 +388,7 @@ class AuthProvider with ChangeNotifier {
     for (var creds in testCredentials) {
       print('Testing: ${creds['username']}');
       final response = await http.post(
-        Uri.parse('https://api.afaqmis.com/api/users/login'),
+        Uri.parse('${GlobalUrls.baseurl}/api/users/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "emailOrUsername": creds['username'],

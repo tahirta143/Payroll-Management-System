@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../Utility/global_url.dart';
 import '../../model/absents_model/absents_model.dart';
 
 class AbsentProvider with ChangeNotifier {
@@ -38,7 +39,7 @@ class AbsentProvider with ChangeNotifier {
     try {
       if (_authToken == null || _authToken!.isEmpty) return {};
 
-      final url = Uri.parse('https://api.afaqmis.com/api/employees');
+      final url = Uri.parse('${GlobalUrls.baseurl}/api/employees');
 
       final response = await http.get(
         url,
@@ -97,7 +98,7 @@ class AbsentProvider with ChangeNotifier {
       _selectedDate = date;
       notifyListeners();
 
-      final url = Uri.parse('https://api.afaqmis.com/api/absents');
+      final url = Uri.parse('${GlobalUrls.baseurl}/api/absents');
 
       final response = await http.get(
         url,

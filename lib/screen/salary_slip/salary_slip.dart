@@ -4,17 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../provider/salary_slip_provider/salary_slip_provider.dart';
 
-// Helper function to check if user is admin (can be used anywhere)
-bool checkIfAdmin(String role) {
-  if (role.isEmpty) return false;
-
-  final lowerRole = role.toLowerCase();
-  return lowerRole.contains('admin') ||
-      lowerRole.contains('administrator') ||
-      lowerRole.contains('superadmin') ||
-      lowerRole.contains('super user');
-}
-
 class SalarySlipScreen extends StatefulWidget {
   const SalarySlipScreen({Key? key}) : super(key: key);
 
@@ -23,12 +12,7 @@ class SalarySlipScreen extends StatefulWidget {
 }
 
 class _SalarySlipScreenState extends State<SalarySlipScreen> {
-  bool _isAdmin = false;
-  int? _currentEmployeeId;
-  String? _currentUserName;
-  String? _userRole;
   bool _showDebugPanel = false;
-  List<Map<String, dynamic>> _validEmployees = [];
 
   @override
   void initState() {
@@ -37,71 +21,21 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
   }
 
   Future<void> _initialize() async {
-    await _loadUserInfo();
-    await _checkUserRoleDetails();
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await context.read<SalarySlipProvider>().initialize();
-    });
-  }
+      final provider = context.read<SalarySlipProvider>();
+      await provider.initialize();
 
-  Future<void> _loadUserInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Get all relevant keys
-    final userRole = prefs.getString('user_role') ?? 'employee';
-    final employeeIdString = prefs.getString('employee_id') ?? '0';
-    final userName = prefs.getString('user_name') ?? 'User';
-    final employeeName = prefs.getString('employee_name') ?? 'User';
-    final employeeCode = prefs.getString('employee_code') ?? '';
-
-    // Parse employee ID safely
-    int? employeeId;
-    try {
-      employeeId = int.tryParse(employeeIdString);
-      if (employeeId == null && employeeIdString.isNotEmpty) {
-        // Try to extract numbers from string
-        final match = RegExp(r'\d+').firstMatch(employeeIdString);
-        if (match != null) {
-          employeeId = int.tryParse(match.group(0)!);
-        }
+      // 🔴 FORCE LOAD EMPLOYEES FOR ADMIN
+      if (provider.isAdmin) {
+        await provider.loadEmployeesForAdmin();
       }
-    } catch (e) {
-      print('Error parsing employee ID: $e');
-      employeeId = null;
-    }
-
-    // Check for admin - more flexible check
-    final isAdmin = userRole.toLowerCase().contains('admin') ||
-        userRole.toLowerCase().contains('administrator');
-
-    setState(() {
-      _userRole = userRole;
-      _isAdmin = isAdmin;
-      _currentEmployeeId = employeeId;
-      _currentUserName = userName.isNotEmpty ? userName : employeeName;
     });
-  }
-
-  Future<void> _checkUserRoleDetails() async {
-    final prefs = await SharedPreferences.getInstance();
-    final allKeys = prefs.getKeys();
-
-    print('🔑 All SharedPreferences keys:');
-    for (var key in allKeys) {
-      if (key.contains('user') || key.contains('employee') || key.contains('role')) {
-        print('   $key: ${prefs.getString(key)}');
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenWidth < 600;
-    final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
-    final isLargeScreen = screenWidth >= 900;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
@@ -131,9 +65,22 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
               tooltip: 'Print',
             ),
             IconButton(
-              onPressed: () => context.read<SalarySlipProvider>().fetchSalarySlip(),
+              onPressed: () => _refreshData(context),
               icon: Icon(Icons.refresh, color: Colors.white, size: isSmallScreen ? 22 : 24),
               tooltip: 'Refresh',
+            ),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _showDebugPanel = !_showDebugPanel;
+                });
+              },
+              icon: Icon(
+                _showDebugPanel ? Icons.bug_report : Icons.bug_report_outlined,
+                color: Colors.white,
+                size: isSmallScreen ? 22 : 24,
+              ),
+              tooltip: 'Debug',
             ),
           ],
         ),
@@ -150,13 +97,10 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
           ),
           child: Consumer<SalarySlipProvider>(
             builder: (context, provider, child) {
-              // Filter and prepare valid employees
-              _validEmployees = _getValidEmployees(provider.employees, provider.selectedEmployeeId);
-
               return Column(
                 children: [
                   // Debug Panel
-                  if (_showDebugPanel) _buildDebugPanel(provider, screenWidth),
+                  if (_showDebugPanel) _buildDebugPanel(provider, screenWidth, isSmallScreen),
 
                   // Filters Section
                   _buildFilters(provider, screenWidth, isSmallScreen),
@@ -195,31 +139,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     );
   }
 
-  // Helper to get valid employees and validate selected ID
-  List<Map<String, dynamic>> _getValidEmployees(
-      List<Map<String, dynamic>> employees,
-      int? selectedEmployeeId
-      ) {
-    final validEmployees = employees.where((emp) {
-      final hasId = emp.containsKey('id') && emp['id'] != null;
-      final hasName = emp.containsKey('name') && emp['name'] != null;
-      return hasId && hasName;
-    }).toList();
-
-    // If selectedEmployeeId is not in valid employees, reset it
-    if (selectedEmployeeId != null &&
-        !validEmployees.any((emp) => _getEmployeeId(emp) == selectedEmployeeId)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.read<SalarySlipProvider>().setSelectedEmployee(null);
-      });
-    }
-
-    return validEmployees;
-  }
-
-  Widget _buildDebugPanel(SalarySlipProvider provider, double screenWidth) {
-    final isSmallScreen = screenWidth < 600;
-
+  Widget _buildDebugPanel(SalarySlipProvider provider, double screenWidth, bool isSmallScreen) {
     return Container(
       margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
       padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -248,22 +168,22 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Text('User Role: $_userRole', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
-          Text('Is Admin: $_isAdmin', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
-          Text('Employee ID: $_currentEmployeeId', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
-          Text('Valid Employees: ${_validEmployees.length}', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
-          Text('Selected ID: ${provider.selectedEmployeeId}', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
+          Text('Is Admin: ${provider.isAdmin}', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
+          Text('Current Employee ID: ${provider.currentEmployeeId}', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
+          Text('Selected Employee ID: ${provider.selectedEmployeeId}', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
+          Text('Total Employees: ${provider.employees.length}', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
           const SizedBox(height: 8),
           Row(
             children: [
               ElevatedButton(
                 onPressed: () async {
-                  // Set as admin for testing
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setString('user_role', 'admin');
-                  await prefs.setString('employee_id', '29');
-                  await _loadUserInfo();
-                  provider.initialize();
+                  await prefs.setInt('employee_id_int', 29);
+                  await provider.initialize();
+                  if (provider.isAdmin) {
+                    await provider.loadEmployeesForAdmin();
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(
@@ -278,12 +198,10 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
               SizedBox(width: isSmallScreen ? 6 : 8),
               ElevatedButton(
                 onPressed: () async {
-                  // Set as employee
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setString('user_role', 'employee');
-                  await prefs.setString('employee_id', '29');
-                  await _loadUserInfo();
-                  provider.initialize();
+                  await prefs.setInt('employee_id_int', 29);
+                  await provider.initialize();
                 },
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(
@@ -293,6 +211,18 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                 ),
                 child: Text('Set as Employee', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
               ),
+              SizedBox(width: isSmallScreen ? 6 : 8),
+              ElevatedButton(
+                onPressed: () => provider.debugPrintState(),
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 8 : 12,
+                    vertical: isSmallScreen ? 4 : 6,
+                  ),
+                  backgroundColor: Colors.grey,
+                ),
+                child: Text('Log State', style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
+              ),
             ],
           ),
         ],
@@ -300,6 +230,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     );
   }
 
+  // ============ FILTERS SECTION ============
   Widget _buildFilters(SalarySlipProvider provider, double screenWidth, bool isSmallScreen) {
     return Container(
       margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -353,13 +284,11 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                           child: Text(
                             provider.selectedMonth.isNotEmpty
                                 ? _formatMonth(provider.selectedMonth)
-                                : 'Select Month (YYYY-MM)',
+                                : 'Select Month',
                             style: TextStyle(
                               color: provider.selectedMonth.isNotEmpty ? Colors.black : Colors.grey,
                               fontSize: isSmallScreen ? 13 : 14,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
                           ),
                         ),
                         Icon(Icons.arrow_drop_down,
@@ -376,8 +305,8 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
 
           SizedBox(height: isSmallScreen ? 16 : 20),
 
-          // Admin Section - Employee Selection
-          if (_isAdmin && _validEmployees.isNotEmpty) ...[
+          // 🔴 ADMIN SECTION - FORCE SHOW DROPDOWN
+          if (provider.isAdmin) ...[
             Text(
               'Select Employee',
               style: TextStyle(
@@ -387,7 +316,15 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
               ),
             ),
             SizedBox(height: isSmallScreen ? 8 : 12),
-            _buildEmployeeDropdown(provider, screenWidth, isSmallScreen),
+
+            // Loading State
+            if (provider.isLoadingEmployees)
+              const Center(child: CircularProgressIndicator())
+
+            // Employee Dropdown
+            else
+              _buildEmployeeDropdown(provider, isSmallScreen),
+
             SizedBox(height: isSmallScreen ? 16 : 20),
           ],
 
@@ -398,13 +335,13 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: _isAdmin
+                colors: provider.isAdmin
                     ? [const Color(0xFF667EEA).withOpacity(0.1), const Color(0xFF764BA2).withOpacity(0.1)]
                     : [Colors.green.withOpacity(0.1), Colors.blue.withOpacity(0.1)],
               ),
               borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 16),
               border: Border.all(
-                color: _isAdmin
+                color: provider.isAdmin
                     ? const Color(0xFF667EEA).withOpacity(0.3)
                     : Colors.green.withOpacity(0.3),
               ),
@@ -418,14 +355,14 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: _isAdmin
+                      colors: provider.isAdmin
                           ? [const Color(0xFF667EEA), const Color(0xFF764BA2)]
                           : [Colors.green, Colors.blue],
                     ),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _isAdmin ? Icons.admin_panel_settings : Icons.person,
+                    provider.isAdmin ? Icons.admin_panel_settings : Icons.person,
                     color: Colors.white,
                     size: isSmallScreen ? 20 : 24,
                   ),
@@ -436,49 +373,26 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _isAdmin ? 'Administrator Mode' : 'Employee Mode',
+                        provider.isAdmin ? 'Administrator Mode' : 'Employee Mode',
                         style: TextStyle(
                           fontSize: isSmallScreen ? 14 : 16,
                           fontWeight: FontWeight.bold,
-                          color: _isAdmin ? const Color(0xFF667EEA) : Colors.green,
+                          color: provider.isAdmin ? const Color(0xFF667EEA) : Colors.green,
                         ),
                       ),
                       SizedBox(height: isSmallScreen ? 2 : 4),
                       Text(
-                        _isAdmin
+                        provider.isAdmin
                             ? 'You can view salary slips for any employee'
                             : 'Viewing your own salary slip only',
                         style: TextStyle(
                           fontSize: isSmallScreen ? 11 : 13,
                           color: Colors.grey,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-                if (_isAdmin && provider.selectedEmployeeId != null)
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 8 : 12,
-                      vertical: isSmallScreen ? 4 : 6,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                      ),
-                      borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
-                    ),
-                    child: Text(
-                      'ID: ${provider.selectedEmployeeId}',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isSmallScreen ? 10 : 12,
-                          fontWeight: FontWeight.bold
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -496,18 +410,9 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                     borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12)
                 ),
                 backgroundColor: const Color(0xFF667EEA),
-                elevation: 2,
-                shadowColor: const Color(0xFF667EEA).withOpacity(0.3),
               ),
               child: provider.isLoading
-                  ? SizedBox(
-                height: isSmallScreen ? 20 : 22,
-                width: isSmallScreen ? 20 : 22,
-                child: const CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
+                  ? const CircularProgressIndicator(color: Colors.white)
                   : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -520,7 +425,6 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                     'Get Salary Slip',
                     style: TextStyle(
                       fontSize: isSmallScreen ? 14 : 16,
-                      fontWeight: FontWeight.w500,
                       color: Colors.white,
                     ),
                   ),
@@ -533,8 +437,9 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     );
   }
 
-  Widget _buildEmployeeDropdown(SalarySlipProvider provider, double screenWidth, bool isSmallScreen) {
-    if (_validEmployees.isEmpty) {
+  // 🔴 FIXED: Employee Dropdown Builder
+  Widget _buildEmployeeDropdown(SalarySlipProvider provider, bool isSmallScreen) {
+    if (provider.employees.isEmpty) {
       return Container(
         padding: EdgeInsets.symmetric(
           vertical: isSmallScreen ? 12 : 14,
@@ -554,27 +459,27 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
             SizedBox(width: isSmallScreen ? 8 : 12),
             Expanded(
               child: Text(
-                'No employees found. Using current user.',
+                'No employees found. Click refresh to load.',
                 style: TextStyle(
                   color: Colors.grey,
                   fontSize: isSmallScreen ? 12 : 14,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
+            ),
+            TextButton(
+              onPressed: () => provider.loadEmployeesForAdmin(),
+              child: const Text('Refresh'),
             ),
           ],
         ),
       );
     }
 
-    // Ensure selected value exists in the list
-    final selectedValue = provider.selectedEmployeeId;
-    final isValidSelection = selectedValue == null ||
-        _validEmployees.any((emp) => _getEmployeeId(emp) == selectedValue);
+    // Check if selected employee exists
+    final isValidSelection = provider.selectedEmployeeId == null ||
+        provider.employees.any((emp) => emp.id == provider.selectedEmployeeId);
 
     if (!isValidSelection) {
-      // Reset invalid selection
       WidgetsBinding.instance.addPostFrameCallback((_) {
         provider.setSelectedEmployee(null);
       });
@@ -588,7 +493,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int?>(
-          value: isValidSelection ? selectedValue : null,
+          value: isValidSelection ? provider.selectedEmployeeId : null,
           isExpanded: true,
           elevation: 2,
           style: TextStyle(
@@ -612,7 +517,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
           hint: Padding(
             padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16),
             child: Text(
-                'Select Employee',
+                '-- Select Employee --',
                 style: TextStyle(
                   color: Colors.grey,
                   fontSize: isSmallScreen ? 13 : 14,
@@ -620,32 +525,21 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
             ),
           ),
           items: [
-            DropdownMenuItem(
+            const DropdownMenuItem<int?>(
               value: null,
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 12 : 16,
-                  vertical: isSmallScreen ? 6 : 8,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Text(
                   '-- Select Employee --',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontStyle: FontStyle.italic,
-                    fontSize: isSmallScreen ? 13 : 14,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
                 ),
               ),
             ),
-            ..._validEmployees.map((employee) {
-              final id = _getEmployeeId(employee);
-              final name = _getEmployeeName(employee);
-              final empId = _getEmployeeCode(employee);
-              final department = _getEmployeeDepartment(employee);
-              final isCurrentUser = id == _currentEmployeeId;
+            ...provider.employees.map((employee) {
+              final isCurrentUser = employee.id == provider.currentEmployeeId;
 
               return DropdownMenuItem<int?>(
-                value: id,
+                value: employee.id,
                 child: Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: isSmallScreen ? 12 : 16,
@@ -674,7 +568,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                         ),
                         child: Center(
                           child: Text(
-                            name.substring(0, 1),
+                            employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -689,7 +583,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              name,
+                              employee.name,
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: isCurrentUser ? Colors.blue : Colors.black87,
@@ -700,28 +594,28 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                             SizedBox(height: isSmallScreen ? 2 : 4),
                             Row(
                               children: [
-                                if (empId.isNotEmpty)
-                                  // Text(
-                                  //   'ID: $empId',
-                                  //   style: TextStyle(
-                                  //       fontSize: isSmallScreen ? 10 : 12,
-                                  //       color: Colors.grey
-                                  //   ),
-                                  // ),
-                                if (empId.isNotEmpty && department.isNotEmpty)
-                                  // Padding(
-                                  //   padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 2 : 4),
-                                  //   child: Text('•',
-                                  //       style: TextStyle(
-                                  //         color: Colors.grey,
-                                  //         fontSize: isSmallScreen ? 10 : 12,
-                                  //       )
-                                  //   ),
-                                  // ),
-                                if (department.isNotEmpty)
+                                // if (employee.empId.isNotEmpty)
+                                //   Text(
+                                //     'ID: ${employee.empId}',
+                                //     style: TextStyle(
+                                //         fontSize: isSmallScreen ? 10 : 12,
+                                //         color: Colors.grey
+                                //     ),
+                                //   ),
+                                // if (employee.empId.isNotEmpty && employee.departmentName.isNotEmpty)
+                                //   Padding(
+                                //     padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 2 : 4),
+                                //     child: Text('•',
+                                //         style: TextStyle(
+                                //           color: Colors.grey,
+                                //           fontSize: isSmallScreen ? 10 : 12,
+                                //         )
+                                //     ),
+                                //   ),
+                                if (employee.departmentName.isNotEmpty)
                                   Expanded(
                                     child: Text(
-                                      department,
+                                      employee.departmentName,
                                       style: TextStyle(
                                           fontSize: isSmallScreen ? 8 : 10,
                                           color: Colors.grey
@@ -760,7 +654,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
             }).toList(),
           ],
           onChanged: (value) {
-            print('👤 Selected employee: $value');
+            debugPrint('👤 Selected employee: $value');
             provider.setSelectedEmployee(value);
           },
         ),
@@ -768,71 +662,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     );
   }
 
-  // Helper methods to safely extract employee data
-  int _getEmployeeId(Map<String, dynamic> employee) {
-    try {
-      if (employee['id'] is int) {
-        return employee['id'] as int;
-      } else if (employee['id'] is String) {
-        return int.tryParse(employee['id'] as String) ?? 0;
-      } else if (employee.containsKey('employee_id')) {
-        final empId = employee['employee_id'];
-        if (empId is int) return empId;
-        if (empId is String) return int.tryParse(empId) ?? 0;
-      }
-    } catch (e) {
-      print('Error getting employee ID: $e');
-    }
-    return 0;
-  }
-
-  String _getEmployeeName(Map<String, dynamic> employee) {
-    try {
-      if (employee['name'] is String) {
-        return employee['name'] as String;
-      } else if (employee.containsKey('employee_name')) {
-        return employee['employee_name']?.toString() ?? 'Unknown';
-      } else if (employee.containsKey('full_name')) {
-        return employee['full_name']?.toString() ?? 'Unknown';
-      }
-    } catch (e) {
-      print('Error getting employee name: $e');
-    }
-    return 'Unknown Employee';
-  }
-
-  String _getEmployeeCode(Map<String, dynamic> employee) {
-    try {
-      if (employee['emp_id'] is String) {
-        return employee['emp_id'] as String;
-      } else if (employee['employee_code'] is String) {
-        return employee['employee_code'] as String;
-      } else if (employee['code'] is String) {
-        return employee['code'] as String;
-      } else if (employee.containsKey('id')) {
-        return 'EMP${_getEmployeeId(employee).toString().padLeft(3, '0')}';
-      }
-    } catch (e) {
-      print('Error getting employee code: $e');
-    }
-    return '';
-  }
-
-  String _getEmployeeDepartment(Map<String, dynamic> employee) {
-    try {
-      if (employee['department'] is String) {
-        return employee['department'] as String;
-      } else if (employee['department_name'] is String) {
-        return employee['department_name'] as String;
-      } else if (employee['dept'] is String) {
-        return employee['dept'] as String;
-      }
-    } catch (e) {
-      print('Error getting employee department: $e');
-    }
-    return '';
-  }
-
+  // ============ CONTENT SECTION ============
   Widget _buildContent(SalarySlipProvider provider, double screenWidth, bool isSmallScreen) {
     if (provider.isLoading) {
       return const Center(
@@ -928,7 +758,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                   fontSize: isSmallScreen ? 13 : 14,
                 ),
               ),
-            if (_isAdmin && provider.selectedEmployeeId != null)
+            if (provider.isAdmin && provider.selectedEmployeeId != null)
               Text(
                 'Employee ID: ${provider.selectedEmployeeId}',
                 style: TextStyle(
@@ -944,7 +774,19 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     return _buildSalarySlipDetails(provider.salarySlip!, screenWidth, isSmallScreen);
   }
 
-  // Show month picker (year and month only)
+  // ============ UTILITY METHODS ============
+  Future<void> _refreshData(BuildContext context) async {
+    final provider = context.read<SalarySlipProvider>();
+
+    if (provider.isAdmin) {
+      await provider.loadEmployeesForAdmin();
+    }
+
+    if (provider.selectedEmployeeId != null || !provider.isAdmin) {
+      await provider.fetchSalarySlip();
+    }
+  }
+
   Future<void> _showMonthPicker(BuildContext context, SalarySlipProvider provider) async {
     final now = DateTime.now();
     DateTime initialDate;
@@ -1008,6 +850,23 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     return month;
   }
 
+  void _printSalarySlip() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Print Salary Slip'),
+        content: const Text('Salary slip printing functionality will be implemented soon.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============ SALARY SLIP DETAILS WIDGET ============
   Widget _buildSalarySlipDetails(salarySlip, double screenWidth, bool isSmallScreen) {
     final useVerticalLayout = screenWidth < 700;
 
@@ -1516,22 +1375,6 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
               color: Colors.black87,
               fontSize: isSmallScreen ? 13 : 14,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _printSalarySlip() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Print Salary Slip'),
-        content: const Text('Salary slip printing functionality will be implemented soon.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
           ),
         ],
       ),

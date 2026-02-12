@@ -1689,88 +1689,88 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             // Leave ID Field - Temporary ID for display
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF667EEA).withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: const Color(0xFF667EEA).withOpacity(0.3),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF667EEA).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Iconsax.document_text,
-                                      color: Color(0xFF667EEA),
-                                      size: 20,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Text(
-                                              'Reference ID',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.orange.withOpacity(0.1),
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: const Text(
-                                                'Temporary',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.orange,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          tempDisplayLeaveId,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF667EEA),
-                                          ),
-                                        ),
-                                        Text(
-                                          'Server will assign final ID after submission',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
+                            // Container(
+                            //   padding: const EdgeInsets.all(16),
+                            //   decoration: BoxDecoration(
+                            //     color: const Color(0xFF667EEA).withOpacity(0.05),
+                            //     borderRadius: BorderRadius.circular(12),
+                            //     border: Border.all(
+                            //       color: const Color(0xFF667EEA).withOpacity(0.3),
+                            //     ),
+                            //   ),
+                            //   child: Row(
+                            //     children: [
+                                  // Container(
+                                  //   padding: const EdgeInsets.all(8),
+                                  //   decoration: BoxDecoration(
+                                  //     color: const Color(0xFF667EEA).withOpacity(0.1),
+                                  //     borderRadius: BorderRadius.circular(8),
+                                  //   ),
+                                  //   child: const Icon(
+                                  //     Iconsax.document_text,
+                                  //     color: Color(0xFF667EEA),
+                                  //     size: 20,
+                                  //   ),
+                                  // ),
+                                  // const SizedBox(width: 12),
+                                  // Expanded(
+                                  //   child: Column(
+                                  //     crossAxisAlignment: CrossAxisAlignment.start,
+                                  //     children: [
+                                  //       Row(
+                                  //         children: [
+                                  //           const Text(
+                                  //             'Reference ID',
+                                  //             style: TextStyle(
+                                  //               fontSize: 12,
+                                  //               color: Colors.grey,
+                                  //               fontWeight: FontWeight.w500,
+                                  //             ),
+                                  //           ),
+                                  //           const SizedBox(width: 8),
+                                  //           Container(
+                                  //             padding: const EdgeInsets.symmetric(
+                                  //               horizontal: 8,
+                                  //               vertical: 2,
+                                  //             ),
+                                  //             decoration: BoxDecoration(
+                                  //               color: Colors.orange.withOpacity(0.1),
+                                  //               borderRadius: BorderRadius.circular(12),
+                                  //             ),
+                                  //             child: const Text(
+                                  //               'Temporary',
+                                  //               style: TextStyle(
+                                  //                 fontSize: 10,
+                                  //                 color: Colors.orange,
+                                  //                 fontWeight: FontWeight.w600,
+                                  //               ),
+                                  //             ),
+                                  //           ),
+                                  //         ],
+                                  //       ),
+                                  //       const SizedBox(height: 4),
+                                  //       // Text(
+                                  //       //   tempDisplayLeaveId,
+                                  //       //   style: const TextStyle(
+                                  //       //     fontSize: 16,
+                                  //       //     fontWeight: FontWeight.w600,
+                                  //       //     color: Color(0xFF667EEA),
+                                  //       //   ),
+                                  //       // ),
+                                  //       // Text(
+                                  //       //   'Server will assign final ID after submission',
+                                  //       //   style: TextStyle(
+                                  //       //     fontSize: 10,
+                                  //       //     color: Colors.grey[600],
+                                  //       //   ),
+                                  //       // ),
+                                  //     ],
+                                  //   ),
+                                  // ),
+                                // ],
+                              // ),
+                            // ),
+                            // const SizedBox(height: 20),
 
                             // Employee Info - For non-admin, show their name
                             if (!provider.isAdmin)

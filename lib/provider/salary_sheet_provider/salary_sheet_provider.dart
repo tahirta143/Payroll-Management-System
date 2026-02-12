@@ -4,12 +4,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../Utility/global_url.dart';
 import '../../model/attendance_model/attendance_model.dart';
 import '../../model/salary_sheet/salary_sheet.dart' hide Department;
 
 class SalarySheetProvider extends ChangeNotifier {
   // API URLs - Using your actual API URL
-  static const String _baseUrl = 'https://api.afaqmis.com/api';
+  static const String _baseUrl = '${GlobalUrls.baseurl}/api';
   static String getDepartmentsUrl() => '$_baseUrl/departments';
   static String getSalarySheetUrl(String month, int departmentId) =>
       '$_baseUrl/monthly-salary-sheet?month=$month&department_id=$departmentId';

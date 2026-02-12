@@ -1,4 +1,5 @@
 // lib/models/attendance_models.dart
+
 class Employee {
   final int id;
   final String name;
@@ -41,15 +42,11 @@ class Employee {
 }
 
 class Settings {
-  final String maxLateTime;
-  final int halfDayDeductionPercent;
   final int fullDayDeductionPercent;
   final String overtimeStartAfter;
   final int overtimeRate;
 
   Settings({
-    required this.maxLateTime,
-    required this.halfDayDeductionPercent,
     required this.fullDayDeductionPercent,
     required this.overtimeStartAfter,
     required this.overtimeRate,
@@ -57,8 +54,6 @@ class Settings {
 
   factory Settings.fromJson(Map<String, dynamic> json) {
     return Settings(
-      maxLateTime: json['max_late_time'] ?? '09:15:00',
-      halfDayDeductionPercent: json['half_day_deduction_percent'] ?? 1,
       fullDayDeductionPercent: json['full_day_deduction_percent'] ?? 5,
       overtimeStartAfter: json['overtime_start_after'] ?? '18:15:00',
       overtimeRate: json['overtime_rate'] ?? 200,
@@ -94,9 +89,6 @@ class Salary {
 
 class SalarySummary {
   final int baseNetSalary;
-  final int halfDayCount;
-  final int halfDayDeductionPercent;
-  final int halfDayDeductionTotal;
   final int fullAbsentCount;
   final int fullDayDeductionPercent;
   final int fullDayDeductionTotal;
@@ -109,9 +101,6 @@ class SalarySummary {
 
   SalarySummary({
     required this.baseNetSalary,
-    required this.halfDayCount,
-    required this.halfDayDeductionPercent,
-    required this.halfDayDeductionTotal,
     required this.fullAbsentCount,
     required this.fullDayDeductionPercent,
     required this.fullDayDeductionTotal,
@@ -126,9 +115,6 @@ class SalarySummary {
   factory SalarySummary.fromJson(Map<String, dynamic> json) {
     return SalarySummary(
       baseNetSalary: json['base_net_salary'] ?? 0,
-      halfDayCount: json['half_day_count'] ?? 0,
-      halfDayDeductionPercent: json['half_day_deduction_percent'] ?? 0,
-      halfDayDeductionTotal: json['half_day_deduction_total'] ?? 0,
       fullAbsentCount: json['full_absent_count'] ?? 0,
       fullDayDeductionPercent: json['full_day_deduction_percent'] ?? 0,
       fullDayDeductionTotal: json['full_day_deduction_total'] ?? 0,
@@ -168,7 +154,7 @@ class Holiday {
 class AttendanceDay {
   final String date;
   final String weekday;
-  final String status;
+  final String status; // Only 'present', 'absent', 'holiday'
   final String? timeIn;
   final String? timeOut;
   final int? durationMinutes;
@@ -181,8 +167,6 @@ class AttendanceDay {
   final String? overtimeLabel;
   final int overtimePayableMinutes;
   final int overtimeAmount;
-  final bool isHalfDay;
-  final int halfDayDeductionAmount;
   final bool isFullAbsent;
   final int fullDayDeductionAmount;
   final dynamic leave;
@@ -205,8 +189,6 @@ class AttendanceDay {
     this.overtimeLabel,
     required this.overtimePayableMinutes,
     required this.overtimeAmount,
-    required this.isHalfDay,
-    required this.halfDayDeductionAmount,
     required this.isFullAbsent,
     required this.fullDayDeductionAmount,
     this.leave,
@@ -215,10 +197,16 @@ class AttendanceDay {
   });
 
   factory AttendanceDay.fromJson(Map<String, dynamic> json) {
+    // Handle legacy half_day status by converting to present
+    String status = json['status'] ?? '';
+    if (status.toLowerCase() == 'half_day' || status.toLowerCase() == 'half day') {
+      status = 'present';
+    }
+
     return AttendanceDay(
       date: json['date'] ?? '',
       weekday: json['weekday'] ?? '',
-      status: json['status'] ?? '',
+      status: status,
       timeIn: json['time_in'],
       timeOut: json['time_out'],
       durationMinutes: json['duration_minutes'],
@@ -231,8 +219,6 @@ class AttendanceDay {
       overtimeLabel: json['overtime_label'],
       overtimePayableMinutes: json['overtime_payable_minutes'] ?? 0,
       overtimeAmount: json['overtime_amount'] ?? 0,
-      isHalfDay: json['is_half_day'] ?? false,
-      halfDayDeductionAmount: json['half_day_deduction_amount'] ?? 0,
       isFullAbsent: json['is_full_absent'] ?? false,
       fullDayDeductionAmount: json['full_day_deduction_amount'] ?? 0,
       leave: json['leave'],
@@ -262,13 +248,26 @@ class MonthlyReport {
   });
 
   factory MonthlyReport.fromJson(Map<String, dynamic> json) {
+    // Clean the salary summary data to remove half-day fields
+    final Map<String, dynamic> cleanedSalarySummary =
+    Map<String, dynamic>.from(json['salary_summary'] ?? {});
+
+    // Remove half-day related fields if they exist
+    cleanedSalarySummary.remove('half_day_count');
+    cleanedSalarySummary.remove('half_day_deduction_percent');
+    cleanedSalarySummary.remove('half_day_deduction_total');
+
+    // Ensure these fields are set to 0 if they were removed
+    cleanedSalarySummary['half_day_count'] = 0;
+    cleanedSalarySummary['half_day_deduction_total'] = 0;
+
     return MonthlyReport(
       employee: Employee.fromJson(json['employee'] ?? {}),
       month: json['month'] ?? '',
       settings: Settings.fromJson(json['settings'] ?? {}),
       salary: Salary.fromJson(json['salary'] ?? {}),
       advances: json['advances'] ?? [],
-      salarySummary: SalarySummary.fromJson(json['salary_summary'] ?? {}),
+      salarySummary: SalarySummary.fromJson(cleanedSalarySummary),
       days: (json['days'] as List? ?? [])
           .map((day) => AttendanceDay.fromJson(day))
           .toList(),
@@ -293,32 +292,4 @@ class Department {
           'Unknown Department',
     );
   }
-}
-
-class User {
-  final int id;
-  final String name;
-  final String email;
-  final String role;
-  final int? employeeId;
-
-  User({
-    required this.id,
-    required this.name,
-    required this.email,
-    required this.role,
-    this.employeeId,
-  });
-
-  factory User.fromJson(Map<String, dynamic> json) {
-    return User(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      email: json['email'] ?? '',
-      role: json['role'] ?? 'employee',
-      employeeId: json['employee_id'],
-    );
-  }
-
-  bool get isAdmin => role.toLowerCase() == 'admin';
 }

@@ -13,28 +13,31 @@ class MonthlyAttendanceScreen extends StatefulWidget {
 }
 
 class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
-  final ScrollController _horizontalScroll = ScrollController();
-  final ScrollController _verticalScroll = ScrollController();
-
+  final ScrollController _scrollController = ScrollController();
+  final ScrollController _horizontalScrollController = ScrollController(); // Add this
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = Provider.of<MonthlyReportProvider>(context, listen: false);
 
-      // Debug: Print all SharedPreferences data
+      // First check what's in SharedPreferences
       provider.debugPrintSharedPreferences().then((_) {
-        // Initialize from auth first
+        // Then initialize from auth
         provider.initializeFromAuth().then((_) {
-          // FOR NON-ADMIN USERS - Load their own report
+          // Double-check for non-admin users
           if (!provider.isAdmin) {
-            print('🔵 NON-ADMIN USER: Loading own report...');
-            provider.loadReportForCurrentUser();
+            print('🔵 NON-ADMIN USER: Loading own report after init...');
+            // Small delay to ensure everything is set
+            Future.delayed(const Duration(milliseconds: 100), () {
+              provider.loadReportForCurrentUser();
+            });
           }
         });
       });
     });
   }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -76,6 +79,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
               icon: Icon(Icons.filter_alt, color: Colors.white, size: iconSize),
               tooltip: 'Filter',
             ),
+
             IconButton(
               onPressed: () {
                 final provider = Provider.of<MonthlyReportProvider>(context, listen: false);
@@ -188,16 +192,15 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Month Selection with responsive layout
+          // Month selection - show for everyone
           if (isSmallScreen)
             _buildMonthSelectionVertical(provider, padding, borderRadius, iconSize, fontSize)
           else
             _buildMonthSelectionHorizontal(provider, padding, borderRadius, iconSize, fontSize),
 
+          // 🔴 Only show admin filters for admin users
           if (isAdmin) ...[
             SizedBox(height: padding),
-
-            // Department Selection
             Row(
               children: [
                 Icon(Icons.business, size: iconSize, color: const Color(0xFF667EEA)),
@@ -215,10 +218,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
                 ),
               ],
             ),
-
             SizedBox(height: padding),
-
-            // Employee Selection
             Row(
               children: [
                 Icon(Icons.person, size: iconSize, color: const Color(0xFF667EEA)),
@@ -236,10 +236,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
                 ),
               ],
             ),
-
             SizedBox(height: padding * 1.5),
-
-            // Action Buttons
             Row(
               children: [
                 Expanded(
@@ -253,6 +250,37 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
             ),
           ],
 
+          // 🔴 Show current employee info for non-admin users
+          if (!isAdmin && provider.currentUserName != null) ...[
+            SizedBox(height: padding),
+            Container(
+              padding: EdgeInsets.all(padding),
+              decoration: BoxDecoration(
+                color: const Color(0xFF667EEA).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(borderRadius / 2),
+                border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.person, color: const Color(0xFF667EEA), size: iconSize * 0.8),
+                  SizedBox(width: padding / 2),
+                  Expanded(
+                    child: Text(
+                      'Viewing: ${provider.currentUserName}',
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF667EEA),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Error widget
           if (provider.error != null) ...[
             SizedBox(height: padding),
             _buildErrorWidget(provider.error!, padding, fontSizeSmall: fontSize),
@@ -262,6 +290,68 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     );
   }
 
+  Widget _buildMonthSelectionHorizontal(
+      MonthlyReportProvider provider,
+      double padding,
+      double borderRadius,
+      double iconSize,
+      double fontSize,
+      ) {
+    return Row(
+      children: [
+        Icon(Icons.calendar_today, size: iconSize, color: const Color(0xFF667EEA)),
+        SizedBox(width: padding),
+        Text(
+          'Month:',
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: fontSize,
+          ),
+        ),
+        SizedBox(width: padding),
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(borderRadius / 2),
+              color: Colors.grey[50],
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: provider.selectedMonth,
+                isExpanded: true,
+                padding: EdgeInsets.symmetric(horizontal: padding),
+                icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF667EEA)),
+                items: _getMonths().map((month) {
+                  return DropdownMenuItem<String>(
+                    value: month,
+                    child: Text(
+                      _formatMonth(month),
+                      style: TextStyle(fontSize: fontSize),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    provider.setSelectedMonth(value);
+                    // 🔴 Auto-reload for non-admin users
+                    if (!provider.isAdmin && provider.currentEmployeeId != null) {
+                      provider.loadReport(
+                        employeeId: provider.currentEmployeeId,
+                        month: value,
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+// Same for vertical version
   Widget _buildMonthSelectionVertical(
       MonthlyReportProvider provider,
       double padding,
@@ -311,6 +401,13 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
               onChanged: (value) {
                 if (value != null) {
                   provider.setSelectedMonth(value);
+                  // 🔴 Auto-reload for non-admin users
+                  if (!provider.isAdmin && provider.currentEmployeeId != null) {
+                    provider.loadReport(
+                      employeeId: provider.currentEmployeeId,
+                      month: value,
+                    );
+                  }
                 }
               },
             ),
@@ -319,61 +416,6 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       ],
     );
   }
-
-  Widget _buildMonthSelectionHorizontal(
-      MonthlyReportProvider provider,
-      double padding,
-      double borderRadius,
-      double iconSize,
-      double fontSize,
-      ) {
-    return Row(
-      children: [
-        Icon(Icons.calendar_today, size: iconSize, color: const Color(0xFF667EEA)),
-        SizedBox(width: padding),
-        Text(
-          'Month:',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: fontSize,
-          ),
-        ),
-        SizedBox(width: padding),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-              borderRadius: BorderRadius.circular(borderRadius / 2),
-              color: Colors.grey[50],
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: provider.selectedMonth,
-                isExpanded: true,
-                padding: EdgeInsets.symmetric(horizontal: padding),
-                icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF667EEA)),
-                items: _getMonths().map((month) {
-                  return DropdownMenuItem<String>(
-                    value: month,
-                    child: Text(
-                      _formatMonth(month),
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    provider.setSelectedMonth(value);
-                  }
-                },
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildDepartmentDropdown(
       MonthlyReportProvider provider,
       double padding,
@@ -436,11 +478,10 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       double borderRadius,
       double fontSize,
       ) {
-
-    // Create a Set to track unique employee IDs
+    // 🔴 FIX: Create unique employee list
     final uniqueEmployees = <int, Employee>{};
     for (var emp in provider.employees) {
-      uniqueEmployees[emp.id] = emp; // This automatically keeps only unique IDs
+      uniqueEmployees[emp.id] = emp;
     }
     final uniqueEmployeeList = uniqueEmployees.values.toList();
 
@@ -466,10 +507,18 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
             ),
           ),
           items: [
-            const DropdownMenuItem<int?>(
+            // Add "Select Employee" item
+            DropdownMenuItem<int?>(
               value: null,
-              child: Text('Select Employee'),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
+                child: Text(
+                  'Select Employee',
+                  style: TextStyle(color: Colors.grey, fontSize: fontSize),
+                ),
+              ),
             ),
+            // 🔴 FIXED: Use uniqueEmployeeList instead of provider.employees
             ...uniqueEmployeeList.map((emp) {
               return DropdownMenuItem<int?>(
                 value: emp.id,
@@ -479,12 +528,13 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
                     '${emp.name} (${emp.empId})',
                     style: TextStyle(fontSize: fontSize),
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               );
             }).toList(),
           ],
-          onChanged: provider.isLoading
+          onChanged: provider.isLoading || !provider.isAdmin // 🔴 Also disable for non-admin
               ? null
               : (value) => provider.setSelectedEmployeeId(value),
         ),
@@ -676,6 +726,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
   }
 
   // ==================== ATTENDANCE TABLE ====================
+  // ==================== ATTENDANCE TABLE ====================
   Widget _buildAttendanceTable(
       MonthlyReportProvider provider,
       double screenWidth,
@@ -692,7 +743,6 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     final days = report.days.where((day) =>
     day.status == 'present' ||
         day.status == 'absent' ||
-        day.isHalfDay ||
         day.status == 'holiday'
     ).toList();
 
@@ -719,200 +769,132 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       );
     }
 
-    // Define column widths based on screen size
-    final List<double> columnWidths = _getColumnWidths(
-      screenWidth,
-      isSmallScreen,
-      isMediumScreen,
-      isLargeScreen,
-    );
+    // Column widths
+    final List<double> columnWidths = [
+      20,   // #
+      55,   // Date
+      90,  // Day & Status
+      50,   // In
+      50,   // Out
+      70,   // Duration
+      50,   // Late
+      50,   // Early
+      50,   // OT
+      60,  // Status
+    ];
 
     // Calculate total table width
     final totalTableWidth = columnWidths.reduce((a, b) => a + b) + (padding * (columnWidths.length - 1));
-    final availableWidth = screenWidth - (padding * 4); // Account for margins
-    final tableWidth = totalTableWidth > availableWidth ? totalTableWidth : availableWidth;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(borderRadius / 2),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius / 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Table Header - Fixed
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 1.2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF667EEA),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(borderRadius / 2),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(borderRadius / 2),
+            child: Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: true,
               child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                controller: _horizontalScroll,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Row(
-                    children: _buildTableHeader(
-                      columnWidths,
-                      isSmallScreen,
-                      fontSizeSmall,
-                      fontSizeMedium,
-                      padding,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Table Rows
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                ),
+                controller: _scrollController,
+                scrollDirection: Axis.vertical,
                 child: Scrollbar(
-                  controller: _verticalScroll,
+                  controller: _horizontalScrollController,
                   thumbVisibility: true,
                   child: SingleChildScrollView(
-                    controller: _verticalScroll,
-                    scrollDirection: Axis.vertical,
-                    child: Scrollbar(
-                      controller: _horizontalScroll,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        controller: _horizontalScroll,
-                        scrollDirection: Axis.horizontal,
-                        physics: const ClampingScrollPhysics(),
-                        child: SizedBox(
-                          width: tableWidth,
-                          child: Column(
-                            children: List.generate(days.length, (index) {
-                              final day = days[index];
-                              return Container(
-                                width: double.infinity,
-                                color: index.isEven ? Colors.white : Colors.grey.shade50,
-                                padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 1.5),
-                                child: Row(
-                                  children: _buildTableRow(
-                                    index + 1,
-                                    day,
-                                    columnWidths,
-                                    isSmallScreen,
-                                    fontSizeSmall,
-                                    fontSizeMedium,
-                                    padding,
+                    controller: _horizontalScrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: totalTableWidth,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Table Header
+                          Container(
+                            width: totalTableWidth,
+                            padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 1.2),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF667EEA),
+                            ),
+                            child: Row(
+                              children: _buildTableHeader(
+                                columnWidths,
+                                isSmallScreen,
+                                fontSizeSmall,
+                                fontSizeMedium,
+                                padding,
+                              ),
+                            ),
+                          ),
+
+                          // Table Rows
+                          ...List.generate(days.length, (index) {
+                            final day = days[index];
+                            return Container(
+                              width: totalTableWidth,
+                              color: index.isEven ? Colors.white : Colors.grey.shade50,
+                              padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 1.5),
+                              child: Row(
+                                children: _buildTableRow(
+                                  index + 1,
+                                  day,
+                                  columnWidths,
+                                  isSmallScreen,
+                                  fontSizeSmall,
+                                  fontSizeMedium,
+                                  padding,
+                                ),
+                              ),
+                            );
+                          }),
+
+                          // Footer
+                          Container(
+                            width: totalTableWidth,
+                            padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 1.2),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              border: Border(
+                                top: BorderSide(color: Colors.grey.shade200),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF667EEA).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(padding),
+                                  ),
+                                  child: Text(
+                                    'Total Days: ${days.length}',
+                                    style: TextStyle(
+                                      fontSize: fontSizeSmall,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF667EEA),
+                                    ),
                                   ),
                                 ),
-                              );
-                            }),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-
-            // Total days count footer
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 1.2),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                border: Border(
-                  top: BorderSide(color: Colors.grey.shade200),
-                ),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                controller: _horizontalScroll,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF667EEA).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(padding),
-                        ),
-                        child: Text(
-                          'Total Days: ${days.length}',
-                          style: TextStyle(
-                            fontSize: fontSizeSmall,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF667EEA),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
-  }
-
-  List<double> _getColumnWidths(
-      double screenWidth,
-      bool isSmallScreen,
-      bool isMediumScreen,
-      bool isLargeScreen,
-      ) {
-    final double baseWidth = screenWidth * 0.9;
-
-    if (isSmallScreen) {
-      return [
-        baseWidth * 0.05,  // # (5%)
-        baseWidth * 0.10,  // Date (10%)
-        baseWidth * 0.07,  // Day (7%)
-        baseWidth * 0.09,  // In (9%)
-        baseWidth * 0.09,  // Out (9%)
-        baseWidth * 0.10,  // Duration (10%)
-        baseWidth * 0.08,  // Late (8%)
-        baseWidth * 0.08,  // Early (8%)
-        baseWidth * 0.08,  // OT (8%)
-        baseWidth * 0.12,  // Status (12%)
-      ];
-    } else if (isMediumScreen) {
-      return [
-        baseWidth * 0.04,  // #
-        baseWidth * 0.10,  // Date
-        baseWidth * 0.07,  // Day
-        baseWidth * 0.10,  // In
-        baseWidth * 0.10,  // Out
-        baseWidth * 0.11,  // Duration
-        baseWidth * 0.08,  // Late
-        baseWidth * 0.08,  // Early
-        baseWidth * 0.08,  // OT
-        baseWidth * 0.12,  // Status
-      ];
-    } else {
-      return [
-        baseWidth * 0.03,  // #
-        baseWidth * 0.10,  // Date
-        baseWidth * 0.07,  // Day
-        baseWidth * 0.11,  // In
-        baseWidth * 0.11,  // Out
-        baseWidth * 0.12,  // Duration
-        baseWidth * 0.08,  // Late
-        baseWidth * 0.08,  // Early
-        baseWidth * 0.08,  // OT
-        baseWidth * 0.12,  // Status
-      ];
-    }
   }
 
   List<Widget> _buildTableHeader(
@@ -933,11 +915,11 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       SizedBox(width: padding / 2),
       SizedBox(width: columnWidths[1], child: Text('Date', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
-      SizedBox(width: columnWidths[2], child: Text('Day', style: headerTextStyle, textAlign: TextAlign.center)),
+      SizedBox(width: columnWidths[2], child: Text('Days', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
-      SizedBox(width: columnWidths[3], child: Text('In', style: headerTextStyle, textAlign: TextAlign.center)),
+      SizedBox(width: columnWidths[3], child: Text('Time In', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
-      SizedBox(width: columnWidths[4], child: Text('Out', style: headerTextStyle, textAlign: TextAlign.center)),
+      SizedBox(width: columnWidths[4], child: Text('Time Out', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
       SizedBox(width: columnWidths[5], child: Text('Duration', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
@@ -988,13 +970,39 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       ),
       SizedBox(width: padding / 2),
 
-      // Day
+      // Day & Status combined
       SizedBox(
         width: columnWidths[2],
-        child: Text(
-          day.weekday.substring(0, 3),
-          style: rowTextStyle,
-          textAlign: TextAlign.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _formatWeekday(day.weekday),
+              style: rowTextStyle,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
+              decoration: BoxDecoration(
+                color: _getStatusBackgroundColor(day),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: _getStatusBorderColor(day).withOpacity(0.3),
+                  width: 0.5,
+                ),
+              ),
+              child: Text(
+                _getStatusText(day),
+                style: TextStyle(
+                  color: _getStatusTextColor(day),
+                  fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ),
       ),
       SizedBox(width: padding / 2),
@@ -1037,10 +1045,10 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
         width: columnWidths[6],
         child: day.lateMinutes > 0
             ? Container(
-          padding: EdgeInsets.symmetric(horizontal: padding / 3, vertical: padding / 6),
+          padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
           decoration: BoxDecoration(
             color: Colors.red.shade50,
-            borderRadius: BorderRadius.circular(padding / 2),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(color: Colors.red.shade200, width: 0.5),
           ),
           child: Text(
@@ -1062,10 +1070,10 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
         width: columnWidths[7],
         child: day.earlyMinutes > 0
             ? Container(
-          padding: EdgeInsets.symmetric(horizontal: padding / 3, vertical: padding / 6),
+          padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
           decoration: BoxDecoration(
             color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(padding / 2),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(color: Colors.blue.shade200, width: 0.5),
           ),
           child: Text(
@@ -1087,10 +1095,10 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
         width: columnWidths[8],
         child: day.overtimeMinutes > 0
             ? Container(
-          padding: EdgeInsets.symmetric(horizontal: padding / 3, vertical: padding / 6),
+          padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
           decoration: BoxDecoration(
             color: Colors.green.shade50,
-            borderRadius: BorderRadius.circular(padding / 2),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(color: Colors.green.shade200, width: 0.5),
           ),
           child: Text(
@@ -1107,21 +1115,21 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       ),
       SizedBox(width: padding / 2),
 
-      // Status with proper colors
+      // Status (removed from here since it's now combined with day)
       SizedBox(
         width: columnWidths[9],
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: padding / 3, vertical: padding / 6),
+          padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
           decoration: BoxDecoration(
             color: _getStatusBackgroundColor(day),
-            borderRadius: BorderRadius.circular(padding / 2),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: _getStatusBorderColor(day).withOpacity(0.3),
               width: 0.5,
             ),
           ),
           child: Text(
-            _getStatusText(day),
+            _getDetailedStatusText(day),
             style: TextStyle(
               color: _getStatusTextColor(day),
               fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
@@ -1139,10 +1147,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     if (day.status == 'holiday') {
       return Colors.purple.shade50;
     }
-    if (day.isHalfDay) {
-      return Colors.orange.shade50;
-    }
-    if (day.isFullAbsent) {
+    if (day.status == 'absent'||day.isFullAbsent) {
       return Colors.red.shade50;
     }
     if (day.status == 'present') {
@@ -1155,10 +1160,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     if (day.status == 'holiday') {
       return Colors.purple;
     }
-    if (day.isHalfDay) {
-      return Colors.orange;
-    }
-    if (day.isFullAbsent) {
+    if (day.status == 'absent'||day.isFullAbsent) {
       return Colors.red;
     }
     if (day.status == 'present') {
@@ -1171,10 +1173,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     if (day.status == 'holiday') {
       return Colors.purple.shade700;
     }
-    if (day.isHalfDay) {
-      return Colors.orange.shade700;
-    }
-    if (day.isFullAbsent) {
+    if (day.status == 'absent') {
       return Colors.red.shade700;
     }
     if (day.status == 'present') {
@@ -1187,14 +1186,24 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     if (day.status == 'holiday' && day.holiday != null) {
       return 'Holiday';
     }
-    if (day.isHalfDay) {
-      return 'Half Day';
-    }
-    if (day.isFullAbsent) {
+    if (day.status == 'absent'||day.isFullAbsent) {
       return 'Absent';
     }
     if (day.status == 'present') {
       return 'Present';
+    }
+    return day.status.toUpperCase();
+  }
+
+  String _getDetailedStatusText(AttendanceDay day) {
+    if (day.status == 'holiday' && day.holiday != null) {
+      return 'HOLIDAY';
+    }
+    if (day.status == 'absent') {
+      return 'ABSENT';
+    }
+    if (day.status == 'present') {
+      return 'PRESENT';
     }
     return day.status.toUpperCase();
   }
@@ -1236,10 +1245,17 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     }
   }
 
+  String _formatWeekday(String weekday) {
+    if (weekday.length > 3) {
+      return weekday.substring(0, 3);
+    }
+    return weekday;
+  }
+
   @override
   void dispose() {
-    _horizontalScroll.dispose();
-    _verticalScroll.dispose();
+    _scrollController.dispose();
+    _horizontalScrollController.dispose(); // Add this
     super.dispose();
   }
 }
