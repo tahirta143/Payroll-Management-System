@@ -1352,7 +1352,6 @@
 //     notifyListeners();
 //   }
 // }
-
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -1375,7 +1374,6 @@ class LeaveProvider extends ChangeNotifier {
   List<String> _employees = ['All'];
   final List<String> _statusOptions = ['All', 'Pending', 'Approved', 'Rejected'];
 
-  // User role management
   bool _isAdmin = false;
   int? _currentUserId;
   int? _currentDepartmentId;
@@ -1383,10 +1381,9 @@ class LeaveProvider extends ChangeNotifier {
   String? _currentEmployeeName;
   String? _userRole;
 
-  // 🔴🔴🔴 ADD THIS - EMPLOYEE ID ALAG SE STORE KARO
-  int? _currentEmployeeId;  // YEH HOGA 18 (EMPLOYEE ID), 15 NAHI
+  // EMPLOYEE ID — yahi important hai (auth provider se save hoti hai)
+  int? _currentEmployeeId;
 
-  // New properties for employee dropdown and pay mode
   List<Map<String, dynamic>> _allEmployees = [];
   final List<String> _payModes = ['With Pay', 'Without Pay'];
   final List<String> _leaveTypes = [
@@ -1401,7 +1398,6 @@ class LeaveProvider extends ChangeNotifier {
     'urgent_work'
   ];
 
-  // Debug mode
   bool _debugMode = true;
   String? _lastCreatedLeaveId;
 
@@ -1423,185 +1419,251 @@ class LeaveProvider extends ChangeNotifier {
   String? get userRole => _userRole;
   String? get currentEmployeeName => _currentEmployeeName;
   String? get currentEmployeeCode => _currentEmployeeCode;
-
-  // 🔴🔴🔴 NEW GETTER FOR EMPLOYEE ID
   int? get currentEmployeeId => _currentEmployeeId;
-
-  // New getters
   List<Map<String, dynamic>> get allEmployees => _allEmployees;
   List<String> get payModes => _payModes;
   List<String> get leaveTypes => _leaveTypes;
   String? get lastCreatedLeaveId => _lastCreatedLeaveId;
 
-  // Add this method to LeaveProvider
   void setCurrentDepartmentId(int? deptId) {
     _currentDepartmentId = deptId;
     print('Updated current department ID to: $_currentDepartmentId');
     notifyListeners();
   }
 
-  // 🔴🔴🔴 FIXED: initializeUserData - EMPLOYEE ID BHI LOAD KARO
+  // ✅ FIX 1: initializeUserData — SharedPreferences se employee_id properly read karo
+  // ✅ FIXED initializeUserData — null/zero department_id handle karta hai
   Future<void> initializeUserData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       print('=== INITIALIZE USER DATA ===');
+      print('All prefs keys: ${prefs.getKeys()}');
 
-      // 🔴🔴🔴 STEP 1: PEHLE EMPLOYEE ID LOAD KARO (AuthProvider ne save kiya hai!)
-      _currentEmployeeId = prefs.getInt('employee_id_int');
-      print('📊 employee_id_int from prefs: $_currentEmployeeId');
-
-      if (_currentEmployeeId == null) {
-        final empIdStr = prefs.getString('employee_id');
-        _currentEmployeeId = empIdStr != null ? int.tryParse(empIdStr) : null;
-        print('📊 employee_id from prefs: $_currentEmployeeId');
-      }
-
-      // Get user data
-      final userDataString = prefs.getString('userData');
-      if (userDataString != null && userDataString.isNotEmpty) {
-        try {
-          final userData = jsonDecode(userDataString);
-          print('userData keys: ${userData.keys}');
-
-          // Extract user info
-          _currentUserId = userData['id'];
-          _currentEmployeeName = userData['name']?.toString() ?? '';
-          _currentEmployeeCode = userData['employee_code']?.toString() ?? '';
-          _userRole = userData['role_label']?.toString() ?? 'user';
-
-          // NORMALIZE THE ROLE
-          if (_userRole!.toLowerCase().contains('attendence') ||
-              _userRole!.toLowerCase().contains('attendance') ||
-              _userRole!.toLowerCase().contains('employee') ||
-              _userRole!.toLowerCase().contains('staff') ||
-              _userRole!.toLowerCase().contains('user')) {
-            _userRole = 'employee';
-            print('Normalized role to "$_userRole"');
-          }
-
-          // Extract department ID
-          if (userData['department'] != null) {
-            if (userData['department'] is Map) {
-              _currentDepartmentId = userData['department']['id'];
-            } else {
-              _currentDepartmentId = userData['department_id'];
-            }
-          }
-          if (_currentDepartmentId == null && userData['department_id'] != null) {
-            _currentDepartmentId = userData['department_id'];
-          }
-
-          // Determine if admin
-          final roleLower = _userRole!.toLowerCase().trim();
-          _isAdmin = roleLower.contains('admin') ||
-              roleLower.contains('super') ||
-              roleLower.contains('manager');
-
-          // Save for future use
-          await prefs.setString('user_role', _userRole!);
-          if (_currentUserId != null) {
-            await prefs.setInt('user_id', _currentUserId!);
-          }
-          if (_currentEmployeeName != null) {
-            await prefs.setString('employee_name', _currentEmployeeName!);
-          }
-          if (_currentDepartmentId != null) {
-            await prefs.setInt('department_id', _currentDepartmentId!);
-          }
-          if (_currentEmployeeCode != null) {
-            await prefs.setString('employee_code', _currentEmployeeCode!);
-          }
-
-        } catch (e) {
-          print('Error parsing userData: $e');
+      // ── STEP 1: Employee ID ───────────────────────────────────────────────
+      final empIdInt = prefs.getInt('employee_id_int');
+      if (empIdInt != null && empIdInt > 0) {
+        _currentEmployeeId = empIdInt;
+        print('✅ employee_id_int: $_currentEmployeeId');
+      } else {
+        final empIdStr = prefs.getString('employee_id') ?? '';
+        final parsed = int.tryParse(empIdStr);
+        if (parsed != null && parsed > 0) {
+          _currentEmployeeId = parsed;
+          print('✅ employee_id (string): $_currentEmployeeId');
         }
       }
 
-      // If still not set, try from storage
-      if (_userRole == null) {
-        _userRole = prefs.getString('user_role') ?? 'employee';
-      }
-      if (_currentUserId == null) {
-        _currentUserId = prefs.getInt('user_id');
-      }
-      if (_currentEmployeeName == null) {
-        _currentEmployeeName = prefs.getString('employee_name');
-      }
-      if (_currentDepartmentId == null) {
-        _currentDepartmentId = prefs.getInt('department_id');
-      }
-      if (_currentEmployeeCode == null) {
-        _currentEmployeeCode = prefs.getString('employee_code');
+      // ── STEP 2: User basic info ──────────────────────────────────────────
+      _currentUserId       = prefs.getInt('user_id');
+      _currentEmployeeName = prefs.getString('employee_name') ??
+          prefs.getString('user_name');
+      _currentEmployeeCode = prefs.getString('employee_code');
+      _userRole            = prefs.getString('user_role') ?? 'employee';
+
+      print('  user_id       = $_currentUserId');
+      print('  employee_name = "$_currentEmployeeName"');
+      print('  user_role     = "$_userRole"');
+
+      // ── STEP 3: userData JSON se additional info ──────────────────────────
+      final userDataString = prefs.getString('userData');
+      if (userDataString != null && userDataString.isNotEmpty) {
+        try {
+          final ud = jsonDecode(userDataString);
+
+          // Employee name fallback
+          if (_currentEmployeeName == null || _currentEmployeeName!.isEmpty) {
+            _currentEmployeeName = ud['name']?.toString() ?? '';
+          }
+
+          // User ID fallback
+          if (_currentUserId == null) {
+            _currentUserId = ud['id'] as int?;
+          }
+
+          // Role from userData
+          final roleFromData = ud['role_label']?.toString() ?? '';
+          if (roleFromData.isNotEmpty) {
+            _userRole = roleFromData;
+          }
+
+          print('  userData parsed OK — name: "${ud['name']}", role: "${ud['role_label']}"');
+        } catch (e) {
+          print('  ⚠️ userData parse error: $e');
+        }
       }
 
-      // Re-check admin status
-      final roleLower = _userRole!.toLowerCase().trim();
+      // ── STEP 4: Role normalize ────────────────────────────────────────────
+      final roleLower = (_userRole ?? '').toLowerCase().trim();
+      if (roleLower.contains('attendence') ||
+          roleLower.contains('attendance') ||
+          roleLower.contains('employee') ||
+          roleLower.contains('staff') ||
+          roleLower.contains('user')) {
+        _userRole = 'employee';
+      }
+
       _isAdmin = roleLower.contains('admin') ||
           roleLower.contains('super') ||
           roleLower.contains('manager');
 
-      // 🔴🔴🔴 FALLBACK: Agar employee ID nahi mila to hardcode for Mazhar
-      if ((_currentEmployeeId == null || _currentEmployeeId == 0) &&
-          (_currentEmployeeName?.contains('Mazhar') ?? false)) {
-        _currentEmployeeId = 18;
-        print('🔴 HARDCODED: Setting employee ID to 18 for Mazhar Ahmed');
+      // ── STEP 5: Department ID ─────────────────────────────────────────────
+      final savedDeptId = prefs.getInt('department_id');
+      if (savedDeptId != null && savedDeptId > 0) {
+        _currentDepartmentId = savedDeptId;
+        print('✅ department_id from prefs: $_currentDepartmentId');
+      } else {
+        // Department ID nahi mila — API se fetch karo
+        print('⚠️ Department ID not in prefs, fetching from API...');
+        await _fetchAndSaveDepartmentId(prefs);
+      }
 
-        // Save for future
-        await prefs.setInt('employee_id_int', 18);
-        await prefs.setString('employee_id', '18');
+      // ── STEP 6: Employee ID fallback ─────────────────────────────────────
+      if (_currentEmployeeId == null || _currentEmployeeId == 0) {
+        if (_currentUserId != null && _currentUserId! > 0) {
+          _currentEmployeeId = _currentUserId;
+          print('⚠️ Employee ID fallback to user_id: $_currentEmployeeId');
+        }
       }
 
       print('\n✅ FINAL VALUES:');
-      print('  User Role: "$_userRole"');
-      print('  isAdmin: $_isAdmin');
-      print('  User ID (Auth): $_currentUserId');  // 15
-      print('  🔴 EMPLOYEE ID: $_currentEmployeeId'); // 18 - YAHI IMPORTANT HAI!
-      print('  Employee Name: "$_currentEmployeeName"');
-      print('  Department ID: $_currentDepartmentId');
+      print('  userRole       = "$_userRole"');
+      print('  isAdmin        = $_isAdmin');
+      print('  userId         = $_currentUserId');
+      print('  employeeId     = $_currentEmployeeId');
+      print('  employeeName   = "$_currentEmployeeName"');
+      print('  departmentId   = $_currentDepartmentId');
       print('==============================');
 
       notifyListeners();
     } catch (e) {
-      print('Error initializing user data: $e');
-      _isAdmin = false;
+      print('❌ Error initializing user data: $e');
+      _isAdmin  = false;
       _userRole = 'employee';
     }
   }
 
-  // 🔴🔴🔴 NEW: Force load employee ID directly from SharedPreferences
+  // Department ID API se fetch karke save karo
+  Future<void> _fetchAndSaveDepartmentId(SharedPreferences prefs) async {
+    try {
+      final token = prefs.getString('token') ?? '';
+      if (token.isEmpty) return;
+
+      final empIdInt = _currentEmployeeId ?? _currentUserId;
+      if (empIdInt == null) return;
+
+      // Employee detail se department_id lo
+      final response = await http.get(
+        Uri.parse('${GlobalUrls.baseurl}/api/employees/$empIdInt'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Response structure handle karo
+        final empData = data is Map && data['data'] != null
+            ? data['data']
+            : data is Map && data['employee'] != null
+            ? data['employee']
+            : data;
+
+        final deptId = int.tryParse(
+            empData['department_id']?.toString() ?? '0') ?? 0;
+
+        if (deptId > 0) {
+          _currentDepartmentId = deptId;
+          await prefs.setInt('department_id', deptId);
+          print('✅ Department ID fetched from API: $deptId');
+        }
+      } else {
+        // Fallback: employees list se try karo
+        final listResponse = await http.get(
+          Uri.parse('${GlobalUrls.baseurl}/api/employees?limit=1000'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        );
+
+        if (listResponse.statusCode == 200) {
+          final listData = jsonDecode(listResponse.body);
+          List<dynamic> empList = [];
+          if (listData is Map && listData['data'] is List) {
+            empList = listData['data'];
+          } else if (listData is Map && listData['employees'] is List) {
+            empList = listData['employees'];
+          } else if (listData is List) {
+            empList = listData;
+          }
+
+          for (var emp in empList) {
+            if (emp['id']?.toString() == empIdInt.toString() ||
+                emp['user_id']?.toString() == (_currentUserId?.toString() ?? '')) {
+              final deptId = int.tryParse(
+                  emp['department_id']?.toString() ?? '0') ?? 0;
+              if (deptId > 0) {
+                _currentDepartmentId = deptId;
+                await prefs.setInt('department_id', deptId);
+                print('✅ Department ID from list: $deptId');
+                return;
+              }
+            }
+          }
+        }
+
+        // Absolute fallback
+        _currentDepartmentId = 1;
+        print('⚠️ Department ID defaulting to 1');
+      }
+    } catch (e) {
+      print('❌ Error fetching department: $e');
+      _currentDepartmentId = 1; // default fallback
+    }
+  }
+
+  // ✅ FIX 2: forceLoadEmployeeId — SharedPreferences se employee_id properly load karo
   Future<void> forceLoadEmployeeId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       print('🔍 FORCE LOADING EMPLOYEE ID FROM STORAGE');
 
-      _currentEmployeeId = prefs.getInt('employee_id_int');
-      print('📊 employee_id_int: $_currentEmployeeId');
-
-      if (_currentEmployeeId == null) {
-        final empIdStr = prefs.getString('employee_id');
-        _currentEmployeeId = empIdStr != null ? int.tryParse(empIdStr) : null;
-        print('📊 employee_id: $_currentEmployeeId');
+      // Int try first
+      final empIdInt = prefs.getInt('employee_id_int');
+      if (empIdInt != null && empIdInt > 0) {
+        _currentEmployeeId = empIdInt;
+        print('✅ Force loaded employee_id_int: $_currentEmployeeId');
+        notifyListeners();
+        return;
       }
 
-      // Hardcode for Mazhar if still null
-      if ((_currentEmployeeId == null || _currentEmployeeId == 0) &&
-          (_currentEmployeeName?.contains('Mazhar') ?? false)) {
-        _currentEmployeeId = 18;
-        print('🔴 HARDCODED: Setting employee ID to 18');
-        await prefs.setInt('employee_id_int', 18);
-        await prefs.setString('employee_id', '18');
+      // String fallback
+      final empIdStr = prefs.getString('employee_id');
+      if (empIdStr != null && empIdStr.isNotEmpty) {
+        final parsed = int.tryParse(empIdStr);
+        if (parsed != null && parsed > 0) {
+          _currentEmployeeId = parsed;
+          print('✅ Force loaded employee_id (string): $_currentEmployeeId');
+          notifyListeners();
+          return;
+        }
       }
 
-      print('✅ Force loaded Employee ID: $_currentEmployeeId');
+      // Last resort: user_id use karo
+      if (_currentUserId != null && _currentUserId! > 0) {
+        _currentEmployeeId = _currentUserId;
+        print('⚠️ Force load: using user_id as employee_id: $_currentEmployeeId');
+      }
+
       notifyListeners();
     } catch (e) {
       print('❌ Error force loading employee ID: $e');
     }
   }
 
-  // Generate a unique leave_id
   String _generateLeaveId() {
     final now = DateTime.now();
     final random = Random();
@@ -1623,15 +1685,14 @@ class LeaveProvider extends ChangeNotifier {
         throw Exception('No authentication token found');
       }
 
-      // Initialize user data first
       await initializeUserData();
 
       String apiUrl = '${GlobalUrls.baseurl}/api/leaves';
 
       print('=== FETCH LEAVES ===');
       print('User is admin: $_isAdmin');
-      print('Current EMPLOYEE ID: $_currentEmployeeId'); // ✅ Should be 18
-      print('Current user ID: $_currentUserId'); // This is 15
+      print('Current EMPLOYEE ID: $_currentEmployeeId');
+      print('Current user ID: $_currentUserId');
 
       final response = await http.get(
         Uri.parse(apiUrl),
@@ -1661,11 +1722,10 @@ class LeaveProvider extends ChangeNotifier {
 
         _leaves = leaveList.map((json) => ApproveLeave.fromJson(json)).toList();
 
-        // ✅ FIXED: Filter by EMPLOYEE ID, not user ID
+        // Non-admin ke liye employee ID se filter karo
         if (!_isAdmin && _currentEmployeeId != null) {
           print('=== FILTERING LEAVES FOR EMPLOYEE ===');
           print('Filtering by EMPLOYEE ID: $_currentEmployeeId');
-
           final originalCount = _leaves.length;
           _leaves = _leaves.where((leave) => leave.employeeId == _currentEmployeeId).toList();
           print('Filtered from $originalCount to ${_leaves.length} leaves');
@@ -1673,7 +1733,6 @@ class LeaveProvider extends ChangeNotifier {
 
         _extractFilters();
         _applyFilters();
-
       } else {
         throw Exception('Failed to load leaves: ${response.statusCode}');
       }
@@ -1729,16 +1788,20 @@ class LeaveProvider extends ChangeNotifier {
     return {};
   }
 
+  // ✅ FIX 3: fetchAllEmployeesForDropdown — non-admin ke liye EMPLOYEE ID use karo, user ID nahi
   Future<void> fetchAllEmployeesForDropdown() async {
     try {
       print('=== FETCHING EMPLOYEES FOR DROPDOWN ===');
       _allEmployees.clear();
 
       if (!_isAdmin) {
-        // ✅ FIXED: Non-admin ke liye EMPLOYEE ID use karo
-        if (_currentEmployeeId != null && _currentEmployeeName != null) {
+        // ✅ CORRECT: _currentEmployeeId use karo (employee table ka ID)
+        // _currentUserId nahi (users table ka ID)
+        final empId = _currentEmployeeId ?? _currentUserId;
+
+        if (empId != null && _currentEmployeeName != null) {
           _allEmployees.add({
-            'id': _currentEmployeeId!, // ✅ EMPLOYEE ID (18), user ID nahi
+            'id': empId, // ✅ Employee ID
             'name': _currentEmployeeName!,
             'employee_code': _currentEmployeeCode ?? '',
             'department_id': _currentDepartmentId ?? 1,
@@ -1746,7 +1809,7 @@ class LeaveProvider extends ChangeNotifier {
             'designation': 'Employee',
             'image': null,
           });
-          print('✅ Added current employee: $_currentEmployeeName (ID: $_currentEmployeeId)');
+          print('✅ Non-admin employee added: $_currentEmployeeName (Employee ID: $empId)');
         }
         notifyListeners();
         return;
@@ -1792,7 +1855,7 @@ class LeaveProvider extends ChangeNotifier {
     }
   }
 
-  // 🔴🔴🔴 FIXED: submitLeaveForSelf - EMPLOYEE ID USE KARO
+  // ✅ FIX 4: submitLeaveForSelf — employee_id properly use karo
   Future<bool> submitLeaveForSelf({
     required String natureOfLeave,
     required DateTime fromDate,
@@ -1816,33 +1879,38 @@ class LeaveProvider extends ChangeNotifier {
         throw Exception('No authentication token found');
       }
 
-      // 🔴🔴🔴 STEP 1: FORCE LOAD EMPLOYEE ID
+      // STEP 1: Fresh load karo SharedPreferences se
       await forceLoadEmployeeId();
-      await initializeUserData(); // Double check
 
-      // 🔴🔴🔴 STEP 2: EMPLOYEE ID CHECK
+      // STEP 2: Agar abhi bhi null hai to initializeUserData try karo
       if (_currentEmployeeId == null || _currentEmployeeId == 0) {
-        print('❌ CRITICAL: Employee ID is NULL!');
+        await initializeUserData();
+      }
 
-        // Hardcode for Mazhar
-        if (_currentEmployeeName?.contains('Mazhar') ?? false) {
-          _currentEmployeeId = 18;
-          await prefs.setInt('employee_id_int', 18);
-          await prefs.setString('employee_id', '18');
-          print('🔴 HARDCODED: Set employee ID to 18');
+      // STEP 3: Final check — employee_id hona chahiye
+      if (_currentEmployeeId == null || _currentEmployeeId == 0) {
+        // Last fallback: user_id use karo
+        if (_currentUserId != null && _currentUserId! > 0) {
+          _currentEmployeeId = _currentUserId;
+          print('⚠️ Using user_id as employee_id: $_currentEmployeeId');
         } else {
-          throw Exception('Employee ID is required. Please contact administrator.');
+          throw Exception('Employee ID not found. Please logout and login again.');
         }
       }
 
-      // Department ID fallback
+      // STEP 4: Department ID fallback
       if (_currentDepartmentId == null || _currentDepartmentId == 0) {
-        _currentDepartmentId = 1;
-        await prefs.setInt('department_id', 1);
+        final savedDeptId = prefs.getInt('department_id');
+        if (savedDeptId != null && savedDeptId > 0) {
+          _currentDepartmentId = savedDeptId;
+        } else {
+          _currentDepartmentId = 1; // default
+        }
+        print('⚠️ Department ID fallback: $_currentDepartmentId');
       }
 
-      print('✅ Using EMPLOYEE ID: $_currentEmployeeId'); // Should be 18
-      print('✅ Using Department ID: $_currentDepartmentId');
+      print('✅ Submitting with EMPLOYEE ID: $_currentEmployeeId');
+      print('✅ Department ID: $_currentDepartmentId');
 
       final generatedLeaveId = _generateLeaveId();
 
@@ -1850,7 +1918,7 @@ class LeaveProvider extends ChangeNotifier {
         'leave_id': generatedLeaveId,
         'date': DateTime.now().toIso8601String().split('T')[0],
         'department_id': _currentDepartmentId,
-        'employee_id': _currentEmployeeId!, // ✅ YEH SAHI HAI - EMPLOYEE ID
+        'employee_id': _currentEmployeeId!, // ✅ Employee ID (employees table)
         'nature_of_leave': natureOfLeave,
         'from_date': fromDate.toIso8601String().split('T')[0],
         'to_date': toDate.toIso8601String().split('T')[0],
@@ -1858,7 +1926,7 @@ class LeaveProvider extends ChangeNotifier {
         'pay_mode': payMode.toLowerCase().replaceAll(' ', '_'),
         'reason': reason ?? '',
         'submitted_by_role': 'employee',
-        'submitted_by': _currentEmployeeId!, // ✅ EMPLOYEE ID
+        'submitted_by': _currentEmployeeId!, // ✅ Employee ID
         'status': 'pending',
       };
 
@@ -1881,7 +1949,6 @@ class LeaveProvider extends ChangeNotifier {
         final responseData = json.decode(response.body);
         _lastCreatedLeaveId = responseData['leave_id']?.toString() ?? generatedLeaveId;
         _successMessage = 'Leave request submitted successfully! Leave ID: $_lastCreatedLeaveId';
-
         await fetchLeaves();
         return true;
       } else {
@@ -1889,7 +1956,7 @@ class LeaveProvider extends ChangeNotifier {
           final errorData = json.decode(response.body);
           final errorMessage = errorData['message'] ?? errorData['error'] ?? 'Failed to submit leave';
           throw Exception(errorMessage);
-        } catch (e) {
+        } catch (_) {
           throw Exception('Failed to submit leave: ${response.statusCode}');
         }
       }
@@ -1904,7 +1971,6 @@ class LeaveProvider extends ChangeNotifier {
     }
   }
 
-  // Submit leave for admin
   Future<bool> submitLeave({
     required int selectedEmployeeId,
     required String natureOfLeave,
@@ -1992,9 +2058,8 @@ class LeaveProvider extends ChangeNotifier {
     }
   }
 
-  // Remove this method - we don't need it anymore
   Future<int?> _fetchEmployeeIdFromDatabase(String token) async {
-    return _currentEmployeeId; // Directly return stored employee ID
+    return _currentEmployeeId;
   }
 
   void _extractFilters() {
@@ -2043,7 +2108,7 @@ class LeaveProvider extends ChangeNotifier {
 
       bool matchesEmployee;
       if (!_isAdmin) {
-        matchesEmployee = leave.employeeId == _currentEmployeeId; // ✅ FIXED: EMPLOYEE ID se compare
+        matchesEmployee = leave.employeeId == _currentEmployeeId;
       } else {
         matchesEmployee = _selectedEmployeeFilter == 'All' ||
             leave.employeeName == _selectedEmployeeFilter;
@@ -2206,10 +2271,14 @@ class LeaveProvider extends ChangeNotifier {
     }
   }
 
-  int get pendingCount => _leaves.where((leave) => leave.status.toLowerCase().contains('pending')).length;
-  int get approvedCount => _leaves.where((leave) => leave.status.toLowerCase().contains('approved')).length;
-  int get rejectedCount => _leaves.where((leave) => leave.status.toLowerCase().contains('rejected')).length;
-  int get totalDays => _leaves.fold(0, (sum, leave) => sum + leave.days);
+  int get pendingCount =>
+      _leaves.where((leave) => leave.status.toLowerCase().contains('pending')).length;
+  int get approvedCount =>
+      _leaves.where((leave) => leave.status.toLowerCase().contains('approved')).length;
+  int get rejectedCount =>
+      _leaves.where((leave) => leave.status.toLowerCase().contains('rejected')).length;
+  int get totalDays =>
+      _leaves.fold(0, (sum, leave) => sum + leave.days);
 
   void clearFilters() {
     _searchQuery = '';

@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -1446,28 +1443,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
   // UPDATED: New Leave Dialog with proper handling for admin vs non-admin
   // UPDATED: New Leave Dialog with proper handling for admin vs non-admin
   // COMPLETE UPDATED: New Leave Dialog with proper handling for admin and non-admin
+  // COMPLETE FIXED: New Leave Dialog with proper department_id handling
   Future<void> _showNewLeaveDialog(BuildContext context, LeaveProvider provider) async {
     print('=== SHOW NEW LEAVE DIALOG START ===');
     print('User is admin: ${provider.isAdmin}');
     print('User Name: ${provider.currentEmployeeName}');
     print('Department ID: ${provider.currentDepartmentId}');
 
-    // Local fallback generator (only used for display)
-    // Generate a unique leave_id that matches API expected format
-    String _generateLeaveId() {
-      final now = DateTime.now();
-      final timestamp = now.millisecondsSinceEpoch.toString();
-      final random = (1000 + DateTime.now().microsecond % 9000).toString();
-      // Format: LV-12345678 (matching your example: LV-432980326)
-      return 'LV-${timestamp.substring(timestamp.length - 9)}';
-    }
-
-    // Generate a temporary display ID
-    final tempDisplayLeaveId = _generateLeaveId();
-
     // Variables for form
     int? selectedEmployeeId;
-    int? selectedDepartmentId;
+    int? selectedDepartmentId; // This will store the actual department_id integer
     String? selectedLeaveType;
     String? selectedPayMode;
     DateTime? fromDate;
@@ -1485,64 +1470,45 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     }
 
     // Function to filter employees by department - for admin only
-    void filterEmployeesByDepartment(int? departmentIndex) {
-      if (departmentIndex == null || provider.allEmployees.isEmpty) {
+    void filterEmployeesByDepartment(int? departmentId) {
+      if (departmentId == null || provider.allEmployees.isEmpty) {
         filteredEmployees = [];
         selectedEmployeeId = null;
         return;
       }
 
       print('=== FILTERING EMPLOYEES BY DEPARTMENT ===');
-      print('Department index selected: $departmentIndex');
+      print('Selected department ID: $departmentId');
       print('Total employees in provider: ${provider.allEmployees.length}');
 
-      // Get unique department names list (excluding 'All')
-      final departmentList = provider.departments
-          .where((dept) => dept != 'All')
-          .toSet()
-          .toList();
-
-      print('Available departments: $departmentList');
-
-      // Check if index is valid
-      if (departmentIndex - 1 < 0 || departmentIndex - 1 >= departmentList.length) {
-        print('Invalid department index');
-        filteredEmployees = [];
-        selectedEmployeeId = null;
-        return;
-      }
-
-      final selectedDeptName = departmentList[departmentIndex - 1];
-      print('Selected department name: "$selectedDeptName"');
-
-      // Filter employees by department name
+      // Filter employees by department ID
       filteredEmployees = provider.allEmployees.where((emp) {
-        final empDeptName = emp['department_name']?.toString() ?? '';
-        return empDeptName == selectedDeptName;
+        final empDeptId = emp['department_id'];
+        return empDeptId == departmentId;
       }).toList();
 
-      print('Filtered ${filteredEmployees.length} employees for department "$selectedDeptName"');
+      print('Filtered ${filteredEmployees.length} employees for department ID: $departmentId');
 
-      // If no matches by name, try to match by department ID
+      // If no matches by ID, try to find department name from leaves and filter by name
       if (filteredEmployees.isEmpty) {
-        print('No matches by department name, trying to get department ID mapping...');
+        print('No matches by department ID, trying to find department name...');
 
-        int? deptId;
+        String? departmentName;
         final leaves = provider.allLeaves;
         for (var leave in leaves) {
-          if (leave.departmentName == selectedDeptName) {
-            deptId = leave.departmentId;
+          if (leave.departmentId == departmentId) {
+            departmentName = leave.departmentName;
             break;
           }
         }
 
-        if (deptId != null) {
-          print('Found department ID for "$selectedDeptName": $deptId');
+        if (departmentName != null) {
+          print('Found department name: "$departmentName"');
           filteredEmployees = provider.allEmployees.where((emp) {
-            final empDeptId = emp['department_id'];
-            return empDeptId == deptId;
+            final empDeptName = emp['department_name']?.toString() ?? '';
+            return empDeptName == departmentName;
           }).toList();
-          print('Now found ${filteredEmployees.length} employees by department ID');
+          print('Now found ${filteredEmployees.length} employees by department name');
         }
       }
 
@@ -1550,27 +1516,33 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       if (filteredEmployees.isNotEmpty) {
         print('--- Filtered Employees ---');
         for (var emp in filteredEmployees) {
-          print('  - ${emp['name']} (Dept: "${emp['department_name']}", ID: ${emp['department_id']})');
+          print('  - ${emp['name']} (Dept ID: ${emp['department_id']}, Name: "${emp['department_name']}")');
         }
       } else {
-        print('WARNING: No employees found for department "$selectedDeptName"');
+        print('WARNING: No employees found for department ID: $departmentId');
+        // Fallback: show all employees
+        filteredEmployees = List.from(provider.allEmployees);
+        print('Fallback: showing all ${filteredEmployees.length} employees');
       }
     }
 
     // For non-admin users, automatically set employee and department to themselves
-    if (!provider.isAdmin && provider.currentUserId != null) {
-      selectedEmployeeId = provider.currentUserId;
+    if (!provider.isAdmin && provider.currentEmployeeId != null) {
+      selectedEmployeeId = provider.currentEmployeeId;
       selectedDepartmentId = provider.currentDepartmentId ?? 1;
       print('NON-ADMIN: Auto-selected employee ID: $selectedEmployeeId, Dept ID: $selectedDepartmentId');
 
       // For non-admin, add themselves to filteredEmployees
       if (provider.currentEmployeeName != null) {
         filteredEmployees.add({
-          'id': provider.currentUserId!,
+          'id': provider.currentEmployeeId!,
           'name': provider.currentEmployeeName!,
           'employee_code': provider.currentEmployeeCode ?? '',
           'department_id': selectedDepartmentId,
-          'department_name': 'My Department',
+          'department_name': provider.departments.firstWhere(
+                (dept) => dept != 'All',
+            orElse: () => 'My Department',
+          ),
         });
       }
     }
@@ -1688,90 +1660,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Leave ID Field - Temporary ID for display
-                            // Container(
-                            //   padding: const EdgeInsets.all(16),
-                            //   decoration: BoxDecoration(
-                            //     color: const Color(0xFF667EEA).withOpacity(0.05),
-                            //     borderRadius: BorderRadius.circular(12),
-                            //     border: Border.all(
-                            //       color: const Color(0xFF667EEA).withOpacity(0.3),
-                            //     ),
-                            //   ),
-                            //   child: Row(
-                            //     children: [
-                                  // Container(
-                                  //   padding: const EdgeInsets.all(8),
-                                  //   decoration: BoxDecoration(
-                                  //     color: const Color(0xFF667EEA).withOpacity(0.1),
-                                  //     borderRadius: BorderRadius.circular(8),
-                                  //   ),
-                                  //   child: const Icon(
-                                  //     Iconsax.document_text,
-                                  //     color: Color(0xFF667EEA),
-                                  //     size: 20,
-                                  //   ),
-                                  // ),
-                                  // const SizedBox(width: 12),
-                                  // Expanded(
-                                  //   child: Column(
-                                  //     crossAxisAlignment: CrossAxisAlignment.start,
-                                  //     children: [
-                                  //       Row(
-                                  //         children: [
-                                  //           const Text(
-                                  //             'Reference ID',
-                                  //             style: TextStyle(
-                                  //               fontSize: 12,
-                                  //               color: Colors.grey,
-                                  //               fontWeight: FontWeight.w500,
-                                  //             ),
-                                  //           ),
-                                  //           const SizedBox(width: 8),
-                                  //           Container(
-                                  //             padding: const EdgeInsets.symmetric(
-                                  //               horizontal: 8,
-                                  //               vertical: 2,
-                                  //             ),
-                                  //             decoration: BoxDecoration(
-                                  //               color: Colors.orange.withOpacity(0.1),
-                                  //               borderRadius: BorderRadius.circular(12),
-                                  //             ),
-                                  //             child: const Text(
-                                  //               'Temporary',
-                                  //               style: TextStyle(
-                                  //                 fontSize: 10,
-                                  //                 color: Colors.orange,
-                                  //                 fontWeight: FontWeight.w600,
-                                  //               ),
-                                  //             ),
-                                  //           ),
-                                  //         ],
-                                  //       ),
-                                  //       const SizedBox(height: 4),
-                                  //       // Text(
-                                  //       //   tempDisplayLeaveId,
-                                  //       //   style: const TextStyle(
-                                  //       //     fontSize: 16,
-                                  //       //     fontWeight: FontWeight.w600,
-                                  //       //     color: Color(0xFF667EEA),
-                                  //       //   ),
-                                  //       // ),
-                                  //       // Text(
-                                  //       //   'Server will assign final ID after submission',
-                                  //       //   style: TextStyle(
-                                  //       //     fontSize: 10,
-                                  //       //     color: Colors.grey[600],
-                                  //       //   ),
-                                  //       // ),
-                                  //     ],
-                                  //   ),
-                                  // ),
-                                // ],
-                              // ),
-                            // ),
-                            // const SizedBox(height: 20),
-
                             // Employee Info - For non-admin, show their name
                             if (!provider.isAdmin)
                               Column(
@@ -1866,7 +1754,8 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<int>(
-                                  value: selectedDepartmentId ?? provider.currentDepartmentId ?? 1,
+                                  value: selectedDepartmentId ??
+                                      (!provider.isAdmin ? provider.currentDepartmentId : null),
                                   isExpanded: true,
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   icon: const Icon(Iconsax.arrow_down_1),
@@ -1876,32 +1765,31 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                     color: Colors.black87,
                                   ),
                                   hint: const Text('Select Department'),
-                                  onChanged: (value) {
-                                    print('Department changed to: $value');
+                                  onChanged: provider.isAdmin
+                                      ? (int? value) {
+                                    print('Department changed to ID: $value');
                                     setState(() {
                                       selectedDepartmentId = value;
-                                      // Update provider with selected department ID
-                                      provider.setCurrentDepartmentId(value);
-
-                                      if (provider.isAdmin) {
-                                        selectedEmployeeId = null; // Reset employee when department changes
-                                        filterEmployeesByDepartment(value);
-                                      }
+                                      selectedEmployeeId = null; // Reset employee when department changes
+                                      filterEmployeesByDepartment(value);
                                     });
-                                  },
-                                  items: [
-                                    // Get unique departments list
-                                    ...provider.departments
-                                        .where((dept) => dept != 'All')
-                                        .toSet()
-                                        .toList()
-                                        .asMap()
+                                  }
+                                      : null, // Non-admin cannot change department
+                                  items: provider.isAdmin
+                                      ? [
+                                    // Get unique department IDs and names from leaves
+                                    ...provider.allLeaves
+                                        .where((leave) =>
+                                    leave.departmentId != null &&
+                                        leave.departmentName.isNotEmpty)
+                                        .fold<Map<int, String>>({}, (map, leave) {
+                                      map[leave.departmentId!] = leave.departmentName;
+                                      return map;
+                                    })
                                         .entries
                                         .map((entry) {
-                                      final index = entry.key;
-                                      final dept = entry.value;
                                       return DropdownMenuItem<int>(
-                                        value: index + 1,
+                                        value: entry.key, // Use department_id as value
                                         child: Row(
                                           children: [
                                             Container(
@@ -1918,7 +1806,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                               ),
                                               child: Center(
                                                 child: Text(
-                                                  dept.substring(0, 1).toUpperCase(),
+                                                  entry.value.substring(0, 1).toUpperCase(),
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,
@@ -1930,7 +1818,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: Text(
-                                                dept,
+                                                entry.value, // Display department name
                                                 style: const TextStyle(
                                                   fontSize: 14,
                                                   color: Colors.black87,
@@ -1942,6 +1830,53 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                         ),
                                       );
                                     }).toList(),
+                                  ]
+                                      : [
+                                    // For non-admin, show only their department
+                                    if (provider.currentDepartmentId != null &&
+                                        provider.currentEmployeeName != null)
+                                      DropdownMenuItem<int>(
+                                        value: provider.currentDepartmentId,
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: const BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Color(0xFF667EEA),
+                                                    Color(0xFF764BA2),
+                                                  ],
+                                                ),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  provider.currentEmployeeName!
+                                                      .substring(0, 1)
+                                                      .toUpperCase(),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            const Expanded(
+                                              child: Text(
+                                                'My Department',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
@@ -2461,7 +2396,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                 // ============= DEBUG LOG =============
                                 print('=== LEAVE SUBMISSION DEBUG ===');
                                 print('User Type: ${provider.isAdmin ? "ADMIN" : "NON-ADMIN"}');
-                                print('Reference ID: $tempDisplayLeaveId');
                                 print('Selected Employee ID: $selectedEmployeeId');
                                 print('Selected Department ID: $selectedDepartmentId');
                                 print('Selected Leave Type: $selectedLeaveType');
