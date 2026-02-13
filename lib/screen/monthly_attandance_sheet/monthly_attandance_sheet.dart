@@ -779,7 +779,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       70,   // Duration
       50,   // Late
       50,   // Early
-      50,   // OT
+      // 50,   // OT
       60,  // Status
     ];
 
@@ -926,10 +926,10 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       SizedBox(width: columnWidths[6], child: Text('Late', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
       SizedBox(width: columnWidths[7], child: Text('Early', style: headerTextStyle, textAlign: TextAlign.center)),
+      // SizedBox(width: padding / 2),
+      // SizedBox(width: columnWidths[8], child: Text('OT', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
-      SizedBox(width: columnWidths[8], child: Text('OT', style: headerTextStyle, textAlign: TextAlign.center)),
-      SizedBox(width: padding / 2),
-      SizedBox(width: columnWidths[9], child: Text('Status', style: headerTextStyle, textAlign: TextAlign.center)),
+      SizedBox(width: columnWidths[8], child: Text('Status', style: headerTextStyle, textAlign: TextAlign.center)),
     ];
   }
 
@@ -981,27 +981,27 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
               style: rowTextStyle,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 2),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
-              decoration: BoxDecoration(
-                color: _getStatusBackgroundColor(day),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: _getStatusBorderColor(day).withOpacity(0.3),
-                  width: 0.5,
-                ),
-              ),
-              child: Text(
-                _getStatusText(day),
-                style: TextStyle(
-                  color: _getStatusTextColor(day),
-                  fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
+            // const SizedBox(height: 2),
+            // Container(
+            //   padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
+            //   decoration: BoxDecoration(
+            //     color: _getStatusBackgroundColor(day),
+            //     borderRadius: BorderRadius.circular(4),
+            //     border: Border.all(
+            //       color: _getStatusBorderColor(day).withOpacity(0.3),
+            //       width: 0.5,
+            //     ),
+            //   ),
+            //   child: Text(
+            //     _getStatusText(day),
+            //     style: TextStyle(
+            //       color: _getStatusTextColor(day),
+            //       fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
+            //       fontWeight: FontWeight.w600,
+            //     ),
+            //     textAlign: TextAlign.center,
+            //   ),
+            // ),
           ],
         ),
       ),
@@ -1091,33 +1091,33 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       SizedBox(width: padding / 2),
 
       // OT
-      SizedBox(
-        width: columnWidths[8],
-        child: day.overtimeMinutes > 0
-            ? Container(
-          padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.green.shade50,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.green.shade200, width: 0.5),
-          ),
-          child: Text(
-            day.overtimeLabel ?? '${day.overtimeMinutes}m',
-            style: TextStyle(
-              color: Colors.green.shade700,
-              fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        )
-            : Text('-', style: rowTextStyle, textAlign: TextAlign.center),
-      ),
-      SizedBox(width: padding / 2),
+      // SizedBox(
+      //   width: columnWidths[8],
+      //   child: day.overtimeMinutes > 0
+      //       ? Container(
+      //     padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
+      //     decoration: BoxDecoration(
+      //       color: Colors.green.shade50,
+      //       borderRadius: BorderRadius.circular(4),
+      //       border: Border.all(color: Colors.green.shade200, width: 0.5),
+      //     ),
+      //     child: Text(
+      //       day.overtimeLabel ?? '${day.overtimeMinutes}m',
+      //       style: TextStyle(
+      //         color: Colors.green.shade700,
+      //         fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
+      //         fontWeight: FontWeight.w600,
+      //       ),
+      //       textAlign: TextAlign.center,
+      //     ),
+      //   )
+      //       : Text('-', style: rowTextStyle, textAlign: TextAlign.center),
+      // ),
+      // SizedBox(width: padding / 2),
 
       // Status (removed from here since it's now combined with day)
       SizedBox(
-        width: columnWidths[9],
+        width: columnWidths[8],
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
           decoration: BoxDecoration(

@@ -58,6 +58,9 @@ class AuthProvider with ChangeNotifier {
         await prefs.setString('user_role', userRole);
         await prefs.setString('employee_name', userName);
         await prefs.setString('employee_code', empCode);
+        await prefs.setString('user_image', data['user']['profile_image']?.toString() ??   // ADD THIS
+            data['user']['image']?.toString() ??
+            data['user']['avatar']?.toString() ?? '');
         await prefs.setString('userData', jsonEncode(userData));
 
         // ── Department ID ────────────────────────────────────────
@@ -214,17 +217,54 @@ class AuthProvider with ChangeNotifier {
     if (savedToken != null) {
       token = savedToken;
 
+      // Read directly saved values as fallback
+      final savedName  = prefs.getString('user_name') ?? '';
+      final savedRole  = prefs.getString('user_role') ?? '';
+      final savedEmail = prefs.getString('user_email') ?? '';
+      final savedImage = prefs.getString('user_image') ?? '';
       final userDataString       = prefs.getString('userData');
       final rolesString          = prefs.getString('roles');
       final permissionDetailsStr = prefs.getString('permissionDetails');
 
       if (userDataString != null) {
         userData = jsonDecode(userDataString);
-        permissionProvider.setUserRole(userData!['role_label'] ?? '');
+
+        // If name is missing in userData, inject it from saved prefs
+        if ((userData!['name'] == null || userData!['name'].toString().isEmpty) && savedName.isNotEmpty) {
+          userData!['name'] = savedName;
+        }
+        if (userData!['profile_image'] == null || userData!['profile_image'].toString().isEmpty) {
+          userData!['profile_image'] = savedImage;
+        }
+        // If role_label is missing, inject from saved prefs
+        if ((userData!['role_label'] == null || userData!['role_label'].toString().isEmpty) && savedRole.isNotEmpty) {
+          userData!['role_label'] = savedRole;
+        }
+
+        permissionProvider.setUserRole(userData!['role_label'] ?? savedRole);
+
+        print('✅ autoLogin - userData restored');
+        print('  name       = "${userData!['name']}"');
+        print('  role_label = "${userData!['role_label']}"');
+      } else {
+        // Fallback: rebuild minimal userData from saved prefs
+        userData = {
+          'name':       savedName,
+          'role_label': savedRole,
+          'email':      savedEmail,
+          'profile_image': savedImage,
+        };
+        permissionProvider.setUserRole(savedRole);
+
+        print('⚠️ autoLogin - userData rebuilt from prefs');
+        print('  name  = "$savedName"');
+        print('  role  = "$savedRole"');
       }
+
       if (rolesString != null) {
         roles = jsonDecode(rolesString);
       }
+
       if (permissionDetailsStr != null) {
         permissionDetails = jsonDecode(permissionDetailsStr);
         final permissions = permissionDetails!
@@ -236,7 +276,6 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
     }
   }
-
   // ── Logout ────────────────────────────────────────────────────────────────
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -279,4 +318,9 @@ class AuthProvider with ChangeNotifier {
   String get userRole  => userData?['role_label'] ?? 'User';
   String get userName  => userData?['name'] ?? '';
   String get userEmail => userData?['email'] ?? '';
+  String get userImage =>                                          // ADD THIS
+  userData?['profile_image']?.toString() ??
+      userData?['image']?.toString() ??
+      userData?['avatar']?.toString() ??
+      userData?['photo']?.toString() ?? '';
 }
