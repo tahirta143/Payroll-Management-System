@@ -143,6 +143,41 @@ class AuthProvider with ChangeNotifier {
     return false;
   }
 
+  // Call this method when you need to ensure employee ID is available
+  Future<String> getEmployeeId() async {
+    // First try from userData
+    if (userData != null) {
+      final id = userData!['employee_id']?.toString() ??
+          userData!['emp_id']?.toString() ?? '';
+      if (id.isNotEmpty && id != 'null') {
+        return id;
+      }
+    }
+
+    // Try from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final savedId = prefs.getString('employee_id');
+    if (savedId != null && savedId.isNotEmpty) {
+      // Update userData
+      if (userData != null) {
+        userData!['employee_id'] = savedId;
+        userData!['emp_id'] = savedId;
+        notifyListeners();
+      }
+      return savedId;
+    }
+
+    // If still not found, use user ID as fallback
+    if (userData != null) {
+      final userId = userData!['id']?.toString();
+      if (userId != null && userId.isNotEmpty) {
+        print('⚠️ Using user ID as fallback: $userId');
+        return userId;
+      }
+    }
+
+    return '';
+  }
   // ── Employee data fetch (ID + department_id) ─────────────────────────────
   Future<Map<String, dynamic>> _fetchEmployeeData(
       String token, int userId, String userName) async {
@@ -207,9 +242,92 @@ class AuthProvider with ChangeNotifier {
       String token, int userId, String userName) async {
     final result = await _fetchEmployeeData(token, userId, userName);
     return result['id']?.toString() ?? userId.toString();
+  }// Add this method to AuthProvider
+  void debugPrintStoredData() async {
+    final prefs = await SharedPreferences.getInstance();
+    print('🔍 SHARED PREFERENCES DEBUG ==========');
+    print('employee_id: ${prefs.getString('employee_id')}');
+    print('user_id: ${prefs.getInt('user_id')}');
+    print('userData string: ${prefs.getString('userData')}');
+    print('=======================================');
   }
 
   // ── Auto login ────────────────────────────────────────────────────────────
+  // Future<void> autoLogin(PermissionProvider permissionProvider) async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final savedToken = prefs.getString('token');
+  //
+  //   if (savedToken != null) {
+  //     token = savedToken;
+  //
+  //     // Read saved values
+  //     final savedName = prefs.getString('user_name') ?? '';
+  //     final savedRole = prefs.getString('user_role') ?? '';
+  //     final savedEmail = prefs.getString('user_email') ?? '';
+  //     final savedImage = prefs.getString('user_image') ?? '';
+  //     final savedEmployeeId = prefs.getString('employee_id') ?? ''; // This is "18"
+  //     final userDataString = prefs.getString('userData');
+  //     final rolesString = prefs.getString('roles');
+  //     final permissionDetailsStr = prefs.getString('permissionDetails');
+  //
+  //     if (userDataString != null) {
+  //       userData = jsonDecode(userDataString);
+  //
+  //       // 🔥 CRITICAL FIX: Add employee_id from SharedPreferences to userData
+  //       if (savedEmployeeId.isNotEmpty) {
+  //         userData!['employee_id'] = savedEmployeeId;
+  //         userData!['emp_id'] = savedEmployeeId;
+  //         print('✅✅✅ CRITICAL: Added employee_id "$savedEmployeeId" to userData');
+  //       }
+  //
+  //       // If name is missing in userData, inject it from saved prefs
+  //       if ((userData!['name'] == null || userData!['name'].toString().isEmpty) && savedName.isNotEmpty) {
+  //         userData!['name'] = savedName;
+  //       }
+  //       if (userData!['profile_image'] == null || userData!['profile_image'].toString().isEmpty) {
+  //         userData!['profile_image'] = savedImage;
+  //       }
+  //       // If role_label is missing, inject from saved prefs
+  //       if ((userData!['role_label'] == null || userData!['role_label'].toString().isEmpty) && savedRole.isNotEmpty) {
+  //         userData!['role_label'] = savedRole;
+  //       }
+  //
+  //       permissionProvider.setUserRole(userData!['role_label'] ?? savedRole);
+  //
+  //       print('✅ autoLogin - userData restored with employee_id: ${userData!['employee_id']}');
+  //     } else {
+  //       // Fallback: rebuild minimal userData from saved prefs
+  //       userData = {
+  //         'name': savedName,
+  //         'role_label': savedRole,
+  //         'email': savedEmail,
+  //         'profile_image': savedImage,
+  //         'employee_id': savedEmployeeId, // 🔥 Add employee_id here
+  //         'emp_id': savedEmployeeId,
+  //         'id': prefs.getInt('user_id'),
+  //       };
+  //       permissionProvider.setUserRole(savedRole);
+  //
+  //       print('⚠️ autoLogin - userData rebuilt from prefs with employee_id: $savedEmployeeId');
+  //     }
+  //
+  //     if (rolesString != null) {
+  //       roles = jsonDecode(rolesString);
+  //     }
+  //
+  //     if (permissionDetailsStr != null) {
+  //       permissionDetails = jsonDecode(permissionDetailsStr);
+  //       final permissions = permissionDetails!
+  //           .map<String>((p) => p['code'] as String)
+  //           .toList();
+  //       permissionProvider.setPermissions(permissions);
+  //     }
+  //
+  //     // Force a notify to update all listeners
+  //     notifyListeners();
+  //   }
+  // }
+
   Future<void> autoLogin(PermissionProvider permissionProvider) async {
     final prefs = await SharedPreferences.getInstance();
     final savedToken = prefs.getString('token');
@@ -217,63 +335,84 @@ class AuthProvider with ChangeNotifier {
     if (savedToken != null) {
       token = savedToken;
 
-      // Read directly saved values as fallback
-      final savedName  = prefs.getString('user_name') ?? '';
-      final savedRole  = prefs.getString('user_role') ?? '';
+      // Read saved values
+      final savedName = prefs.getString('user_name') ?? '';
+      final savedRole = prefs.getString('user_role') ?? '';
       final savedEmail = prefs.getString('user_email') ?? '';
       final savedImage = prefs.getString('user_image') ?? '';
-      final userDataString       = prefs.getString('userData');
-      final rolesString          = prefs.getString('roles');
+      final savedEmployeeId = prefs.getString('employee_id') ?? '';
+      final userDataString = prefs.getString('userData');
+      final rolesString = prefs.getString('roles');
       final permissionDetailsStr = prefs.getString('permissionDetails');
+
+      print('🔐 AUTO LOGIN - Restoring data');
+      print('  savedRole: $savedRole');
+      print('  savedEmployeeId: $savedEmployeeId');
+      print('  hasPermissionDetails: ${permissionDetailsStr != null}');
 
       if (userDataString != null) {
         userData = jsonDecode(userDataString);
 
-        // If name is missing in userData, inject it from saved prefs
-        if ((userData!['name'] == null || userData!['name'].toString().isEmpty) && savedName.isNotEmpty) {
-          userData!['name'] = savedName;
+        // Add employee_id to userData if missing
+        if (savedEmployeeId.isNotEmpty &&
+            (userData!['employee_id'] == null || userData!['employee_id'].toString().isEmpty)) {
+          userData!['employee_id'] = savedEmployeeId;
+          userData!['emp_id'] = savedEmployeeId;
+          print('  ✅ Added employee_id to userData: $savedEmployeeId');
         }
-        if (userData!['profile_image'] == null || userData!['profile_image'].toString().isEmpty) {
-          userData!['profile_image'] = savedImage;
-        }
-        // If role_label is missing, inject from saved prefs
+
+        // Ensure role_label is in userData
         if ((userData!['role_label'] == null || userData!['role_label'].toString().isEmpty) && savedRole.isNotEmpty) {
           userData!['role_label'] = savedRole;
+          print('  ✅ Added role_label to userData: $savedRole');
         }
-
-        permissionProvider.setUserRole(userData!['role_label'] ?? savedRole);
-
-        print('✅ autoLogin - userData restored');
-        print('  name       = "${userData!['name']}"');
-        print('  role_label = "${userData!['role_label']}"');
       } else {
         // Fallback: rebuild minimal userData from saved prefs
         userData = {
-          'name':       savedName,
+          'name': savedName,
           'role_label': savedRole,
-          'email':      savedEmail,
+          'email': savedEmail,
           'profile_image': savedImage,
+          'employee_id': savedEmployeeId,
+          'emp_id': savedEmployeeId,
+          'id': prefs.getInt('user_id'),
         };
-        permissionProvider.setUserRole(savedRole);
-
-        print('⚠️ autoLogin - userData rebuilt from prefs');
-        print('  name  = "$savedName"');
-        print('  role  = "$savedRole"');
+        print('  ⚠️ userData rebuilt from prefs');
       }
 
+      // Restore roles
       if (rolesString != null) {
         roles = jsonDecode(rolesString);
+        print('  roles restored: ${roles?.length} roles');
       }
 
+      // 🔥 CRITICAL: Restore permissionDetails and set permissions
       if (permissionDetailsStr != null) {
         permissionDetails = jsonDecode(permissionDetailsStr);
+        print('  permissionDetails restored: ${permissionDetails?.length} permissions');
+
+        // Extract permission codes
         final permissions = permissionDetails!
             .map<String>((p) => p['code'] as String)
             .toList();
+
+        print('  Setting permissions in PermissionProvider: ${permissions.length} permissions');
         permissionProvider.setPermissions(permissions);
+        permissionProvider.setUserRole(savedRole);
+      } else {
+        print('  ⚠️ No permissionDetails found in prefs');
+        // Try to load from PermissionProvider's saved prefs as fallback
+        await permissionProvider.loadFromPrefs();
       }
 
+      // Force a notify to update all listeners
       notifyListeners();
+
+      print('✅ AUTO LOGIN COMPLETE');
+      print('  userRole: ${userData?['role_label']}');
+      print('  permissions count: ${permissionProvider.permissions.length}');
+    } else {
+      print('❌ No saved token found');
     }
   }
   // ── Logout ────────────────────────────────────────────────────────────────
@@ -310,6 +449,7 @@ class AuthProvider with ChangeNotifier {
     if (permissionDetails == null) return false;
     return permissionDetails!.any((p) => p['code'] == permissionCode);
   }
+
 
   String get employeeId =>
       userData?['employee_id']?.toString() ??

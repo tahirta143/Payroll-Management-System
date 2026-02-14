@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../model/salary_sheet/salary_sheet.dart';
@@ -80,130 +81,167 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
     final fontSizeLarge = isSmallScreen ? 16.0 : isMediumScreen ? 18.0 : 20.0;
     final borderRadius = isSmallScreen ? 12.0 : isMediumScreen ? 16.0 : 20.0;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
-        statusBarColor: Colors.transparent,
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Salary Sheet',
-            style: TextStyle(
-              fontSize: fontSizeLarge,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          centerTitle: true,
-          backgroundColor: const Color(0xFF667EEA),
-          iconTheme: const IconThemeData(color: Colors.white),
-          actions: [
-            // IconButton(
-            //   onPressed: () {
-            //     setState(() {
-            //       _showDebugPanel = !_showDebugPanel;
-            //     });
-            //   },
-            //   icon: Icon(Icons.bug_report, color: Colors.white, size: iconSize),
-            //   tooltip: 'Debug Panel',
-            // ),
-            // IconButton(
-            //   onPressed: () async {
-            //     setState(() {
-            //       _showApiDataPanel = !_showApiDataPanel;
-            //     });
-            //     if (_showApiDataPanel) {
-            //       await _runApiTests(context);
-            //     }
-            //   },
-            //   icon: Icon(Icons.api, color: Colors.white, size: iconSize),
-            //   tooltip: 'API Data',
-            // ),
-            IconButton(
-              onPressed: _showFilterDialog,
-              icon: Icon(Icons.filter_alt, color: Colors.white, size: iconSize),
-              tooltip: 'Filter',
-            ),
-            IconButton(
-              onPressed: _refreshData,
-              icon: Icon(Icons.refresh, color: Colors.white, size: iconSize),
-              tooltip: 'Refresh',
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark.copyWith(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
         ),
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF667EEA),
-                Color(0xFF764BA2),
-              ],
-            ),
-          ),
-          child: Consumer<SalarySheetProvider>(
-            builder: (context, provider, child) {
-              return Column(
-                children: [
-                  // Debug Panel
-                  if (_showDebugPanel)
-                    _buildDebugPanel(provider, screenWidth, isSmallScreen),
+        child: Consumer<SalarySheetProvider>(
+          builder: (context, provider, child) {
+            return Column(
+              children: [
+                // Add some top padding to account for status bar
+                SizedBox(height: MediaQuery.of(context).padding.top + 8),
 
-                  // API Data Panel
-                  if (_showApiDataPanel && _apiTestResults != null)
-                    _buildApiDataPanel(provider, screenWidth, isSmallScreen),
-
-                  // Filters Section
-                  _buildFilters(
-                    provider,
-                    screenWidth,
-                    isSmallScreen,
-                    isMediumScreen,
-                    isLargeScreen,
-                    paddingValue,
-                    borderRadius,
-                    iconSize,
-                    fontSizeMedium,
+                // Custom Header with Menu Icon (like attendance screen)
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 16 : 20,
                   ),
-
-                  SizedBox(height: paddingValue),
-
-                  // Loading/Error/Salary Sheet - THIS NEEDS TO BE EXPANDED
-                  Expanded(
-                    child: Container(
-                      margin: EdgeInsets.all(paddingValue),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(borderRadius),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: paddingValue,
-                            offset: const Offset(0, 4),
+                  child: Row(
+                    children: [
+                      // Menu/Drawer icon to open drawer
+                      // Builder(
+                      //   builder: (context) {
+                      //     return Container(
+                      //       decoration: BoxDecoration(
+                      //         color: Colors.white,
+                      //         borderRadius: BorderRadius.circular(12),
+                      //         boxShadow: [
+                      //           BoxShadow(
+                      //             color: Colors.black.withOpacity(0.05),
+                      //             blurRadius: 8,
+                      //             offset: const Offset(0, 2),
+                      //           ),
+                      //         ],
+                      //       ),
+                      //       child: IconButton(
+                      //         icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
+                      //         onPressed: () {
+                      //           Scaffold.of(context).openDrawer();
+                      //         },
+                      //       ),
+                      //     );
+                      //   },
+                      // ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Salary Sheet',
+                        style: TextStyle(
+                          fontSize: fontSizeLarge,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF667EEA),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Filter button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: _showFilterDialog,
+                          icon: Icon(
+                            Icons.filter_alt,
+                            color: const Color(0xFF667EEA),
+                            size: iconSize * 0.8,
                           ),
-                        ],
+                          tooltip: 'Filter',
+                        ),
                       ),
-                      child: _buildContent(
-                        provider,
-                        screenWidth,
-                        isSmallScreen,
-                        isMediumScreen,
-                        isLargeScreen,
-                        paddingValue,
-                        fontSizeSmall,
-                        fontSizeMedium,
-                        fontSizeLarge,
-                        borderRadius,
+                      const SizedBox(width: 8),
+                      // Refresh button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: _refreshData,
+                          icon: Icon(
+                            Icons.refresh,
+                            color: const Color(0xFF667EEA),
+                            size: iconSize * 0.8,
+                          ),
+                          tooltip: 'Refresh',
+                        ),
                       ),
+                    ],
+                  ),
+                ),
+
+                // Debug Panel
+                if (_showDebugPanel)
+                  _buildDebugPanel(provider, screenWidth, isSmallScreen),
+
+                // API Data Panel
+                if (_showApiDataPanel && _apiTestResults != null)
+                  _buildApiDataPanel(provider, screenWidth, isSmallScreen),
+
+                // Filters Section
+                _buildFilters(
+                  provider,
+                  screenWidth,
+                  isSmallScreen,
+                  isMediumScreen,
+                  isLargeScreen,
+                  paddingValue,
+                  borderRadius,
+                  iconSize,
+                  fontSizeMedium,
+                ),
+
+                SizedBox(height: paddingValue),
+
+                // Loading/Error/Salary Sheet - THIS NEEDS TO BE EXPANDED
+                Expanded(
+                  child: Container(
+                    margin: EdgeInsets.all(paddingValue),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(borderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: paddingValue,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildContent(
+                      provider,
+                      screenWidth,
+                      isSmallScreen,
+                      isMediumScreen,
+                      isLargeScreen,
+                      paddingValue,
+                      fontSizeSmall,
+                      fontSizeMedium,
+                      fontSizeLarge,
+                      borderRadius,
                     ),
                   ),
-                ],
-              );
-            },
-          ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -793,6 +831,7 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
           backgroundColor: provider.selectedMonth.isNotEmpty && provider.selectedDepartmentId != null
               ? const Color(0xFF667EEA)
               : Colors.grey,
+          foregroundColor: Colors.white
         ),
         child: provider.isLoading
             ? SizedBox(

@@ -1733,63 +1733,43 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget _buildFilterRow(AttendanceProvider provider) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
-    final isVerySmallScreen = screenWidth < 400;
 
-    if (isVerySmallScreen) {
-      // For very small screens, stack filters vertically
-      return Column(
-        children: [
-          _buildDepartmentFilter(provider),
-          SizedBox(height: isSmallScreen ? 8 : 12),
-          _buildEmployeeFilter(provider),
-          SizedBox(height: isSmallScreen ? 8 : 12),
-          _buildMonthFilter(provider),
-        ],
-      );
-    } else {
-      // For normal screens, use horizontal layout
-      return Row(
-        children: [
-          Expanded(child: _buildDepartmentFilter(provider)),
-          SizedBox(width: isSmallScreen ? 6 : 8),
-          Expanded(child: _buildEmployeeFilter(provider)),
-          SizedBox(width: isSmallScreen ? 6 : 8),
-          Expanded(child: _buildMonthFilter(provider)),
-        ],
-      );
-    }
+    // Always use Row with Expanded to keep 3 filters in one row
+    return Row(
+      children: [
+        Expanded(child: _buildDepartmentFilter(provider)),
+        SizedBox(width: isSmallScreen ? 6 : 8),
+        Expanded(child: _buildEmployeeFilter(provider)),
+        SizedBox(width: isSmallScreen ? 6 : 8),
+        Expanded(child: _buildMonthFilter(provider)),
+      ],
+    );
   }
 
   Widget _buildEmployeeFilter(AttendanceProvider provider) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
-    final isVerySmallScreen = screenWidth < 400;
 
     return Consumer<AttendanceProvider>(
       builder: (context, provider, child) {
-        // Check if department is selected (not "All")
         final isDepartmentSelected = provider.selectedDepartmentFilter != 'All';
-
-        // Get employees for the selected department
         final employeesForDepartment = provider.filteredEmployees;
         final hasEmployees = employeesForDepartment.isNotEmpty;
-
-        // Enable dropdown only when department is selected AND has employees
         final isEnabled = isDepartmentSelected && hasEmployees;
 
-        // Determine what to show in the dropdown
         String displayText;
         if (!isDepartmentSelected) {
-          displayText = 'Select Department';
+          displayText = 'Select Dept';
         } else if (!hasEmployees) {
           displayText = 'No employees';
         } else if (provider.selectedEmployeeFilter.isEmpty) {
-          displayText = 'Select Employee';
+          displayText = 'Select Emp';
         } else {
           displayText = provider.selectedEmployeeFilter;
         }
 
         return Container(
+          height: 45,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -1814,66 +1794,30 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   : null,
               isExpanded: true,
               icon: Container(
-                padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
-                decoration: BoxDecoration(
-                  color: isEnabled
-                      ? const Color(0xFF667EEA).withOpacity(0.1)
-                      : Colors.grey[200],
-                  borderRadius: BorderRadius.circular(6),
-                ),
+                margin: const EdgeInsets.only(right: 8),
                 child: Icon(
                   Iconsax.arrow_down_1,
-                  size: isSmallScreen ? 14 : 16,
+                  size: 16,
                   color: isEnabled
                       ? const Color(0xFF667EEA)
                       : Colors.grey[400],
                 ),
               ),
               style: TextStyle(
-                fontSize: isSmallScreen ? 12 : 13,
+                fontSize: 13,
                 color: isEnabled ? Colors.black87 : Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
               hint: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 8 : 12,
-                  vertical: isSmallScreen ? 6 : 8,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: isSmallScreen ? 28 : 32,
-                      height: isSmallScreen ? 28 : 32,
-                      decoration: BoxDecoration(
-                        color: isEnabled
-                            ? const Color(0xFF667EEA).withOpacity(0.1)
-                            : Colors.grey[300],
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Iconsax.people,
-                          size: isSmallScreen ? 14 : 16,
-                          color: isEnabled
-                              ? const Color(0xFF667EEA)
-                              : Colors.grey[400],
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: isSmallScreen ? 8 : 12),
-                    Expanded(
-                      child: Text(
-                        _truncateText(displayText, isVerySmallScreen ? 15 : 20),
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 12 : 13,
-                          color: isEnabled ? Colors.black87 : Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  _truncateText(displayText, 12),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isEnabled ? Colors.black87 : Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               onChanged: isEnabled ? (String? value) {
@@ -1885,65 +1829,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 return DropdownMenuItem<String>(
                   value: employee.name,
                   child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 8 : 12,
-                      vertical: isSmallScreen ? 6 : 8,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: isSmallScreen ? 28 : 32,
-                          height: isSmallScreen ? 28 : 32,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Color(0xFF667EEA),
-                                Color(0xFF764BA2),
-                              ],
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              employee.name.substring(0, 1).toUpperCase(),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: isSmallScreen ? 12 : 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: isSmallScreen ? 8 : 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _truncateText(employee.name, isVerySmallScreen ? 12 : 18),
-                                style: TextStyle(
-                                  fontSize: isSmallScreen ? 12 : 13,
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (employee.empId.isNotEmpty)
-                                Text(
-                                  employee.empId,
-                                  style: TextStyle(
-                                    fontSize: isSmallScreen ? 10 : 11,
-                                    color: Colors.grey[600],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      _truncateText(employee.name, 15),
+                      style: const TextStyle(fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 );
@@ -1963,9 +1854,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget _buildDepartmentFilter(AttendanceProvider provider) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
-    final isVerySmallScreen = screenWidth < 400;
 
     return Container(
+      height: 45, // Fixed height for consistency
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1986,67 +1877,36 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           value: provider.selectedDepartmentFilter,
           isExpanded: true,
           icon: Container(
-            padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF667EEA).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
+            margin: const EdgeInsets.only(right: 8),
             child: Icon(
               Iconsax.arrow_down_1,
-              size: isSmallScreen ? 12 : 14,
+              size: 16,
               color: const Color(0xFF667EEA),
             ),
           ),
-          style: TextStyle(
-            fontSize: isSmallScreen ? 11 : 12,
-            color: provider.selectedDepartmentFilter == 'All'
-                ? Colors.grey[600]
-                : Colors.black87,
+          elevation: 2,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Colors.black87,
             fontWeight: FontWeight.w500,
           ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
           onChanged: (String? value) {
             if (value != null) {
               provider.setDepartmentFilter(value);
             }
           },
           items: [
-            DropdownMenuItem<String>(
+            const DropdownMenuItem<String>(
               value: 'All',
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 6 : 8,
-                  vertical: isSmallScreen ? 4 : 6,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: isSmallScreen ? 24 : 28,
-                      height: isSmallScreen ? 24 : 28,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '🏢',
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 10 : 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: isSmallScreen ? 6 : 8),
-                    Expanded(
-                      child: Text(
-                        'All Depts',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 12,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'All Depts',
+                  style: TextStyle(fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
@@ -2054,49 +1914,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 6 : 8,
-                    vertical: isSmallScreen ? 4 : 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: isSmallScreen ? 24 : 28,
-                        height: isSmallScreen ? 24 : 28,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Color(0xFF667EEA),
-                              Color(0xFF764BA2),
-                            ],
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            value.substring(0, 1).toUpperCase(),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isSmallScreen ? 10 : 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: isSmallScreen ? 6 : 8),
-                      Expanded(
-                        child: Text(
-                          _truncateText(value, isVerySmallScreen ? 12 : 18),
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 12,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    value,
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               );
@@ -2110,9 +1933,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget _buildMonthFilter(AttendanceProvider provider) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
-    final isVerySmallScreen = screenWidth < 400;
 
     return Container(
+      height: 45,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -2133,68 +1956,37 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           value: provider.selectedMonthFilter,
           isExpanded: true,
           icon: Container(
-            padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF667EEA).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
+            margin: const EdgeInsets.only(right: 8),
             child: Icon(
-              Iconsax.calendar,
-              size: isSmallScreen ? 12 : 14,
+              Iconsax.arrow_down_1,
+              size: 16,
               color: const Color(0xFF667EEA),
             ),
           ),
-          style: TextStyle(
-            fontSize: isSmallScreen ? 11 : 12,
-            color: provider.selectedMonthFilter == 'All'
-                ? Colors.grey[600]
-                : Colors.black87,
+          elevation: 2,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.black87,
             fontWeight: FontWeight.w500,
           ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
           onChanged: (String? value) {
             if (value != null) {
               provider.setMonthFilter(value);
-              // Refresh data with new month filter
               provider.fetchAllData();
             }
           },
           items: [
-            DropdownMenuItem<String>(
+            const DropdownMenuItem<String>(
               value: 'All',
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 6 : 8,
-                  vertical: isSmallScreen ? 4 : 6,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: isSmallScreen ? 24 : 28,
-                      height: isSmallScreen ? 24 : 28,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Iconsax.calendar_1,
-                          size: isSmallScreen ? 12 : 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: isSmallScreen ? 6 : 8),
-                    Expanded(
-                      child: Text(
-                        'All Months',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 12,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'All Months',
+                  style: TextStyle(fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
@@ -2202,49 +1994,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 6 : 8,
-                    vertical: isSmallScreen ? 4 : 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: isSmallScreen ? 24 : 28,
-                        height: isSmallScreen ? 24 : 28,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Color(0xFF667EEA),
-                              Color(0xFF764BA2),
-                            ],
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            _getMonthNumber(value),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isSmallScreen ? 10 : 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: isSmallScreen ? 6 : 8),
-                      Expanded(
-                        child: Text(
-                          _truncateText(value, isVerySmallScreen ? 10 : 16),
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 12,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    _truncateText(value, 10),
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               );
@@ -2254,7 +2009,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
     );
   }
-
   String _getMonthNumber(String monthWithYear) {
     try {
       final monthName = monthWithYear.split(' ')[0];
@@ -2331,8 +2085,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     // Calculate responsive height based on screen size
     final cardHeight = isVerySmallScreen
-        ? screenHeight * 0.12
-        : (isSmallScreen ? screenHeight * 0.13 : screenHeight * 0.14);
+        ? screenHeight * 0.16
+        : (isSmallScreen ? screenHeight * 0.17 : screenHeight * 0.18);
 
     return SizedBox(
       height: cardHeight,

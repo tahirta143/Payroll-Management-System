@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../provider/salary_slip_provider/salary_slip_provider.dart';
@@ -37,103 +38,178 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
-        statusBarColor: Colors.transparent,
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Salary Slip',
-            style: TextStyle(
-              fontSize: isSmallScreen ? 20 : 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          centerTitle: true,
-          backgroundColor: const Color(0xFF667EEA),
-          iconTheme: const IconThemeData(color: Colors.white),
-          actions: [
-            IconButton(
-              onPressed: () {
-                if (context.read<SalarySlipProvider>().salarySlip != null) {
-                  _printSalarySlip();
-                }
-              },
-              icon: Icon(Icons.print, color: Colors.white, size: isSmallScreen ? 22 : 24),
-              tooltip: 'Print',
-            ),
-            IconButton(
-              onPressed: () => _refreshData(context),
-              icon: Icon(Icons.refresh, color: Colors.white, size: isSmallScreen ? 22 : 24),
-              tooltip: 'Refresh',
-            ),
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  _showDebugPanel = !_showDebugPanel;
-                });
-              },
-              icon: Icon(
-                _showDebugPanel ? Icons.bug_report : Icons.bug_report_outlined,
-                color: Colors.white,
-                size: isSmallScreen ? 22 : 24,
-              ),
-              tooltip: 'Debug',
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark.copyWith(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
         ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF667EEA),
-                Color(0xFF764BA2),
-              ],
-            ),
-          ),
-          child: Consumer<SalarySlipProvider>(
-            builder: (context, provider, child) {
-              return Column(
-                children: [
-                  // Debug Panel
-                  if (_showDebugPanel) _buildDebugPanel(provider, screenWidth, isSmallScreen),
+        child: Consumer<SalarySlipProvider>(
+          builder: (context, provider, child) {
+            return Column(
+              children: [
+                // Add some top padding to account for status bar
+                SizedBox(height: MediaQuery.of(context).padding.top + 8),
 
-                  // Filters Section
-                  _buildFilters(provider, screenWidth, isSmallScreen),
-
-                  SizedBox(height: isSmallScreen ? 12 : 16),
-
-                  // Loading/Error/Salary Slip
-                  Expanded(
-                    child: Container(
-                      margin: EdgeInsets.fromLTRB(
-                        isSmallScreen ? 12 : 16,
-                        0,
-                        isSmallScreen ? 12 : 16,
-                        isSmallScreen ? 12 : 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: isSmallScreen ? 8 : 15,
-                            offset: Offset(0, isSmallScreen ? 4 : 6),
-                          ),
-                        ],
-                      ),
-                      child: _buildContent(provider, screenWidth, isSmallScreen),
-                    ),
+                // Custom Header with Menu Icon (like attendance screen)
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 16 : 20,
                   ),
-                ],
-              );
-            },
-          ),
+                  child: Row(
+                    children: [
+                      // Menu/Drawer icon to open drawer
+                      // Builder(
+                      //   builder: (context) {
+                      //     return Container(
+                      //       decoration: BoxDecoration(
+                      //         color: Colors.white,
+                      //         borderRadius: BorderRadius.circular(12),
+                      //         boxShadow: [
+                      //           BoxShadow(
+                      //             color: Colors.black.withOpacity(0.05),
+                      //             blurRadius: 8,
+                      //             offset: const Offset(0, 2),
+                      //           ),
+                      //         ],
+                      //       ),
+                      //       child: IconButton(
+                      //         icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
+                      //         onPressed: () {
+                      //           Scaffold.of(context).openDrawer();
+                      //         },
+                      //       ),
+                      //     );
+                      //   },
+                      // ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Salary Slip',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 20 : 24,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF667EEA),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Print button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: () {
+                            if (provider.salarySlip != null) {
+                              _printSalarySlip();
+                            }
+                          },
+                          icon: Icon(
+                            Icons.print,
+                            color: const Color(0xFF667EEA),
+                            size: isSmallScreen ? 20 : 22,
+                          ),
+                          tooltip: 'Print',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Refresh button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: () => _refreshData(context),
+                          icon: Icon(
+                            Icons.refresh,
+                            color: const Color(0xFF667EEA),
+                            size: isSmallScreen ? 20 : 22,
+                          ),
+                          tooltip: 'Refresh',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Debug button
+                      // Container(
+                      //   decoration: BoxDecoration(
+                      //     color: Colors.white,
+                      //     borderRadius: BorderRadius.circular(12),
+                      //     boxShadow: [
+                      //       BoxShadow(
+                      //         color: Colors.black.withOpacity(0.05),
+                      //         blurRadius: 8,
+                      //         offset: const Offset(0, 2),
+                      //       ),
+                      //     ],
+                      //   ),
+                      //   child: IconButton(
+                      //     onPressed: () {
+                      //       setState(() {
+                      //         _showDebugPanel = !_showDebugPanel;
+                      //       });
+                      //     },
+                      //     icon: Icon(
+                      //       _showDebugPanel ? Icons.bug_report : Icons.bug_report_outlined,
+                      //       color: const Color(0xFF667EEA),
+                      //       size: isSmallScreen ? 20 : 22,
+                      //     ),
+                      //     tooltip: 'Debug',
+                      //   ),
+                      // ),
+                    ],
+                  ),
+                ),
+
+                // Debug Panel
+                if (_showDebugPanel) _buildDebugPanel(provider, screenWidth, isSmallScreen),
+
+                // Filters Section
+                _buildFilters(provider, screenWidth, isSmallScreen),
+
+                SizedBox(height: isSmallScreen ? 12 : 16),
+
+                // Loading/Error/Salary Slip
+                Expanded(
+                  child: Container(
+                    margin: EdgeInsets.fromLTRB(
+                      isSmallScreen ? 12 : 16,
+                      0,
+                      isSmallScreen ? 12 : 16,
+                      isSmallScreen ? 12 : 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: isSmallScreen ? 8 : 15,
+                          offset: Offset(0, isSmallScreen ? 4 : 6),
+                        ),
+                      ],
+                    ),
+                    child: _buildContent(provider, screenWidth, isSmallScreen),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

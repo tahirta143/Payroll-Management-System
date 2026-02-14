@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -66,49 +67,43 @@ class _SalaryScreenState extends State<SalaryScreen> {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final isSmallScreen = mediaQuery.size.width < 600;
-    final isMediumScreen = mediaQuery.size.width >= 600 && mediaQuery.size.width < 900;
+    final screenWidth = mediaQuery.size.width;
+    final isSmallScreen = screenWidth < 600;
+    final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text(
-          'Salary Management',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
+      // No app bar
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark.copyWith(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFF), // Match scaffold background
+          ),
+          child: Consumer<EmployeeSalaryProvider>(
+            builder: (context, provider, child) {
+              if (_isLoading) {
+                return _buildLoadingState();
+              }
+
+              if (provider.error.isNotEmpty) {
+                return _buildErrorState(provider.error);
+              }
+
+              return _buildMainContent(provider, mediaQuery);
+            },
           ),
         ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF667EEA),
-        iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Iconsax.add, size: 22),
-            onPressed: () => _showAddSalaryDialog(context),
-            tooltip: 'Add Salary',
-          ),
-          IconButton(
-            icon: const Icon(Iconsax.refresh, size: 22),
-            onPressed: _loadData,
-            tooltip: 'Refresh',
-          ),
-        ],
       ),
-      body: Consumer<EmployeeSalaryProvider>(
-        builder: (context, provider, child) {
-          if (_isLoading) {
-            return _buildLoadingState();
-          }
-
-          if (provider.error.isNotEmpty) {
-            return _buildErrorState(provider.error);
-          }
-
-          return _buildMainContent(provider, mediaQuery);
-        },
+      // Floating Action Button for Add Salary
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddSalaryDialog(context),
+        backgroundColor: const Color(0xFF667EEA),
+        child: const Icon(Iconsax.add, color: Colors.white),
+        tooltip: 'Add Salary',
       ),
     );
   }
@@ -183,147 +178,247 @@ class _SalaryScreenState extends State<SalaryScreen> {
 
   Widget _buildMainContent(EmployeeSalaryProvider provider, MediaQueryData mediaQuery) {
     final filteredSalaries = provider.searchSalaries(_searchController.text);
-    final isSmallScreen = mediaQuery.size.width < 600;
+    final screenWidth = mediaQuery.size.width;
+    final isSmallScreen = screenWidth < 600;
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF667EEA),
-            Color(0xFF764BA2),
-          ],
+    return Column(
+      children: [
+        // Add some top padding to account for status bar
+        SizedBox(height: MediaQuery.of(context).padding.top + 8),
+
+        // Custom Header with Menu Icon (like attendance screen)
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isSmallScreen ? 16 : 20,
+          ),
+          child: Row(
+            children: [
+              // Menu/Drawer icon to open drawer
+              // Builder(
+              //   builder: (context) {
+              //     return Container(
+              //       decoration: BoxDecoration(
+              //         color: Colors.white,
+              //         borderRadius: BorderRadius.circular(12),
+              //         boxShadow: [
+              //           BoxShadow(
+              //             color: Colors.black.withOpacity(0.05),
+              //             blurRadius: 8,
+              //             offset: const Offset(0, 2),
+              //           ),
+              //         ],
+              //       ),
+              //       child: IconButton(
+              //         icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
+              //         onPressed: () {
+              //           Scaffold.of(context).openDrawer();
+              //         },
+              //       ),
+              //     );
+              //   },
+              // ),
+              const SizedBox(width: 12),
+              Text(
+                'Salary Management',
+                style: TextStyle(
+                  fontSize: isSmallScreen ? 20 : 24,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF667EEA),
+                ),
+              ),
+              const Spacer(),
+              // Refresh button
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    Iconsax.refresh,
+                    size: isSmallScreen ? 20 : 22,
+                    color: const Color(0xFF667EEA),
+                  ),
+                  onPressed: _loadData,
+                  tooltip: 'Refresh',
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Add button in header for quick access (optional - can remove if only FAB)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    Iconsax.add,
+                    size: isSmallScreen ? 20 : 22,
+                    color: const Color(0xFF667EEA),
+                  ),
+                  onPressed: () => _showAddSalaryDialog(context),
+                  tooltip: 'Add Salary',
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      child: Column(
-        children: [
-          // Header Section with Search
-          Container(
-            padding: EdgeInsets.all(isSmallScreen ? 10 : 14),
+
+        const SizedBox(height: 16),
+
+        // Search Bar
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isSmallScreen ? 12 : 16,
+          ),
+          child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(20),
-              ),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.blue.withOpacity(0.2),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: isSmallScreen ? 8 : 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Column(
-              children: [
-                // Search Bar
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search employee name or code...',
-                      hintStyle: TextStyle(color: Colors.grey[500]),
-                      prefixIcon: const Icon(
-                        Iconsax.search_normal,
-                        color: Color(0xFF667EEA),
-                      ),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                        icon: const Icon(
-                          Iconsax.close_circle,
-                          color: Colors.grey,
-                        ),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {});
-                        },
-                      )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                    ),
-                    onChanged: (value) => setState(() {}),
-                  ),
-                ),
-                const SizedBox(height: 0),
-
-                // Statistics Cards - Responsive layout
-                _buildStatisticsCards(provider, mediaQuery),
-              ],
-            ),
-          ),
-
-          // Salaries List
-          Expanded(
             child: Padding(
-              padding: EdgeInsets.all(isSmallScreen ? 12 : 20),
+              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Salary Records',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 16 : 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                  // Search Bar
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search employee name or code...',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: isSmallScreen ? 13 : 14,
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
+                        prefixIcon: Icon(
+                          Iconsax.search_normal,
+                          color: Colors.grey[500],
+                          size: isSmallScreen ? 20 : 22,
                         ),
-                        child: Text(
-                          '${filteredSalaries.length} records',
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 12 : 14,
-                            color: Colors.white,
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                          icon: Icon(
+                            Iconsax.close_circle,
+                            color: Colors.grey[500],
+                            size: isSmallScreen ? 20 : 22,
                           ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                        )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 12 : 16,
+                          vertical: isSmallScreen ? 12 : 14,
                         ),
                       ),
-                    ],
+                      onChanged: (value) => setState(() {}),
+                    ),
                   ),
                   const SizedBox(height: 16),
 
-                  Expanded(
-                    child: filteredSalaries.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                      itemCount: filteredSalaries.length,
-                      itemBuilder: (context, index) {
-                        return _buildSalaryCard(
-                          filteredSalaries[index],
-                          provider,
-                          mediaQuery,
-                        );
-                      },
-                    ),
-                  ),
+                  // Statistics Cards
+                  _buildStatisticsCards(provider, mediaQuery),
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Salaries List
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: isSmallScreen ? 12 : 16,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Salary Records',
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 16 : 18,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF667EEA),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF667EEA).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFF667EEA).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        '${filteredSalaries.length} records',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 12 : 14,
+                          color: const Color(0xFF667EEA),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                Expanded(
+                  child: filteredSalaries.isEmpty
+                      ? _buildEmptyState(isSmallScreen)
+                      : ListView.builder(
+                    itemCount: filteredSalaries.length,
+                    itemBuilder: (context, index) {
+                      return _buildSalaryCard(
+                        filteredSalaries[index],
+                        provider,
+                        mediaQuery,
+                        isSmallScreen,
+                      );
+                    },
+                  ),
+
+                ),
+              ],
+            ),
+          ),
+        ),
+        // const SizedBox(height: 30), // Extra padding for FAB
+      ],
     );
   }
 
@@ -344,8 +439,8 @@ class _SalaryScreenState extends State<SalaryScreen> {
       return numberFormat.format(value);
     }
 
-    return Container(
-      height: isSmallScreen ? 100 : 90, // Fixed height
+    return SizedBox(
+      height: isSmallScreen ? 80 : 90,
       child: Row(
         children: [
           Expanded(
@@ -392,109 +487,112 @@ class _SalaryScreenState extends State<SalaryScreen> {
     required bool isSmallScreen,
     bool showCurrency = false,
   }) {
-    return Card(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Icon container
+          Container(
+            width: isSmallScreen ? 28 : 32,
+            height: isSmallScreen ? 28 : 32,
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-          ],
-        ),
-        padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Icon container - compact
-            Container(
-              width: isSmallScreen ? 32 : 36,
-              height: isSmallScreen ? 32 : 36,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Icon(
-                    icon,
-                    size: isSmallScreen ? 16 : 18,
-                    color: iconColor
-                ),
+            child: Center(
+              child: Icon(
+                icon,
+                size: isSmallScreen ? 14 : 16,
+                color: iconColor,
               ),
             ),
-            SizedBox(width: isSmallScreen ? 8 : 10),
-      
-            // Text content
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      if (showCurrency)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 2),
-                          child: Text(
-                            '',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 10 : 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                      Expanded(
+          ),
+          SizedBox(width: isSmallScreen ? 6 : 8),
+
+          // Text content
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    if (showCurrency)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 1),
                         child: Text(
-                          value,
+                          '',
                           style: TextStyle(
-                            fontSize: isSmallScreen ? 14 : 16,
+                            fontSize: isSmallScreen ? 10 : 11,
                             fontWeight: FontWeight.bold,
                             color: Colors.black87,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ],
-                  ),
-                  SizedBox(height: isSmallScreen ? 2 : 3),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 10 : 11,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 13 : 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  ],
+                ),
+                SizedBox(height: isSmallScreen ? 1 : 2),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 9 : 10,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
                   ),
-                ],
-              ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
-  Widget _buildEmptyState() {
+
+  Widget _buildEmptyState(bool isSmallScreen) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Iconsax.wallet_money, size: 80, color: Colors.white.withOpacity(0.5)),
+          Icon(
+            Iconsax.wallet_money,
+            size: isSmallScreen ? 60 : 80,
+            color: Colors.grey[300],
+          ),
           const SizedBox(height: 20),
           Text(
             'No Salary Records',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: isSmallScreen ? 18 : 20,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Colors.grey[700],
             ),
           ),
           const SizedBox(height: 10),
@@ -502,7 +600,10 @@ class _SalaryScreenState extends State<SalaryScreen> {
             _searchController.text.isNotEmpty
                 ? 'Try a different search term'
                 : 'Add your first salary record',
-            style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.7)),
+            style: TextStyle(
+              fontSize: isSmallScreen ? 13 : 14,
+              color: Colors.grey[500],
+            ),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -510,8 +611,8 @@ class _SalaryScreenState extends State<SalaryScreen> {
             icon: const Icon(Iconsax.add, size: 18),
             label: const Text('Add Salary'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF667EEA),
+              backgroundColor: const Color(0xFF667EEA),
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -527,9 +628,8 @@ class _SalaryScreenState extends State<SalaryScreen> {
       EmployeeSalary salary,
       EmployeeSalaryProvider provider,
       MediaQueryData mediaQuery,
+      bool isSmallScreen,
       ) {
-    final isSmallScreen = mediaQuery.size.width < 600;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -596,14 +696,37 @@ class _SalaryScreenState extends State<SalaryScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            'Basic: ${salary.basicSalary}',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 11 : 13,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: [
+                              Text(
+                                'Basic: ${salary.basicSalary.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 11 : 13,
+                                  color: Colors.grey[600],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              // const SizedBox(width: 8),
+                              // Container(
+                              //   width: 4,
+                              //   height: 4,
+                              //   decoration: BoxDecoration(
+                              //     color: Colors.grey[400],
+                              //     shape: BoxShape.circle,
+                              //   ),
+                              // ),
+                              // const SizedBox(width: 8),
+                              // Text(
+                              //   'Code: ${salary.employeeCode}',
+                              //   style: TextStyle(
+                              //     fontSize: isSmallScreen ? 11 : 13,
+                              //     color: Colors.grey[600],
+                              //   ),
+                              //   maxLines: 1,
+                              //   overflow: TextOverflow.ellipsis,
+                              // ),
+                            ],
                           ),
                         ],
                       ),
@@ -622,17 +745,36 @@ class _SalaryScreenState extends State<SalaryScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          salary.paymentMethod,
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 12,
-                            color: Colors.grey[700],
-                            fontWeight: FontWeight.bold,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: salary.paymentMethod == 'Cash'
+                                ? Colors.green.withOpacity(0.1)
+                                : salary.paymentMethod == 'Cheque'
+                                ? Colors.blue.withOpacity(0.1)
+                                : Colors.purple.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            salary.paymentMethod,
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 9 : 10,
+                              color: salary.paymentMethod == 'Cash'
+                                  ? Colors.green[700]
+                                  : salary.paymentMethod == 'Cheque'
+                                  ? Colors.blue[700]
+                                  : Colors.purple[700],
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
                     ),
-SizedBox(width: 10,),
+                    SizedBox(width: 8,),
+
                     // Actions Menu
                     PopupMenuButton<String>(
                       onSelected: (value) {
@@ -649,9 +791,9 @@ SizedBox(width: 10,),
                           value: 'view',
                           child: Row(
                             children: [
-                              Icon(Iconsax.eye, size: 18, color: Colors.grey[700]),
+                              Icon(Iconsax.eye, size: 16, color: Colors.grey[700]),
                               const SizedBox(width: 8),
-                              const Text('View Details'),
+                              const Text('View Details', style: TextStyle(fontSize: 13)),
                             ],
                           ),
                         ),
@@ -659,9 +801,9 @@ SizedBox(width: 10,),
                           value: 'edit',
                           child: Row(
                             children: [
-                              Icon(Iconsax.edit, size: 18, color: Colors.blue[700]),
+                              Icon(Iconsax.edit, size: 16, color: Colors.blue[700]),
                               const SizedBox(width: 8),
-                              const Text('Edit'),
+                              const Text('Edit', style: TextStyle(fontSize: 13)),
                             ],
                           ),
                         ),
@@ -669,16 +811,16 @@ SizedBox(width: 10,),
                           value: 'delete',
                           child: Row(
                             children: [
-                              Icon(Iconsax.trash, size: 18, color: Colors.red[700]),
+                              Icon(Iconsax.trash, size: 16, color: Colors.red[700]),
                               const SizedBox(width: 8),
-                              const Text('Delete'),
+                              const Text('Delete', style: TextStyle(fontSize: 13)),
                             ],
                           ),
                         ),
                       ],
                       child: Container(
-                        width: 36,
-                        height: 36,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
                           color: Colors.grey[50],
                           shape: BoxShape.circle,
@@ -686,7 +828,7 @@ SizedBox(width: 10,),
                         ),
                         child: const Icon(
                           Iconsax.more,
-                          size: 18,
+                          size: 16,
                           color: Colors.grey,
                         ),
                       ),
@@ -701,7 +843,7 @@ SizedBox(width: 10,),
     );
   }
 
-  // ========== DIALOGS ==========
+  // ========== DIALOGS (All unchanged from your original code) ==========
 
   void _showAddSalaryDialog(BuildContext context) {
     final provider = Provider.of<EmployeeSalaryProvider>(

@@ -1,6 +1,7 @@
 // lib/screen/monthly_attandance_sheet/monthly_attendance_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../model/monthly_attandance_sheet/monthly_attandance_sheet.dart';
 import '../../provider/monthly_attandance_sheet_provider/monthly_att_provider.dart';
@@ -14,7 +15,8 @@ class MonthlyAttendanceScreen extends StatefulWidget {
 
 class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
   final ScrollController _scrollController = ScrollController();
-  final ScrollController _horizontalScrollController = ScrollController(); // Add this
+  final ScrollController _horizontalScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -54,108 +56,167 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     final fontSizeLarge = isSmallScreen ? 16.0 : isMediumScreen ? 18.0 : 20.0;
     final borderRadius = isSmallScreen ? 12.0 : isMediumScreen ? 16.0 : 20.0;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
-        statusBarColor: Colors.transparent,
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Monthly Attendance',
-            style: TextStyle(
-              fontSize: fontSizeLarge,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          centerTitle: true,
-          backgroundColor: const Color(0xFF667EEA),
-          iconTheme: const IconThemeData(color: Colors.white),
-          actions: [
-            IconButton(
-              onPressed: () {
-                // Filter action
-              },
-              icon: Icon(Icons.filter_alt, color: Colors.white, size: iconSize),
-              tooltip: 'Filter',
-            ),
-
-            IconButton(
-              onPressed: () {
-                final provider = Provider.of<MonthlyReportProvider>(context, listen: false);
-                provider.refreshData();
-              },
-              icon: Icon(Icons.refresh, color: Colors.white, size: iconSize),
-              tooltip: 'Refresh',
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark.copyWith(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
         ),
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF667EEA),
-                Color(0xFF764BA2),
-              ],
-            ),
-          ),
-          child: Consumer<MonthlyReportProvider>(
-            builder: (context, provider, child) {
-              return Column(
-                children: [
-                  // Filters Section
-                  _buildFilters(
-                    provider,
-                    screenWidth,
-                    isSmallScreen,
-                    isMediumScreen,
-                    isLargeScreen,
-                    paddingValue,
-                    borderRadius,
-                    iconSize,
-                    fontSizeMedium,
+        child: Consumer<MonthlyReportProvider>(
+          builder: (context, provider, child) {
+            return Column(
+              children: [
+                // Add some top padding to account for status bar
+                SizedBox(height: MediaQuery.of(context).padding.top + 8),
+
+                // Custom Header with Menu Icon (like attendance screen)
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 16 : 20,
                   ),
-
-                  SizedBox(height: paddingValue),
-
-                  // Content
-                  Expanded(
-                    child: Container(
-                      margin: EdgeInsets.all(paddingValue),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(borderRadius),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: paddingValue,
-                            offset: const Offset(0, 4),
+                  child: Row(
+                    children: [
+                      // Menu/Drawer icon to open drawer
+                      // Builder(
+                      //   builder: (context) {
+                      //     return Container(
+                      //       decoration: BoxDecoration(
+                      //         color: Colors.white,
+                      //         borderRadius: BorderRadius.circular(12),
+                      //         boxShadow: [
+                      //           BoxShadow(
+                      //             color: Colors.black.withOpacity(0.05),
+                      //             blurRadius: 8,
+                      //             offset: const Offset(0, 2),
+                      //           ),
+                      //         ],
+                      //       ),
+                      //       child: IconButton(
+                      //         icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
+                      //         onPressed: () {
+                      //           Scaffold.of(context).openDrawer();
+                      //         },
+                      //       ),
+                      //     );
+                      //   },
+                      // ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Monthly Attendance',
+                        style: TextStyle(
+                          fontSize: fontSizeLarge,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF667EEA),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Filter button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: () {
+                            // Filter action
+                          },
+                          icon: Icon(
+                            Icons.filter_alt,
+                            color: const Color(0xFF667EEA),
+                            size: iconSize * 0.8,
                           ),
-                        ],
+                          tooltip: 'Filter',
+                        ),
                       ),
-                      child: _buildContent(
-                        provider,
-                        screenWidth,
-                        screenHeight,
-                        isSmallScreen,
-                        isMediumScreen,
-                        isLargeScreen,
-                        paddingValue,
-                        fontSizeSmall,
-                        fontSizeMedium,
-                        fontSizeLarge,
-                        borderRadius,
+                      const SizedBox(width: 8),
+                      // Refresh button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: () {
+                            final provider = Provider.of<MonthlyReportProvider>(context, listen: false);
+                            provider.refreshData();
+                          },
+                          icon: Icon(
+                            Icons.refresh,
+                            color: const Color(0xFF667EEA),
+                            size: iconSize * 0.8,
+                          ),
+                          tooltip: 'Refresh',
+                        ),
                       ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: paddingValue),
+
+                // Filters Section
+                _buildFilters(
+                  provider,
+                  screenWidth,
+                  isSmallScreen,
+                  isMediumScreen,
+                  isLargeScreen,
+                  paddingValue,
+                  borderRadius,
+                  iconSize,
+                  fontSizeMedium,
+                ),
+
+                SizedBox(height: paddingValue),
+
+                // Content
+                Expanded(
+                  child: Container(
+                    margin: EdgeInsets.all(paddingValue),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(borderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: paddingValue,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildContent(
+                      provider,
+                      screenWidth,
+                      screenHeight,
+                      isSmallScreen,
+                      isMediumScreen,
+                      isLargeScreen,
+                      paddingValue,
+                      fontSizeSmall,
+                      fontSizeMedium,
+                      fontSizeLarge,
+                      borderRadius,
                     ),
                   ),
-                ],
-              );
-            },
-          ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -555,6 +616,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
           borderRadius: BorderRadius.circular(borderRadius / 2),
         ),
         backgroundColor: const Color(0xFF667EEA),
+        foregroundColor: Colors.white,
       ),
       child: provider.isLoading
           ? SizedBox(
@@ -725,7 +787,6 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     );
   }
 
-  // ==================== ATTENDANCE TABLE ====================
   // ==================== ATTENDANCE TABLE ====================
   Widget _buildAttendanceTable(
       MonthlyReportProvider provider,
@@ -1255,7 +1316,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _horizontalScrollController.dispose(); // Add this
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 }
