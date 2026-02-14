@@ -2674,4 +2674,3 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return DateFormat('dd/MM/yyyy').format(date);
   }
 }
-

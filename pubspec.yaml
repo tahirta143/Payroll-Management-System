@@ -48,6 +48,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   syncfusion_flutter_charts:
   fl_chart:
+  shimmer: ^3.0.0
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
   flutter_test:
