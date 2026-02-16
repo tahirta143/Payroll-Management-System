@@ -329,16 +329,13 @@ class AttendanceProvider extends ChangeNotifier {
         // SORT attendance by date ASCENDING (oldest first)
         _attendance.sort((a, b) => a.date.compareTo(b.date));
 
-        // DEBUG: Print date information
-        print('=== ATTENDANCE DATES DEBUG ===');
-        if (_attendance.isNotEmpty) {
-          print('Total attendance records: ${_attendance.length}');
-          for (int i = 0; i < min(5, _attendance.length); i++) {
-            final record = _attendance[i];
-            print('Record $i: Date = ${record.date}');
-            print('  Formatted: ${_formatMonthForFilter(record.date)}');
-          }
+        // CRITICAL: Fetch employees if not already loaded
+        if (_employees.isEmpty) {
+          await fetchEmployees();
         }
+
+        // Merge employee images with attendance records
+        _mergeEmployeeImagesWithAttendance();
 
         // Extract unique months for filtering
         _extractMonthsFromData();
@@ -355,11 +352,9 @@ class AttendanceProvider extends ChangeNotifier {
         _applyFilters();
 
         print('=== ATTENDANCE FETCH COMPLETE ===');
-        print('Total filtered records: ${_filteredAttendance.length}');
-        print('Available months: ${_availableMonths.length}');
-        if (_availableMonths.length > 1) {
-          print('Month list: ${_availableMonths.sublist(1)}');
-        }
+        print('Total attendance records: ${_attendance.length}');
+        print('Records with images after merge: ${_attendance.where((a) => a.imageUrl != null && a.imageUrl!.isNotEmpty).length}');
+
       } else if (response.statusCode == 401) {
         throw Exception('Unauthorized - Please login again');
       } else if (response.statusCode == 403) {
@@ -379,6 +374,95 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
+// Add this new method to merge employee images
+  void _mergeEmployeeImagesWithAttendance() {
+    // Create a lookup map for employees by multiple identifiers
+    final Map<String, String> employeeImageMap = {};
+    final Map<int, String> employeeIdImageMap = {};
+
+    for (var emp in _employees) {
+      // Map by employee ID
+      if (emp.id > 0 && emp.imageUrl != null && emp.imageUrl!.isNotEmpty) {
+        employeeIdImageMap[emp.id] = emp.imageUrl!;
+      }
+
+      // Map by employee name (lowercase for case-insensitive matching)
+      if (emp.name.isNotEmpty && emp.imageUrl != null && emp.imageUrl!.isNotEmpty) {
+        employeeImageMap[emp.name.toLowerCase().trim()] = emp.imageUrl!;
+      }
+
+      // Map by employee code
+      if (emp.empId.isNotEmpty && emp.imageUrl != null && emp.imageUrl!.isNotEmpty) {
+        employeeImageMap[emp.empId.toLowerCase().trim()] = emp.imageUrl!;
+      }
+    }
+
+    print('=== MERGING EMPLOYEE IMAGES ===');
+    print('Employee image map size: ${employeeImageMap.length}');
+    print('Employee ID map size: ${employeeIdImageMap.length}');
+
+    // Update attendance records with images
+    for (int i = 0; i < _attendance.length; i++) {
+      final attendance = _attendance[i];
+
+      // Skip if already has image
+      if (attendance.imageUrl != null && attendance.imageUrl!.isNotEmpty) {
+        continue;
+      }
+
+      String? imageUrl;
+
+      // Try to match by employee ID first (most reliable)
+      if (attendance.employeeId > 0 && employeeIdImageMap.containsKey(attendance.employeeId)) {
+        imageUrl = employeeIdImageMap[attendance.employeeId];
+        print('Matched by ID: ${attendance.employeeName} (ID: ${attendance.employeeId})');
+      }
+      // Try to match by employee name
+      else if (attendance.employeeName.isNotEmpty) {
+        final nameKey = attendance.employeeName.toLowerCase().trim();
+        if (employeeImageMap.containsKey(nameKey)) {
+          imageUrl = employeeImageMap[nameKey];
+          print('Matched by name: ${attendance.employeeName}');
+        }
+      }
+      // Try to match by employee code
+      else if (attendance.empId.isNotEmpty) {
+        final codeKey = attendance.empId.toLowerCase().trim();
+        if (employeeImageMap.containsKey(codeKey)) {
+          imageUrl = employeeImageMap[codeKey];
+          print('Matched by code: ${attendance.empId}');
+        }
+      }
+
+      // Update the attendance record with the image URL
+      if (imageUrl != null) {
+        // Since Attendance is immutable, we need to recreate it or use copyWith
+        _attendance[i] = Attendance(
+          id: attendance.id,
+          date: attendance.date,
+          departmentId: attendance.departmentId,
+          employeeId: attendance.employeeId,
+          dutyShiftId: attendance.dutyShiftId,
+          machineCode: attendance.machineCode,
+          dutyShift: attendance.dutyShift,
+          timeIn: attendance.timeIn,
+          timeOut: attendance.timeOut,
+          createdAt: attendance.createdAt,
+          updatedAt: attendance.updatedAt,
+          empId: attendance.empId,
+          employeeName: attendance.employeeName,
+          employeeMachineCode: attendance.employeeMachineCode,
+          departmentName: attendance.departmentName,
+          dutyShiftName: attendance.dutyShiftName,
+          dutyShiftStart: attendance.dutyShiftStart,
+          dutyShiftEnd: attendance.dutyShiftEnd,
+          lateMinutesStr: attendance.lateMinutesStr,
+          overtimeMinutesStr: attendance.overtimeMinutesStr,
+          imageUrl: imageUrl,  // Add the image URL here
+        );
+      }
+    }
+  }
   // Method to filter attendance for staff users
   // Update the _filterStaffAttendance method
   Future<void> _filterStaffAttendance() async {
@@ -919,6 +1003,7 @@ class AttendanceProvider extends ChangeNotifier {
   // Update the _parseEmployeeMap method in your AttendanceProvider
 
 // Helper method to parse employee from map
+// Helper method to parse employee from map
   Employee _parseEmployeeMap(Map<String, dynamic> data) {
     try {
       final id = _parseInt(data['id']) ??
@@ -937,37 +1022,41 @@ class AttendanceProvider extends ChangeNotifier {
           data['staff_id']?.toString() ??
           'N/A';
 
-      // FIX: Handle department which might be a Map or a string
-      String department = 'Unknown Department';
+      // Parse image URL
+      String? imageUrl;
+      if (data['image_url'] != null) {
+        imageUrl = data['image_url'].toString();
+      } else if (data['profile_image'] != null) {
+        imageUrl = data['profile_image'].toString();
+      } else if (data['avatar'] != null) {
+        imageUrl = data['avatar'].toString();
+      } else if (data['photo'] != null) {
+        imageUrl = data['photo'].toString();
+      } else if (data['image'] != null) {
+        imageUrl = data['image'].toString();
+      } else if (data['employee_image'] != null) {
+        imageUrl = data['employee_image'].toString();
+      }
 
+      // Parse department (could be Map or String)
+      String department = 'Unknown Department';
       if (data['department'] != null) {
         if (data['department'] is Map) {
-          // Department is a Map, extract the name
           final deptMap = data['department'] as Map<String, dynamic>;
           department = deptMap['name']?.toString() ?? 'Unknown Department';
         } else if (data['department'] is String) {
-          // Department is already a string
           department = data['department'] as String;
         }
       } else if (data['department_name'] != null) {
-        // Try department_name field
         department = data['department_name'].toString();
-      } else if (data['dept'] != null) {
-        // Try dept field
-        department = data['dept'].toString();
-      } else if (data['department_id'] != null) {
-        // Try department_id field
-        department = data['department_id'].toString();
       }
-
-      // Trim and clean department name
-      department = department.trim();
 
       return Employee(
         id: id,
         name: name.trim(),
         empId: empId.trim(),
-        department: department,
+        imageUrl: imageUrl,  // Add this
+        department: department.trim(),
       );
     } catch (e) {
       print('Error in _parseEmployeeMap: $e');
@@ -975,6 +1064,7 @@ class AttendanceProvider extends ChangeNotifier {
         id: 0,
         name: 'Error',
         empId: 'N/A',
+        imageUrl: null,  // Add this
         department: 'Error',
       );
     }

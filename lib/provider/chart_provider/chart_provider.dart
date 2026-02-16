@@ -691,7 +691,7 @@ class ChartProvider extends ChangeNotifier {
   }
 
   // ============================================================
-  // DATE FORMATTING METHODS
+  // DATE FORMATTING METHODS - UPDATED TO "17 Feb 2026" FORMAT
   // ============================================================
 
   String _formatDateForAPI(DateTime date) {
@@ -707,15 +707,26 @@ class ChartProvider extends ChangeNotifier {
   }
 
   String _formatDateForDisplay(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    // Format as "17 Feb 2026"
+    final day = date.day;
+    final month = _getMonthAbbreviation(date.month);
+    final year = date.year;
+    return '$day $month $year';
   }
 
   String _formatMonthForDisplay(DateTime date) {
-    final monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+    // Format as "Feb 2026"
+    final month = _getMonthAbbreviation(date.month);
+    final year = date.year;
+    return '$month $year';
+  }
+
+  String _getMonthAbbreviation(int month) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    return '${monthNames[date.month - 1]} ${date.year}';
+    return months[month - 1];
   }
 
   // ============================================================

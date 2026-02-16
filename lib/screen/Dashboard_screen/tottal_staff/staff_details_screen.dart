@@ -191,10 +191,14 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
           return;
         }
 
+        employeeList.sort((a, b) =>
+            a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
         setState(() {
           _employeeList = employeeList;
           _isLoading = false;
         });
+
 
       } else if (response.statusCode == 401) {
         setState(() {

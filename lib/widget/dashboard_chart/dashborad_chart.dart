@@ -71,23 +71,40 @@ class _ChartWidgetState extends State<ChartWidget> {
     }
   }
 
-  void _selectDate(BuildContext context) async {
-    final provider = context.read<ChartProvider>();
-    final initialDate = provider.selectedDate ?? DateTime.now();
+  String _formatDateLabel(String label, bool isDaily) {
+    if (!isDaily) return label; // For monthly view, return as is
 
-    final selectedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-
-    if (selectedDate != null) {
-      provider.setSelectedDate(selectedDate);
-      provider.setChartType('daily');
-      await provider.fetchAttendanceData();
+    // Try to format date from various possible formats to "17 Feb 2026"
+    try {
+      // If label is in format "dd/MM" or "dd MMM"
+      final parts = label.split(' ');
+      if (parts.length == 2) {
+        // Already in "dd MMM" format
+        return label;
+      } else if (label.contains('/')) {
+        final dateParts = label.split('/');
+        if (dateParts.length == 2) {
+          final day = int.tryParse(dateParts[0]);
+          final month = int.tryParse(dateParts[1]);
+          if (day != null && month != null) {
+            return '$day ${_getMonthAbbreviation(month)}';
+          }
+        }
+      }
+    } catch (e) {
+      // If parsing fails, return original
     }
+    return label;
   }
+
+  String _getMonthAbbreviation(int month) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return months[month - 1];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ChartProvider>(
@@ -110,10 +127,6 @@ class _ChartWidgetState extends State<ChartWidget> {
                 _buildHeader(provider),
                 const SizedBox(height: 16),
 
-                // Statistics Summary
-                _buildSummaryStats(provider),
-                const SizedBox(height: 16),
-
                 // Loading indicator or chart
                 if (provider.isLoading)
                   _buildLoadingIndicator()
@@ -122,7 +135,14 @@ class _ChartWidgetState extends State<ChartWidget> {
                 else if (!provider.hasData)
                     _buildEmptyState()
                   else
-                    _buildChart(provider),
+                    Column(
+                      children: [
+                        _buildChart(provider),
+                        const SizedBox(height: 16),
+                        // Date display horizontally under the chart
+                        // _buildDateDisplay(provider),
+                      ],
+                    ),
 
                 // Legend
                 if (widget.showLegend && provider.hasData && !provider.isLoading)
@@ -166,9 +186,9 @@ class _ChartWidgetState extends State<ChartWidget> {
 
             // Date/Month Selector
             if (widget.showDateSelector && provider.chartType == 'daily')
-              _buildDateSelector(),
-            if (widget.showMonthSelector && provider.chartType == 'monthly')
-              _buildMonthSelector(),
+            // _buildDateSelector(),
+              if (widget.showMonthSelector && provider.chartType == 'monthly')
+                _buildMonthSelector(),
 
             // Refresh Button
             IconButton(
@@ -185,15 +205,84 @@ class _ChartWidgetState extends State<ChartWidget> {
     );
   }
 
+  // Method to build date display horizontally under the chart with "17 Feb 2026" format
+  // Widget _buildDateDisplay(ChartProvider provider) {
+  //   final chartData = provider.chartVisualizationData;
+  //   final labels = chartData['labels'] as List<String>;
+  //   final isDaily = provider.chartType == 'daily';
+  //
+  //   // Format each label to "17 Feb 2026" format
+  //   final formattedLabels = labels.map((label) {
+  //     if (isDaily) {
+  //       // If it's daily view, format to "17 Feb"
+  //       // Note: Year might not be available in the label, so we show only day and month
+  //       return _formatDateLabel(label, isDaily);
+  //     } else {
+  //       // For monthly view, return as is (likely already formatted)
+  //       return label;
+  //     }
+  //   }).toList();
+  //
+  //   return Container(
+  //     width: double.infinity,
+  //     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+  //     decoration: BoxDecoration(
+  //       color: Colors.grey.shade50,
+  //       borderRadius: BorderRadius.circular(8),
+  //       border: Border.all(color: Colors.grey.shade200),
+  //     ),
+  //     child: SingleChildScrollView(
+  //       scrollDirection: Axis.horizontal,
+  //       child: Row(
+  //         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  //         children: formattedLabels.asMap().entries.map((entry) {
+  //           final index = entry.key;
+  //           final label = entry.value;
+  //
+  //           // Add a subtle color variation based on index for visual appeal
+  //           final colorShade = (index % 3) == 0
+  //               ? Colors.blue
+  //               : (index % 3) == 1
+  //               ? Colors.green
+  //               : Colors.orange;
+  //
+  //           return Container(
+  //             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  //             margin: const EdgeInsets.symmetric(horizontal: 4),
+  //             decoration: BoxDecoration(
+  //               color: Colors.white,
+  //               borderRadius: BorderRadius.circular(20),
+  //               border: Border.all(color: colorShade.withOpacity(0.3)),
+  //               boxShadow: [
+  //                 BoxShadow(
+  //                   color: Colors.grey.withOpacity(0.1),
+  //                   blurRadius: 2,
+  //                   offset: const Offset(0, 1),
+  //                 ),
+  //               ],
+  //             ),
+  //             child: Text(
+  //               label,
+  //               style: TextStyle(
+  //                 fontSize: 13,
+  //                 fontWeight: FontWeight.w600,
+  //                 color: colorShade.shade700,
+  //               ),
+  //             ),
+  //           );
+  //         }).toList(),
+  //       ),
+  //     ),
+  //   );
+  // }
 
-
-  Widget _buildDateSelector() {
-    return IconButton(
-      icon: const Icon(Icons.calendar_today, size: 20),
-      onPressed: () => _selectDate(context),
-      tooltip: 'Select Date',
-    );
-  }
+  // Widget _buildDateSelector() {
+  //   return IconButton(
+  //     icon: const Icon(Icons.calendar_today, size: 20),
+  //     onPressed: () => _selectDate(context),
+  //     tooltip: 'Select Date',
+  //   );
+  // }
 
   Widget _buildMonthSelector() {
     return PopupMenuButton<String>(
@@ -212,45 +301,6 @@ class _ChartWidgetState extends State<ChartWidget> {
         }).toList();
       },
       tooltip: 'Select Month',
-    );
-  }
-
-  Widget _buildSummaryStats(ChartProvider provider) {
-    final stats = provider.stats;
-
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _statItem(
-            label: 'Present',
-            value: '${stats['present']}',
-            icon: Icons.check_circle,
-            color: widget.presentColor,
-            percentage: stats['attendanceRate'],
-          ),
-          _verticalDivider(),
-          _statItem(
-            label: 'Absent',
-            value: '${stats['absent']}',
-            icon: Icons.cancel,
-            color: widget.absentColor,
-          ),
-          _verticalDivider(),
-          _statItem(
-            label: 'Late',
-            value: '${stats['late']}',
-            icon: Icons.schedule,
-            color: widget.lateColor,
-            percentage: stats['lateRate'],
-          ),
-        ],
-      ),
     );
   }
 
@@ -313,6 +363,11 @@ class _ChartWidgetState extends State<ChartWidget> {
     final isDaily = provider.chartType == 'daily';
     final labels = chartData['labels'] as List<String>;
 
+    // Format labels for the chart tooltips
+    final formattedLabels = labels.map((label) {
+      return _formatDateLabel(label, isDaily);
+    }).toList();
+
     // Determine if we should show data labels
     final showLabels = widget.showDataLabels && labels.length <= 10;
 
@@ -335,6 +390,8 @@ class _ChartWidgetState extends State<ChartWidget> {
             fontSize: isDaily ? 10 : 12,
             color: Colors.grey.shade700,
           ),
+          // Hide x-axis labels since we're showing them separately
+          isVisible: false,
         ),
         primaryYAxis: NumericAxis(
           minimum: 0,
@@ -345,7 +402,14 @@ class _ChartWidgetState extends State<ChartWidget> {
           axisLine: const AxisLine(width: 1, color: Colors.grey),
           labelStyle: const TextStyle(fontSize: 10, color: Colors.grey),
         ),
-        series: _buildChartSeries(chartData, isDaily, useLineChart, useGroupedBars, showLabels),
+        series: _buildChartSeries(
+          chartData,
+          isDaily,
+          useLineChart,
+          useGroupedBars,
+          showLabels,
+          formattedLabels, // Pass formatted labels to series
+        ),
         tooltipBehavior: TooltipBehavior(
           enable: true,
           format: 'point.series.name : point.y',
@@ -359,7 +423,7 @@ class _ChartWidgetState extends State<ChartWidget> {
           overflowMode: LegendItemOverflowMode.wrap,
           textStyle: const TextStyle(fontSize: 12),
         )
-            : const Legend(isVisible: false), // Provide non-null Legend
+            : const Legend(isVisible: false),
         zoomPanBehavior: ZoomPanBehavior(
           enablePanning: true,
           enablePinching: true,
@@ -374,20 +438,20 @@ class _ChartWidgetState extends State<ChartWidget> {
       bool isDaily,
       bool useLineChart,
       bool useGroupedBars,
-      bool showLabels) {
-    final labels = chartData['labels'] as List<String>;
+      bool showLabels,
+      List<String> formattedLabels) {
     final present = chartData['present'] as List<int>;
     final absent = chartData['absent'] as List<int>;
     final late = chartData['late'] as List<int>;
 
-    final data = _prepareChartData(labels, present, absent, late);
+    final data = _prepareChartData(formattedLabels, present, absent, late);
 
     if (useLineChart) {
       // Use line chart for large datasets
       return [
         LineSeries<int, String>(
           dataSource: present,
-          xValueMapper: (data, index) => index < labels.length ? labels[index] : '',
+          xValueMapper: (data, index) => index < formattedLabels.length ? formattedLabels[index] : '',
           yValueMapper: (data, index) => data,
           name: 'Present',
           color: widget.presentColor,
@@ -401,7 +465,7 @@ class _ChartWidgetState extends State<ChartWidget> {
         ),
         LineSeries<int, String>(
           dataSource: absent,
-          xValueMapper: (data, index) => index < labels.length ? labels[index] : '',
+          xValueMapper: (data, index) => index < formattedLabels.length ? formattedLabels[index] : '',
           yValueMapper: (data, index) => data,
           name: 'Absent',
           color: widget.absentColor,
@@ -415,7 +479,7 @@ class _ChartWidgetState extends State<ChartWidget> {
         ),
         LineSeries<int, String>(
           dataSource: late,
-          xValueMapper: (data, index) => index < labels.length ? labels[index] : '',
+          xValueMapper: (data, index) => index < formattedLabels.length ? formattedLabels[index] : '',
           yValueMapper: (data, index) => data,
           name: 'Late',
           color: widget.lateColor,
@@ -450,7 +514,7 @@ class _ChartWidgetState extends State<ChartWidget> {
               color: Colors.black87,
             ),
           )
-              : const DataLabelSettings(isVisible: false), // Non-null default
+              : const DataLabelSettings(isVisible: false),
         ),
         ColumnSeries<Map<String, dynamic>, String>(
           dataSource: data,
@@ -561,6 +625,7 @@ class _ChartWidgetState extends State<ChartWidget> {
       ];
     }
   }
+
   List<Map<String, dynamic>> _prepareChartData(
       List<String> labels, List<int> present, List<int> absent, List<int> late) {
     final List<Map<String, dynamic>> data = [];

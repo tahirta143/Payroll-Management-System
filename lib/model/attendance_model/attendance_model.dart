@@ -51,6 +51,29 @@ class Attendance {
   });
 
   factory Attendance.fromJson(Map<String, dynamic> json) {
+    // Try to get image URL from various possible locations
+    String? imageUrl;
+
+    // Check if employee data is nested
+    if (json['employee'] != null && json['employee'] is Map) {
+      final employeeData = json['employee'] as Map<String, dynamic>;
+      imageUrl = employeeData['image_url'] ??
+          employeeData['profile_image'] ??
+          employeeData['avatar'] ??
+          employeeData['photo'] ??
+          employeeData['image'];
+    }
+
+    // If not found in nested employee, try direct fields
+    if (imageUrl == null) {
+      imageUrl = json['employee_image'] ??
+          json['profile_image'] ??
+          json['avatar'] ??
+          json['photo'] ??
+          json['image_url'] ??
+          json['image'];
+    }
+
     return Attendance(
       id: json['id'] ?? 0,
       date: DateTime.parse(json['date'] ?? DateTime.now().toString()),
@@ -64,15 +87,12 @@ class Attendance {
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toString()),
       updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toString()),
       empId: json['emp_id'] ?? '',
-      imageUrl: json['employee_image'] ??
-          json['profile_image'] ??
-          json['avatar'] ??
-          json['photo'] ??
-          json['image_url'] ??
-          json['image'],
-      employeeName: json['employee_name'] ?? '',
+      imageUrl: imageUrl,  // Use the extracted imageUrl
+      employeeName: json['employee_name'] ??
+          (json['employee'] != null ? json['employee']['name'] ?? '' : ''),
       employeeMachineCode: json['employee_machine_code'],
-      departmentName: json['department_name'] ?? '',
+      departmentName: json['department_name'] ??
+          (json['department'] != null ? json['department']['name'] ?? '' : ''),
       dutyShiftName: json['duty_shift_name'] ?? '',
       dutyShiftStart: json['duty_shift_start'] ?? '09:00',
       dutyShiftEnd: json['duty_shift_end'] ?? '17:00',
@@ -102,7 +122,6 @@ class Attendance {
     };
   }
 
-  // Create a copyWith method for updates
   Attendance copyWith({
     int? id,
     DateTime? date,
@@ -143,9 +162,11 @@ class Attendance {
     );
   }
 
+  // ✅ FIX: Present = timeIn exists (timeOut not required)
+  bool get isPresent => timeIn.isNotEmpty;
+
   // ============ Calculate late minutes ============
   int get lateMinutes {
-    // If API already provides late minutes, use it
     if (lateMinutesStr != null) {
       return int.tryParse(lateMinutesStr!) ?? 0;
     }
@@ -153,18 +174,8 @@ class Attendance {
     if (timeIn.isEmpty) return 0;
 
     try {
-      // Office start time is 9:00 AM
-      final officeStart = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        9,   // hour
-        15,   // minute
-      );
-
+      final officeStart = DateTime(date.year, date.month, date.day, 9, 15);
       final timeInTime = _parseTime(timeIn);
-
-      // Calculate if checking in after 9:00 AM
       if (timeInTime.isAfter(officeStart)) {
         return timeInTime.difference(officeStart).inMinutes;
       }
@@ -175,28 +186,18 @@ class Attendance {
     }
   }
 
-  // Check if employee is late (after 9:00 AM)
-  bool get isLate {
-    return lateMinutes > 0;
-  }
+  bool get isLate => lateMinutes > 0;
 
-  // Check if late after 9:15 AM
-  bool get isLateAfterNineFifteen {
-    return lateMinutes > 15; // 9:15 AM is 15 minutes after 9:00 AM
-  }
+  bool get isLateAfterNineFifteen => lateMinutes > 15;
 
-  // Calculate overtime minutes
   int get overtimeMinutes {
     if (overtimeMinutesStr != null) {
       return int.tryParse(overtimeMinutesStr!) ?? 0;
     }
-
     if (timeOut.isEmpty) return 0;
-
     try {
       final shiftEnd = _parseTime(dutyShiftEnd);
       final timeOutTime = _parseTime(timeOut);
-
       if (timeOutTime.isAfter(shiftEnd)) {
         return timeOutTime.difference(shiftEnd).inMinutes;
       }
@@ -206,82 +207,54 @@ class Attendance {
     }
   }
 
-  // Check if present
-  bool get isPresent => timeIn.isNotEmpty && timeOut.isNotEmpty;
-
-  // Get status color
   Color get statusColor {
-    if (!isPresent) {
-      // If has timeIn but no timeOut, it's half day
-      if (timeIn.isNotEmpty && timeOut.isEmpty) {
-        return Colors.orange[800]!;
-      }
-      return Colors.red;
-    }
+    if (!isPresent) return Colors.red;
+
+    // Has timeIn but no timeOut yet = half day / still in office
+    if (timeOut.isEmpty) return Colors.orange[800]!;
 
     if (isLate) {
-      if (isLateAfterNineFifteen) {
-        return Colors.orange; // Late after 9:15
-      }
-      return Colors.yellow[700]!; // Late before 9:15
+      if (isLateAfterNineFifteen) return Colors.orange;
+      return Colors.yellow[700]!;
     }
 
-    if (overtimeMinutes > 0) return Colors.blue; // On Time + OT
-    return Colors.green; // On Time
+    if (overtimeMinutes > 0) return Colors.blue;
+    return Colors.green;
   }
 
-  // ============ Get status text ============
   String get status {
-    if (!isPresent) {
-      if (timeIn.isNotEmpty && timeOut.isEmpty) {
-        return 'Half Day';
-      }
-      return 'Absent';
-    }
+    if (!isPresent) return 'Absent';
+
+    // Has timeIn but no timeOut
+    if (timeOut.isEmpty) return 'In Office';
 
     if (isLate) {
-      // If late after 9:15 AM, show exact minutes
       if (isLateAfterNineFifteen) {
         final minutes = lateMinutes;
         if (minutes >= 60) {
           final hours = minutes ~/ 60;
           final mins = minutes % 60;
-          if (mins > 0) {
-            return 'Late (${hours}h ${mins}m)';
-          }
-          return 'Late (${hours}h)';
+          return mins > 0 ? 'Late (${hours}h ${mins}m)' : 'Late (${hours}h)';
         }
         return 'Late (${minutes}m)';
       }
-      // If late but before 9:15 AM
       return 'Late';
     }
 
-    if (overtimeMinutes > 0) {
-      return 'On Time + OT';
-    }
-
+    if (overtimeMinutes > 0) return 'On Time + OT';
     return 'On Time';
   }
 
-  // Get detailed status (always shows minutes if late)
   String get detailedStatus {
-    if (!isPresent) {
-      if (timeIn.isNotEmpty && timeOut.isEmpty) {
-        return 'Half Day';
-      }
-      return 'Absent';
-    }
+    if (!isPresent) return 'Absent';
+    if (timeOut.isEmpty) return 'In Office';
 
     if (isLate) {
       final minutes = lateMinutes;
       if (minutes >= 60) {
         final hours = minutes ~/ 60;
         final mins = minutes % 60;
-        if (mins > 0) {
-          return 'Late (${hours}h ${mins}m)';
-        }
-        return 'Late (${hours}h)';
+        return mins > 0 ? 'Late (${hours}h ${mins}m)' : 'Late (${hours}h)';
       }
       return 'Late (${minutes}m)';
     }
@@ -291,10 +264,7 @@ class Attendance {
       if (minutes >= 60) {
         final hours = minutes ~/ 60;
         final mins = minutes % 60;
-        if (mins > 0) {
-          return 'On Time + OT (${hours}h ${mins}m)';
-        }
-        return 'On Time + OT (${hours}h)';
+        return mins > 0 ? 'On Time + OT (${hours}h ${mins}m)' : 'On Time + OT (${hours}h)';
       }
       return 'On Time + OT (${minutes}m)';
     }
@@ -302,10 +272,8 @@ class Attendance {
     return 'On Time';
   }
 
-  // Get working hours
   String get workingHours {
     if (timeIn.isEmpty || timeOut.isEmpty) return 'N/A';
-
     try {
       final inTime = _parseTime(timeIn);
       final outTime = _parseTime(timeOut);
@@ -318,54 +286,34 @@ class Attendance {
     }
   }
 
-  // Get formatted late time for display
   String get formattedLateTime {
     if (!isLate) return '';
-
     final minutes = lateMinutes;
     if (minutes >= 60) {
       final hours = minutes ~/ 60;
       final mins = minutes % 60;
-      if (mins > 0) {
-        return '${hours}h ${mins}m late';
-      }
-      return '${hours}h late';
+      return mins > 0 ? '${hours}h ${mins}m late' : '${hours}h late';
     }
     return '${minutes}m late';
   }
 
-  // Check exact time after 9:15 AM
   bool get isAfterNineFifteen {
     if (timeIn.isEmpty) return false;
-
     try {
       final timeInTime = _parseTime(timeIn);
-      final nineFifteen = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        9,   // hour
-        15,  // minute
-      );
-
+      final nineFifteen = DateTime(date.year, date.month, date.day, 9, 15);
       return timeInTime.isAfter(nineFifteen);
     } catch (e) {
       return false;
     }
   }
 
-  // Get late minutes after 9:15 (if any)
   int get lateMinutesAfterNineFifteen {
     if (!isAfterNineFifteen) return 0;
-
     final minutes = lateMinutes;
-    if (minutes > 15) {
-      return minutes - 15; // Minutes after 9:15
-    }
-    return 0;
+    return minutes > 15 ? minutes - 15 : 0;
   }
 
-  // Helper method to parse time string
   DateTime _parseTime(String time) {
     try {
       final parts = time.split(':');
@@ -378,29 +326,19 @@ class Attendance {
         parts.length > 2 ? int.parse(parts[2]) : 0,
       );
     } catch (e) {
-      // If parsing fails, return office start time
-      return DateTime(
-        date.year,
-        date.month,
-        date.day,
-        9,   // hour
-        0,   // minute
-      );
+      return DateTime(date.year, date.month, date.day, 9, 0);
     }
   }
 
-  // Get check-in time analysis
-  Map<String, dynamic> get timeAnalysis {
-    return {
-      'isLate': isLate,
-      'lateMinutes': lateMinutes,
-      'isAfterNineFifteen': isAfterNineFifteen,
-      'lateMinutesAfterNineFifteen': lateMinutesAfterNineFifteen,
-      'formattedLateTime': formattedLateTime,
-      'status': status,
-      'detailedStatus': detailedStatus,
-    };
-  }
+  Map<String, dynamic> get timeAnalysis => {
+    'isLate': isLate,
+    'lateMinutes': lateMinutes,
+    'isAfterNineFifteen': isAfterNineFifteen,
+    'lateMinutesAfterNineFifteen': lateMinutesAfterNineFifteen,
+    'formattedLateTime': formattedLateTime,
+    'status': status,
+    'detailedStatus': detailedStatus,
+  };
 }
 
 // DTO for creating/updating attendance
@@ -423,17 +361,15 @@ class AttendanceCreateDTO {
     this.machineCode,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'date': DateFormat('yyyy-MM-dd').format(date),
-      'employee_id': employeeId,
-      'duty_shift_id': dutyShiftId,
-      'department_id': departmentId,
-      'time_in': timeIn,
-      'time_out': timeOut,
-      'machine_code': machineCode ?? '',
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'date': DateFormat('yyyy-MM-dd').format(date),
+    'employee_id': employeeId,
+    'duty_shift_id': dutyShiftId,
+    'department_id': departmentId,
+    'time_in': timeIn,
+    'time_out': timeOut,
+    'machine_code': machineCode ?? '',
+  };
 }
 
 // Employee model
@@ -464,10 +400,12 @@ class Employee {
           json['avatar'] ??
           json['photo'] ??
           json['image'],
+
       department: json['department'] ?? json['department_name'] ?? '',
       departmentId: json['department_id'] ?? 0,
     );
   }
+
 }
 
 // Department model
@@ -482,13 +420,11 @@ class Department {
     this.description,
   });
 
-  factory Department.fromJson(Map<String, dynamic> json) {
-    return Department(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      description: json['description'] ?? json['dept_description'] ?? '',
-    );
-  }
+  factory Department.fromJson(Map<String, dynamic> json) => Department(
+    id: json['id'] ?? 0,
+    name: json['name'] ?? '',
+    description: json['description'] ?? json['dept_description'] ?? '',
+  );
 }
 
 // DutyShift model
@@ -507,16 +443,13 @@ class DutyShift {
     this.description,
   });
 
-  factory DutyShift.fromJson(Map<String, dynamic> json) {
-    return DutyShift(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      startTime: json['start_time'] ?? '09:00',
-      endTime: json['end_time'] ?? '17:00',
-      description: json['description'],
-    );
-  }
+  factory DutyShift.fromJson(Map<String, dynamic> json) => DutyShift(
+    id: json['id'] ?? 0,
+    name: json['name'] ?? '',
+    startTime: json['start_time'] ?? '09:00',
+    endTime: json['end_time'] ?? '18:00',
+    description: json['description'],
+  );
 }
 
-// Attendance Mode enum
 enum AttendanceMode { add, edit, view }

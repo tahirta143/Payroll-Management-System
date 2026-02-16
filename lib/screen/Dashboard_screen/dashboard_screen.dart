@@ -615,6 +615,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final dashboardProvider = context.watch<DashboardSummaryProvider>();
     final chartProvider = context.watch<ChartProvider>();
     final auth = context.watch<AuthProvider>();
+    final p = context.watch<PermissionProvider>();
+
+    final isAdmin = p.hasPermission('can-view-salary-sheet') ||
+        p.userRole.toLowerCase().contains('admin');
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -655,21 +659,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Welcome back,',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          auth.userName.isNotEmpty ? auth.userName : 'User',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        // const Text(
+                        //   'Welcome back,',
+                        //   style: TextStyle(
+                        //     color: Colors.white70,
+                        //     fontSize: 14,
+                        //   ),
+                        // ),
+                        // const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              auth.userName.isNotEmpty ? auth.userName : 'User',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Role Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Text(
+                                isAdmin ? 'Admin' : 'Regular User',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -701,8 +732,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-
-            _buildDateFilter(dashboardProvider),
+            // _buildDateFilter(dashboardProvider),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -988,6 +1018,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
   Widget _buildNonAdminWelcomeHeader(AuthProvider auth) {
+    final p = context.watch<PermissionProvider>();
+
+    final isAdmin = p.hasPermission('can-view-salary-sheet') ||
+        p.userRole.toLowerCase().contains('admin');
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(24),
@@ -1015,21 +1050,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Welcome back,',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  auth.userName.isNotEmpty ? auth.userName : 'Employee',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                  ),
+                // const Text(
+                //   'Welcome back,',
+                //   style: TextStyle(
+                //     color: Colors.white70,
+                //     fontSize: 14,
+                //   ),
+                // ),
+                // const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      auth.userName.isNotEmpty ? auth.userName : 'Employee',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Role Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        isAdmin ? 'Admin' : 'User',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1062,7 +1124,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
   Widget _buildNonAdminMonthDisplay(String currentMonth) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1435,116 +1496,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildDateFilter(DashboardSummaryProvider provider) {
-    final displayDate = _dateController.text == 'All Time'
-        ? 'All Time'
-        : _formatDateForDisplay(_dateController.text);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFF667EEA).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Iconsax.calendar_1,
-              color: Color(0xFF667EEA),
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Select Date',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                GestureDetector(
-                  onTap: () => _selectDate(context),
-                  child: AbsorbPointer(
-                    child: TextFormField(
-                      controller: _dateController,
-                      decoration: InputDecoration(
-                        hintText: 'Select Date',
-                        hintStyle: TextStyle(color: Colors.grey[500]),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        isDense: true,
-                        suffixIcon: Icon(
-                          Iconsax.calendar,
-                          color: Colors.grey[500],
-                          size: 18,
-                        ),
-                      ),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: _showAllTimeData,
-            style: TextButton.styleFrom(
-              backgroundColor: _dateController.text == 'All Time'
-                  ? const Color(0xFF667EEA).withOpacity(0.1)
-                  : Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: _dateController.text == 'All Time'
-                      ? const Color(0xFF667EEA)
-                      : Colors.grey[300]!,
-                ),
-              ),
-            ),
-            child: Text(
-              'All Time',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: _dateController.text == 'All Time'
-                    ? FontWeight.w600
-                    : FontWeight.w500,
-                color: _dateController.text == 'All Time'
-                    ? const Color(0xFF667EEA)
-                    : Colors.grey[600],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildDateFilter(DashboardSummaryProvider provider) {
+  //   final displayDate = _dateController.text == 'All Time'
+  //       ? 'All Time'
+  //       : _formatDateForDisplay(_dateController.text);
+  //
+  //   return Container(
+  //     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+  //     decoration: BoxDecoration(
+  //       color: Colors.white,
+  //       borderRadius: BorderRadius.circular(16),
+  //       boxShadow: [
+  //         BoxShadow(
+  //           color: Colors.black.withOpacity(0.05),
+  //           blurRadius: 10,
+  //           offset: const Offset(0, 4),
+  //         ),
+  //       ],
+  //     ),
+  //     child: Row(
+  //       children: [
+  //         Container(
+  //           width: 40,
+  //           height: 40,
+  //           decoration: BoxDecoration(
+  //             color: const Color(0xFF667EEA).withOpacity(0.1),
+  //             borderRadius: BorderRadius.circular(12),
+  //           ),
+  //           child: const Icon(
+  //             Iconsax.calendar_1,
+  //             color: Color(0xFF667EEA),
+  //             size: 20,
+  //           ),
+  //         ),
+  //         const SizedBox(width: 12),
+  //         Expanded(
+  //           child: Column(
+  //             crossAxisAlignment: CrossAxisAlignment.start,
+  //             children: [
+  //               const Text(
+  //                 'Select Date',
+  //                 style: TextStyle(
+  //                   fontSize: 12,
+  //                   fontWeight: FontWeight.w500,
+  //                   color: Colors.grey,
+  //                 ),
+  //               ),
+  //               const SizedBox(height: 2),
+  //               GestureDetector(
+  //                 onTap: () => _selectDate(context),
+  //                 child: AbsorbPointer(
+  //                   child: TextFormField(
+  //                     controller: _dateController,
+  //                     decoration: InputDecoration(
+  //                       hintText: 'Select Date',
+  //                       hintStyle: TextStyle(color: Colors.grey[500]),
+  //                       border: InputBorder.none,
+  //                       contentPadding: EdgeInsets.zero,
+  //                       isDense: true,
+  //                       suffixIcon: Icon(
+  //                         Iconsax.calendar,
+  //                         color: Colors.grey[500],
+  //                         size: 18,
+  //                       ),
+  //                     ),
+  //                     style: const TextStyle(
+  //                       fontSize: 14,
+  //                       fontWeight: FontWeight.w600,
+  //                       color: Colors.black87,
+  //                     ),
+  //                   ),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //         const SizedBox(width: 8),
+  //         TextButton(
+  //           onPressed: _showAllTimeData,
+  //           style: TextButton.styleFrom(
+  //             backgroundColor: _dateController.text == 'All Time'
+  //                 ? const Color(0xFF667EEA).withOpacity(0.1)
+  //                 : Colors.transparent,
+  //             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //             shape: RoundedRectangleBorder(
+  //               borderRadius: BorderRadius.circular(12),
+  //               side: BorderSide(
+  //                 color: _dateController.text == 'All Time'
+  //                     ? const Color(0xFF667EEA)
+  //                     : Colors.grey[300]!,
+  //               ),
+  //             ),
+  //           ),
+  //           child: Text(
+  //             'All Time',
+  //             style: TextStyle(
+  //               fontSize: 12,
+  //               fontWeight: _dateController.text == 'All Time'
+  //                   ? FontWeight.w600
+  //                   : FontWeight.w500,
+  //               color: _dateController.text == 'All Time'
+  //                   ? const Color(0xFF667EEA)
+  //                   : Colors.grey[600],
+  //             ),
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildLoadingCards() {
     return GridView.count(
@@ -1755,9 +1816,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             _buildClickableStatCard(
               icon: Iconsax.people,
-              title: 'Total Staff$dateSuffix',
+              title: 'Total Staff',
               value: '${summary.totalEmployees}',
-              subtitle: 'All Employees',
               color: const Color(0xFF4CAF50),
               onTap: () {
                 Navigator.push(
@@ -1775,7 +1835,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildClickableStatCard(
               icon: Iconsax.calendar_tick,
               title: isDateSpecific
-                  ? 'Attendance$dateSuffix'
+                  ? 'Today Attendance'
                   : 'Today Attendance$dateSuffix',
               value: '${summary.presentCount}',
               subtitle: isNoDataYet
@@ -1795,7 +1855,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             _buildClickableStatCard(
               icon: Iconsax.calendar_remove,
-              title: 'On Leave$dateSuffix',
+              title: 'On Leave',
               value: '${summary.leaveCount}',
               subtitle: isNoDataYet
                   ? 'Not marked yet'
@@ -1814,7 +1874,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             _buildClickableStatCard(
               icon: Iconsax.calendar_remove,
-              title: 'Absent$dateSuffix',
+              title: 'Absents',
               value: '${summary.absentCount}',
               subtitle: isNoDataYet
                   ? 'Not marked yet'
@@ -1967,62 +2027,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Column(
       children: [
-        Container(
-          margin:
-          EdgeInsets.symmetric(horizontal: screenWidth > 600 ? 20 : 16),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    provider.isAdmin ? Iconsax.chart_square : Iconsax.chart_2,
-                    color: const Color(0xFF667EEA),
-                    size: 22,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      provider.isAdmin ? 'Team Attendance' : 'My Attendance',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  if (!provider.isLoading)
-                    IconButton(
-                      icon: Icon(
-                        Icons.refresh,
-                        color: provider.isLoading
-                            ? Colors.grey
-                            : const Color(0xFF667EEA),
-                        size: 18,
-                      ),
-                      onPressed: provider.isLoading
-                          ? null
-                          : () {
-                        provider.fetchAttendanceData();
-                      },
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
+        // Container(
+        //   margin:
+        //   EdgeInsets.symmetric(horizontal: screenWidth > 600 ? 20 : 16),
+        //   padding: const EdgeInsets.all(16),
+        //   decoration: BoxDecoration(
+        //     color: Colors.white,
+        //     borderRadius: BorderRadius.circular(16),
+        //     boxShadow: [
+        //       BoxShadow(
+        //         color: Colors.black.withOpacity(0.05),
+        //         blurRadius: 10,
+        //         offset: const Offset(0, 4),
+        //       ),
+        //     ],
+        //   ),
+        //   child: Column(
+        //     crossAxisAlignment: CrossAxisAlignment.start,
+        //     children: [
+        //       Row(
+        //         children: [
+        //           Icon(
+        //             provider.isAdmin ? Iconsax.chart_square : Iconsax.chart_2,
+        //             color: const Color(0xFF667EEA),
+        //             size: 22,
+        //           ),
+        //           const SizedBox(width: 8),
+        //           Expanded(
+        //             child: Text(
+        //               provider.isAdmin ? 'Team Attendance' : 'My Attendance',
+        //               style: const TextStyle(
+        //                 fontSize: 16,
+        //                 fontWeight: FontWeight.w700,
+        //                 color: Colors.black87,
+        //               ),
+        //             ),
+        //           ),
+        //           if (!provider.isLoading)
+        //             IconButton(
+        //               icon: Icon(
+        //                 Icons.refresh,
+        //                 color: provider.isLoading
+        //                     ? Colors.grey
+        //                     : const Color(0xFF667EEA),
+        //                 size: 18,
+        //               ),
+        //               onPressed: provider.isLoading
+        //                   ? null
+        //                   : () {
+        //                 provider.fetchAttendanceData();
+        //               },
+        //             ),
+        //         ],
+        //       ),
+        //     ],
+        //   ),
+        // ),
         const SizedBox(height: 16),
 
         if (provider.isLoading)

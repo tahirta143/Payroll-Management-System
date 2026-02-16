@@ -17,13 +17,33 @@ class LeaveListScreen extends StatefulWidget {
 
 class _LeaveListScreenState extends State<LeaveListScreen> {
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _dateController = TextEditingController();
   bool _isRefreshing = false;
   String _searchQuery = '';
+  DateTime? _selectedDate;
 
   @override
   void initState() {
     super.initState();
-    _loadLeaves();
+
+    // Initialize date
+    if (widget.selectedDate != null) {
+      try {
+        _selectedDate = DateTime.parse(widget.selectedDate!);
+        _dateController.text = _formatDateForApi(_selectedDate!);
+      } catch (e) {
+        _selectedDate = DateTime.now();
+        _dateController.text = _formatDateForApi(_selectedDate!);
+      }
+    } else {
+      _selectedDate = DateTime.now();
+      _dateController.text = _formatDateForApi(_selectedDate!);
+    }
+
+    // Use addPostFrameCallback to load data after build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadLeaves();
+    });
 
     // Add scroll listener for pull-to-refresh
     _scrollController.addListener(_onScroll);
@@ -32,6 +52,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _dateController.dispose();
     super.dispose();
   }
 
@@ -39,6 +60,63 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     if (_scrollController.position.pixels == 0 && !_isRefreshing) {
       _pullToRefresh();
     }
+  }
+
+  String _formatDateForApi(DateTime date) {
+    return DateFormat('yyyy-MM-dd').format(date);
+  }
+
+  String _formatDateForDisplay(String dateString) {
+    if (dateString == 'all' || dateString == 'All Time') return 'All Time';
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF667EEA),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text = _formatDateForApi(picked);
+      });
+
+      // Refresh data for selected date
+      _loadLeaves();
+    }
+  }
+
+  void _showTodayData() {
+    setState(() {
+      _selectedDate = DateTime.now();
+      _dateController.text = _formatDateForApi(_selectedDate!);
+    });
+
+    // Refresh data for today
+    _loadLeaves();
   }
 
   Future<void> _pullToRefresh() async {
@@ -51,36 +129,48 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     try {
       final provider = Provider.of<LeaveProvider>(context, listen: false);
       await provider.fetchLeaves();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Leave data refreshed!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 1),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Leave data refreshed!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error refreshing: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error refreshing: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isRefreshing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
     }
   }
 
   Future<void> _loadLeaves() async {
+    // Don't reload if already loading
     final provider = Provider.of<LeaveProvider>(context, listen: false);
+    if (provider.isLoading) return;
+
     await provider.fetchLeaves();
   }
 
   // Get target date in YYYY-MM-DD format
   String get _targetDate {
-    return widget.selectedDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+    if (_selectedDate != null) {
+      return _formatDateForApi(_selectedDate!);
+    }
+    return DateFormat('yyyy-MM-dd').format(DateTime.now());
   }
 
   // Check if a leave covers the target date
@@ -192,19 +282,28 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     }
   }
 
+  String _getTitleText() {
+    if (widget.selectedDate != null) {
+      return "Approved Leaves - ${_formatDate(_targetDate)}";
+    } else if (_selectedDate != null &&
+        _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())) {
+      return "Approved Leaves - ${_formatDate(_targetDate)}";
+    } else {
+      return "Today's Approved Leaves";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenWidth < 360;
-    final isLargeScreen = screenWidth > 600;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       appBar: AppBar(
         backgroundColor: const Color(0xFF667EEA),
         title: Text(
-          "Approved Leaves - ${_formatDate(_targetDate)}",
+          _getTitleText(),
           style: TextStyle(
             fontSize: screenWidth < 360 ? 18 : screenWidth < 600 ? 22 : 24,
             fontWeight: FontWeight.bold,
@@ -220,7 +319,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
             builder: (context, provider, child) {
               return Row(
                 children: [
-                  // User role indicator - Hide on very small screens
                   if (screenWidth > 320)
                     Container(
                       padding: EdgeInsets.symmetric(
@@ -292,9 +390,15 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
           ),
           child: Column(
             children: [
-              // Date Header Card
+              // Date Filter Widget
+              _buildDateFilter(screenWidth),
+
+              // Date Header Card (simplified)
               Container(
-                margin: EdgeInsets.all(screenWidth < 360 ? 12 : 16),
+                margin: EdgeInsets.symmetric(
+                  horizontal: screenWidth < 360 ? 12 : 16,
+                  vertical: screenWidth < 360 ? 6 : 8,
+                ),
                 padding: EdgeInsets.all(screenWidth < 360 ? 12 : 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -476,16 +580,148 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     );
   }
 
+  // Date Filter Widget
+  Widget _buildDateFilter(double screenWidth) {
+    return Container(
+      margin: EdgeInsets.symmetric(
+        horizontal: screenWidth < 360 ? 12 : 16,
+        vertical: screenWidth < 360 ? 6 : 8,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: screenWidth < 360 ? 14 : 18,
+        vertical: screenWidth < 360 ? 10 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(screenWidth < 360 ? 14 : 16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: screenWidth < 360 ? 36 : 40,
+                height: screenWidth < 360 ? 36 : 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF667EEA).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(screenWidth < 360 ? 10 : 12),
+                ),
+                child: const Icon(
+                  Iconsax.calendar_1,
+                  color: Color(0xFF667EEA),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select Date',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    GestureDetector(
+                      onTap: () => _selectDate(context),
+                      child: AbsorbPointer(
+                        child: TextFormField(
+                          controller: _dateController,
+                          decoration: InputDecoration(
+                            hintText: 'Select Date',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: screenWidth < 360 ? 12 : 14,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            isDense: true,
+                            suffixIcon: Icon(
+                              Iconsax.calendar,
+                              color: Colors.grey[500],
+                              size: screenWidth < 360 ? 16 : 18,
+                            ),
+                          ),
+                          style: TextStyle(
+                            fontSize: screenWidth < 360 ? 12 : 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: screenWidth < 360 ? 8 : 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _showTodayData,
+                style: TextButton.styleFrom(
+                  backgroundColor: _dateController.text ==
+                      DateFormat('yyyy-MM-dd').format(DateTime.now())
+                      ? const Color(0xFF667EEA).withOpacity(0.1)
+                      : Colors.transparent,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenWidth < 360 ? 12 : 16,
+                    vertical: screenWidth < 360 ? 6 : 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(screenWidth < 360 ? 10 : 12),
+                    side: BorderSide(
+                      color: _dateController.text ==
+                          DateFormat('yyyy-MM-dd').format(DateTime.now())
+                          ? const Color(0xFF667EEA)
+                          : Colors.grey[300]!,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  'Today',
+                  style: TextStyle(
+                    fontSize: screenWidth < 360 ? 11 : 12,
+                    fontWeight: _dateController.text ==
+                        DateFormat('yyyy-MM-dd').format(DateTime.now())
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+                    color: _dateController.text ==
+                        DateFormat('yyyy-MM-dd').format(DateTime.now())
+                        ? const Color(0xFF667EEA)
+                        : Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatisticsCards({
     required double screenWidth,
     required int totalLeaves,
     required int totalDays,
   }) {
-    double cardHeight = screenWidth < 360 ? 90 : 110;
     final isSmallScreen = screenWidth < 360;
 
     return SizedBox(
-      height: cardHeight,
+      height: isSmallScreen ? 90 : 110,
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -506,14 +742,12 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
               'icon': Iconsax.people,
               'title': 'Employees on Leave',
               'count': totalLeaves.toString(),
-              'subtitle': 'Total Employees',
               'color': const Color(0xFF667EEA),
             },
             {
               'icon': Iconsax.calendar,
               'title': 'Total Leave Days',
               'count': totalDays.toString(),
-              'subtitle': 'Days',
               'color': const Color(0xFF4CAF50),
             },
           ];
@@ -570,7 +804,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      // SizedBox(height: isSmallScreen ? 2 : 4),
                       Text(
                         stat['count'] as String,
                         style: TextStyle(
@@ -633,7 +866,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                 },
               ),
 
-              // Pull-to-refresh indicator
               if (_isRefreshing)
                 Positioned(
                   top: 0,
@@ -682,11 +914,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     final statusText = leave.status.toUpperCase();
     final isSmallScreen = screenWidth < 360;
 
-    // Debug logging
-    print('=== DEBUG: Building leave card for ${leave.employeeName} ===');
-    print('Image URL: ${leave.imageUrl}');
-    print('Has image: ${leave.imageUrl != null && leave.imageUrl!.isNotEmpty}');
-
     return Container(
       margin: EdgeInsets.symmetric(
         horizontal: isSmallScreen ? 8 : 12,
@@ -711,17 +938,16 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
         padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
         child: Row(
           children: [
-            // Profile Image with Status Indicator - UPDATED
+            // Profile Image with Status Indicator
             Stack(
               children: [
-                // Profile Image Container
                 Container(
                   width: isSmallScreen ? 40 : 50,
                   height: isSmallScreen ? 40 : 50,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: leave.imageUrl != null && leave.imageUrl!.isNotEmpty
-                        ? null // No gradient when image exists
+                        ? null
                         : const LinearGradient(
                       colors: [
                         Color(0xFF667EEA),
@@ -757,8 +983,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                         );
                       },
                       errorBuilder: (context, error, stackTrace) {
-                        print('Image load error for ${leave.employeeName}: $error');
-                        // Fallback to initials when image fails to load
                         return Container(
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
@@ -784,7 +1008,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                       },
                     )
                         : Center(
-                      // Show initials when no image URL is available
                       child: Text(
                         leave.employeeName.substring(0, 1).toUpperCase(),
                         style: TextStyle(
@@ -796,8 +1019,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                     ),
                   ),
                 ),
-
-                // Status indicator dot
                 Positioned(
                   right: 0,
                   bottom: 0,
@@ -856,16 +1077,6 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                       ),
                     ],
                   ),
-                  // SizedBox(height: isSmallScreen ? 2 : 4),
-                  // Text(
-                  //   leave.employeeCode,
-                  //   style: TextStyle(
-                  //     fontSize: isSmallScreen ? 10 : 12,
-                  //     color: Colors.grey[600],
-                  //   ),
-                  // ),
-                  // SizedBox(height: isSmallScreen ? 6 : 8),
-
                   // Leave Details
                   Row(
                     children: [
@@ -1056,19 +1267,14 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
           ),
           SizedBox(height: screenWidth < 360 ? 16 : 20),
           Text(
-            'Loading approved leaves...',
+            _selectedDate != null &&
+                _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
+                ? 'Loading approved leaves for ${_formatDate(_targetDate)}...'
+                : 'Loading today\'s approved leaves...',
             style: TextStyle(
               fontSize: screenWidth < 360 ? 14 : 16,
               color: Colors.grey[600],
               fontWeight: FontWeight.w500,
-            ),
-          ),
-          SizedBox(height: screenWidth < 360 ? 6 : 8),
-          Text(
-            'Please wait',
-            style: TextStyle(
-              fontSize: screenWidth < 360 ? 12 : 14,
-              color: Colors.grey[400],
             ),
           ),
         ],
@@ -1154,7 +1360,10 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
             ),
             SizedBox(height: screenWidth < 360 ? 12 : 16),
             Text(
-              'No Approved Leaves',
+              _selectedDate != null &&
+                  _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
+                  ? 'No Approved Leaves'
+                  : 'No Approved Leaves Today',
               style: TextStyle(
                 fontSize: screenWidth < 360 ? 16 : 18,
                 color: Colors.grey[600],
@@ -1163,7 +1372,10 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
             ),
             SizedBox(height: screenWidth < 360 ? 6 : 8),
             Text(
-              'No approved leaves found for ${_formatDate(_targetDate)}',
+              _selectedDate != null &&
+                  _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
+                  ? 'No approved leaves found for ${_formatDate(_targetDate)}'
+                  : 'No approved leaves found for today',
               style: TextStyle(
                 fontSize: screenWidth < 360 ? 12 : 14,
                 color: Colors.grey[400],

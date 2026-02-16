@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
-// Model class
+// ─────────────────────────────────────────────────────────────────────────────
+// Model
+// ─────────────────────────────────────────────────────────────────────────────
 class NonAdminDashboardSummary {
   final String type;
   final String employeeId;
@@ -41,145 +43,152 @@ class NonAdminDashboardSummary {
   });
 
   factory NonAdminDashboardSummary.fromJson(Map<String, dynamic> json) {
-    int present = json['present_count'] ?? 0;
-    int absent = json['absent_count'] ?? 0;
-    int leave = json['leave_count'] ?? 0;
-    int late = json['late_count'] ?? 0;
+    int present    = json['present_count']     ?? 0;
+    int absent     = json['absent_count']      ?? 0;
+    int leave      = json['leave_count']       ?? 0;
+    int late       = json['late_count']        ?? 0;
     int shortLeave = json['short_leave_count'] ?? 0;
-    int total = present + absent + leave;
+    int total      = present + absent + leave;
 
     return NonAdminDashboardSummary(
-      type: json['type'] ?? 'employee',
-      employeeId: json['employee_id']?.toString() ?? '',
-      employeeName: json['employee_name'] ?? '',
-      month: json['month'] ?? '',
-      presentCount: present,
-      absentCount: absent,
-      leaveCount: leave,
-      shortLeaveCount: shortLeave,
-      lateCount: late,
-      presentPercentage: total > 0 ? (present / total) * 100 : 0,
-      absentPercentage: total > 0 ? (absent / total) * 100 : 0,
-      leavePercentage: total > 0 ? (leave / total) * 100 : 0,
-      latePercentage: present > 0 ? (late / present) * 100 : 0,
-      totalDays: total,
+      type:              json['type']                  ?? 'employee',
+      employeeId:        json['employee_id']?.toString() ?? '',
+      employeeName:      json['employee_name']         ?? '',
+      month:             json['month']                 ?? '',
+      presentCount:      present,
+      absentCount:       absent,
+      leaveCount:        leave,
+      shortLeaveCount:   shortLeave,
+      lateCount:         late,
+      presentPercentage: total   > 0 ? (present / total)   * 100 : 0,
+      absentPercentage:  total   > 0 ? (absent  / total)   * 100 : 0,
+      leavePercentage:   total   > 0 ? (leave   / total)   * 100 : 0,
+      latePercentage:    present > 0 ? (late    / present) * 100 : 0,
+      totalDays:         total,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'type': type,
-      'employee_id': employeeId,
-      'employee_name': employeeName,
-      'month': month,
-      'present_count': presentCount,
-      'absent_count': absentCount,
-      'leave_count': leaveCount,
-      'short_leave_count': shortLeaveCount,
-      'late_count': lateCount,
-      'present_percentage': presentPercentage,
-      'absent_percentage': absentPercentage,
-      'leave_percentage': leavePercentage,
-      'late_percentage': latePercentage,
-      'total_days': totalDays,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'type':               type,
+    'employee_id':        employeeId,
+    'employee_name':      employeeName,
+    'month':              month,
+    'present_count':      presentCount,
+    'absent_count':       absentCount,
+    'leave_count':        leaveCount,
+    'short_leave_count':  shortLeaveCount,
+    'late_count':         lateCount,
+    'present_percentage': presentPercentage,
+    'absent_percentage':  absentPercentage,
+    'leave_percentage':   leavePercentage,
+    'late_percentage':    latePercentage,
+    'total_days':         totalDays,
+  };
 
-  bool get isNoDataForDate => presentCount == 0 && absentCount == 0 && leaveCount == 0;
+  bool get isNoDataForDate =>
+      presentCount == 0 && absentCount == 0 && leaveCount == 0;
 }
 
-// Provider class
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider
+// ─────────────────────────────────────────────────────────────────────────────
 class NonAdminDashboardProvider extends ChangeNotifier {
   NonAdminDashboardSummary? _currentSummary;
-  bool _isLoading = false;
-  bool _isRefreshing = false;
+  bool    _isLoading     = false;
+  bool    _isRefreshing  = false;
   String? _error;
-  bool _isInitialized = false;
+  bool    _isInitialized = false;
   late SharedPreferences _prefs;
-  String? _employeeId;
   String? _currentMonth;
-  String? _authToken; // Add this to store the auth token
 
-  // API URL
   static const String _baseUrl = 'https://api.afaqmis.com';
 
-  NonAdminDashboardSummary? get currentSummary => _currentSummary;
-  bool get isLoading => _isLoading;
-  bool get isRefreshing => _isRefreshing;
-  String? get error => _error;
-  bool get isInitialized => _isInitialized;
-  String? get currentMonth => _currentMonth;
+  // ── Public getters ────────────────────────────────────────────────────────
+  NonAdminDashboardSummary? get currentSummary  => _currentSummary;
+  bool    get isLoading     => _isLoading;
+  bool    get isRefreshing  => _isRefreshing;
+  String? get error         => _error;
+  bool    get isInitialized => _isInitialized;
+  String? get currentMonth  => _currentMonth;
 
   NonAdminDashboardProvider() {
     _init();
   }
 
+  // ── Init ──────────────────────────────────────────────────────────────────
   Future<void> _init() async {
     _prefs = await SharedPreferences.getInstance();
-    // Load auth token from SharedPreferences
-    _authToken = _prefs.getString('token');
-    debugPrint('🔑 Auth token loaded: ${_authToken != null ? 'Yes' : 'No'}');
-    await _loadSavedData();
+    await _loadCachedSummary();
   }
 
+  // ── Compatibility stubs ───────────────────────────────────────────────────
+  // These are kept so existing call-sites don't break.
+  // They are no-ops because we now always read token & employee_id
+  // fresh from SharedPreferences (owned by AuthProvider).
   void setAuthToken(String token) {
-    _authToken = token;
-    debugPrint('🔑 Auth token set in provider');
+    debugPrint('ℹ️ setAuthToken() called — no-op, token read from prefs automatically');
   }
 
   void setEmployeeId(String employeeId) {
-    _employeeId = employeeId;
-    debugPrint('✅ Employee ID set in provider: $_employeeId');
-    _saveEmployeeId();
+    debugPrint('ℹ️ setEmployeeId() called — no-op, employee_id read from prefs automatically');
   }
 
-  Future<void> _saveEmployeeId() async {
-    if (_employeeId != null) {
-      await _prefs.setString('non_admin_employee_id', _employeeId!);
-    }
-  }
-
-  Future<void> _loadSavedData() async {
+  // ── Load only cached summary (never caches employee_id) ──────────────────
+  Future<void> _loadCachedSummary() async {
     try {
-      final String? savedData = _prefs.getString('non_admin_dashboard_data');
+      final String? savedData  = _prefs.getString('non_admin_dashboard_data');
       final String? savedMonth = _prefs.getString('non_admin_selected_month');
-      final String? savedEmployeeId = _prefs.getString('non_admin_employee_id');
-
-      // Also try to get from auth provider's saved employee_id
-      if (savedEmployeeId == null || savedEmployeeId.isEmpty) {
-        // Try to get from the main employee_id saved by AuthProvider
-        final authEmployeeId = _prefs.getString('employee_id');
-        if (authEmployeeId != null && authEmployeeId.isNotEmpty) {
-          _employeeId = authEmployeeId;
-          debugPrint('✅ Loaded employee_id from AuthProvider storage: $_employeeId');
-          await _prefs.setString('non_admin_employee_id', _employeeId!);
-        }
-      } else {
-        _employeeId = savedEmployeeId;
-        debugPrint('✅ Loaded employee_id from provider storage: $_employeeId');
-      }
 
       if (savedData != null) {
         final Map<String, dynamic> jsonData = jsonDecode(savedData);
         _currentSummary = NonAdminDashboardSummary.fromJson(jsonData);
+        debugPrint('📦 Loaded cached dashboard summary');
       }
       if (savedMonth != null) {
         _currentMonth = savedMonth;
       }
     } catch (e) {
-      debugPrint('❌ Error loading saved dashboard data: $e');
+      debugPrint('❌ Error loading cached dashboard data: $e');
     } finally {
       _isInitialized = true;
       notifyListeners();
     }
   }
 
+  // ── Resolve employee ID — always reads AuthProvider's prefs key ───────────
+  //
+  //  AuthProvider.login() does:
+  //    1. prefs.clear()                          — wipes all stale values
+  //    2. prefs.setString('employee_id', ...)    — saves the correct ID
+  //
+  //  So 'employee_id' in prefs is always the current user's correct ID.
+  //  We NEVER write our own shadow copy, so nothing can go stale.
+  String? _resolveEmployeeId() {
+    // ✅ Primary source of truth — set by AuthProvider after login
+    final id = _prefs.getString('employee_id');
+    if (id != null && id.isNotEmpty) {
+      debugPrint('✅ employee_id resolved: $id');
+      return id;
+    }
+
+    // Fallback: user_id (int) — also set by AuthProvider
+    final userId = _prefs.getInt('user_id');
+    if (userId != null) {
+      debugPrint('⚠️ employee_id missing — falling back to user_id: $userId');
+      return userId.toString();
+    }
+
+    debugPrint('❌ Could not resolve employee ID from prefs');
+    return null;
+  }
+
+  // ── Save summary to cache ─────────────────────────────────────────────────
   Future<void> _saveData() async {
     try {
       if (_currentSummary != null) {
         await _prefs.setString(
-            'non_admin_dashboard_data',
-            jsonEncode(_currentSummary!.toJson())
+          'non_admin_dashboard_data',
+          jsonEncode(_currentSummary!.toJson()),
         );
       }
       if (_currentMonth != null) {
@@ -190,137 +199,103 @@ class NonAdminDashboardProvider extends ChangeNotifier {
     }
   }
 
-  /// Built-in API service method with authentication token
-  Future<Map<String, dynamic>> _apiGet(String endpoint, {Map<String, dynamic>? queryParams}) async {
-    try {
-      // Check if token is available
-      if (_authToken == null || _authToken!.isEmpty) {
-        // Try to load token again from SharedPreferences
-        _authToken = _prefs.getString('token');
-        if (_authToken == null || _authToken!.isEmpty) {
-          throw Exception('No authentication token available');
-        }
-      }
+  // ── HTTP GET with Bearer token ────────────────────────────────────────────
+  Future<Map<String, dynamic>> _apiGet(
+      String endpoint, {
+        Map<String, dynamic>? queryParams,
+      }) async {
+    // Always read token fresh — AuthProvider owns the 'token' key
+    final authToken = _prefs.getString('token');
+    if (authToken == null || authToken.isEmpty) {
+      throw Exception('No authentication token — please login again');
+    }
 
-      String urlString = '$_baseUrl/api/$endpoint';
+    final uri = Uri.parse('$_baseUrl/api/$endpoint').replace(
+      queryParameters: queryParams?.map(
+            (k, v) => MapEntry(k, v.toString()),
+      ),
+    );
 
-      if (queryParams != null && queryParams.isNotEmpty) {
-        final queryString = queryParams.entries
-            .map((e) => '${e.key}=${Uri.encodeComponent(e.value.toString())}')
-            .join('&');
-        urlString = '$urlString?$queryString';
-      }
+    debugPrint('🌐 GET $uri');
+    debugPrint('🔑 Token: ${authToken.substring(0, authToken.length.clamp(0, 20))}...');
 
-      final uri = Uri.parse(urlString);
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type':  'application/json',
+        'Accept':        'application/json',
+        'Authorization': 'Bearer $authToken',
+      },
+    ).timeout(const Duration(seconds: 30));
 
-      debugPrint('🌐 Making API request to: $uri');
-      debugPrint('🔑 Using auth token: ${_authToken!.substring(0, min(20, _authToken!.length))}...');
+    debugPrint('📥 Status: ${response.statusCode}');
 
-      final response = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $_authToken', // Add the authorization header
-        },
-      ).timeout(const Duration(seconds: 30));
-
-      debugPrint('📥 Response status code: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        debugPrint('❌ Unauthorized - Token might be expired');
-        throw Exception('Unauthorized - Please login again');
-      }
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
-        return jsonResponse;
-      } else {
-        throw Exception('API Error: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('❌ API Request failed: $e');
-      throw Exception('Network Error: $e');
+    switch (response.statusCode) {
+      case 200:
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      case 401:
+        throw Exception('Unauthorized — please login again');
+      case 404:
+        throw Exception('Not found (404): ${response.body}');
+      default:
+        throw Exception('API Error ${response.statusCode}: ${response.body}');
     }
   }
 
-  /// Fetches dashboard summary with authentication
+  // ── Fetch dashboard summary ───────────────────────────────────────────────
   Future<void> fetchDashboardSummary({String? month}) async {
     if (_isLoading) return;
 
-    // Check for auth token
-    if (_authToken == null || _authToken!.isEmpty) {
-      _authToken = _prefs.getString('token');
-      if (_authToken == null || _authToken!.isEmpty) {
-        _error = 'Authentication required - Please login again';
-        debugPrint('❌ $_error');
-        notifyListeners();
-        return;
-      }
-    }
-
-    // Check for employee ID
-    if (_employeeId == null || _employeeId!.isEmpty) {
-      debugPrint('⚠️ In-memory employeeId is null, checking SharedPreferences...');
-
-      _employeeId = _prefs.getString('non_admin_employee_id');
-
-      if (_employeeId == null || _employeeId!.isEmpty) {
-        _employeeId = _prefs.getString('employee_id');
-        if (_employeeId != null && _employeeId!.isNotEmpty) {
-          debugPrint('✅ Found employee_id in auth storage: $_employeeId');
-          await _prefs.setString('non_admin_employee_id', _employeeId!);
-        }
-      }
-
-      if (_employeeId == null || _employeeId!.isEmpty) {
-        _error = 'Employee ID not set';
-        debugPrint('❌ $_error');
-        notifyListeners();
-        return;
-      }
+    // Resolve employee ID fresh every time — no stale in-memory value
+    final employeeId = _resolveEmployeeId();
+    if (employeeId == null) {
+      _error = 'Employee ID not found — please login again';
+      debugPrint('❌ $_error');
+      notifyListeners();
+      return;
     }
 
     _isLoading = true;
-    _error = null;
+    _error     = null;
 
-    String monthToUse;
-    if (month != null && month.isNotEmpty) {
-      monthToUse = month;
-    } else {
-      monthToUse = DateFormat('MM-yyyy').format(DateTime.now());
-    }
+    final monthToUse = (month != null && month.isNotEmpty)
+        ? month
+        : DateFormat('MM-yyyy').format(DateTime.now());
 
     _currentMonth = monthToUse;
     notifyListeners();
 
     try {
-      final Map<String, dynamic> queryParams = {};
-      queryParams['employee_id'] = _employeeId!;
-      queryParams['month'] = monthToUse;
+      final queryParams = {
+        'employee_id': employeeId,
+        'month':       monthToUse,
+      };
 
-      debugPrint('🌐 Fetching non-admin dashboard with params: $queryParams');
+      debugPrint('🌐 Fetching dashboard — params: $queryParams');
 
-      final response = await _apiGet('dashboard-summary', queryParams: queryParams);
+      final response = await _apiGet(
+        'dashboard-summary',
+        queryParams: queryParams,
+      );
 
-      if (response != null && response.isNotEmpty) {
+      if (response.isNotEmpty) {
         _currentSummary = NonAdminDashboardSummary.fromJson(response);
         _error = null;
         await _saveData();
 
-        debugPrint('✅ Dashboard data loaded successfully');
-        debugPrint('📊 Present: ${_currentSummary!.presentCount}');
+        debugPrint('✅ Dashboard loaded — '
+            'Present: ${_currentSummary!.presentCount}, '
+            'Absent: ${_currentSummary!.absentCount}, '
+            'Late: ${_currentSummary!.lateCount}');
       } else {
-        _error = 'Failed to load dashboard data - empty response';
+        _error = 'Empty response from server';
         debugPrint('❌ $_error');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _error = e.toString();
-      debugPrint('❌ Exception fetching dashboard summary: $e');
+      debugPrint('❌ fetchDashboardSummary error: $e');
 
-      // If unauthorized, clear token and force re-login
       if (e.toString().contains('Unauthorized')) {
-        _authToken = null;
         await _prefs.remove('token');
       }
     } finally {
@@ -329,43 +304,40 @@ class NonAdminDashboardProvider extends ChangeNotifier {
     }
   }
 
+  // ── Convenience helpers ───────────────────────────────────────────────────
   Future<void> refreshDashboardData() async {
     if (_isRefreshing) return;
-
     _isRefreshing = true;
     notifyListeners();
 
-    String monthToUse = _currentMonth ?? DateFormat('MM-yyyy').format(DateTime.now());
-    await fetchDashboardSummary(month: monthToUse);
+    await fetchDashboardSummary(
+      month: _currentMonth ?? DateFormat('MM-yyyy').format(DateTime.now()),
+    );
 
     _isRefreshing = false;
     notifyListeners();
   }
 
   Future<void> fetchDataForMonth(DateTime month) async {
-    final formattedMonth = DateFormat('MM-yyyy').format(month);
-    await fetchDashboardSummary(month: formattedMonth);
+    await fetchDashboardSummary(
+      month: DateFormat('MM-yyyy').format(month),
+    );
   }
 
-  String getCurrentMonthFormatted() {
-    return DateFormat('MM-yyyy').format(DateTime.now());
-  }
+  String getCurrentMonthFormatted() =>
+      DateFormat('MM-yyyy').format(DateTime.now());
 
+  // ── Clear / logout ────────────────────────────────────────────────────────
+  // Only clears OUR cache keys.
+  // Never touches 'employee_id' or 'token' — those belong to AuthProvider.
   void clearData() {
     _currentSummary = null;
-    _error = null;
-    _currentMonth = null;
-    _authToken = null;
+    _error          = null;
+    _currentMonth   = null;
     _prefs.remove('non_admin_dashboard_data');
     _prefs.remove('non_admin_selected_month');
-    _prefs.remove('non_admin_employee_id');
     notifyListeners();
   }
 
-  Future<void> logout() async {
-    clearData();
-  }
+  Future<void> logout() async => clearData();
 }
-
-// Helper function for string substring
-int min(int a, int b) => a < b ? a : b;

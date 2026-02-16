@@ -18,18 +18,113 @@ class AbsentListScreen extends StatefulWidget {
 
 class _AbsentListScreenState extends State<AbsentListScreen> {
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _dateController = TextEditingController();
   bool _isRefreshing = false;
   String _searchQuery = '';
+  DateTime? _selectedDate;
 
-  // Target date getter
-  String get _targetDate {
-    return widget.selectedDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize date
+    if (widget.selectedDate != null) {
+      try {
+        _selectedDate = DateTime.parse(widget.selectedDate!);
+        _dateController.text = _formatDateForApi(_selectedDate!);
+      } catch (e) {
+        _selectedDate = DateTime.now();
+        _dateController.text = _formatDateForApi(_selectedDate!);
+      }
+    } else {
+      _selectedDate = DateTime.now();
+      _dateController.text = _formatDateForApi(_selectedDate!);
+    }
+
+    // Delay the API call until after the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAbsents();
+    });
+
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _dateController.dispose();
+    super.dispose();
   }
 
   void _onScroll() {
     if (_scrollController.position.pixels == 0 && !_isRefreshing) {
       _pullToRefresh();
     }
+  }
+
+  String _formatDateForApi(DateTime date) {
+    return DateFormat('yyyy-MM-dd').format(date);
+  }
+
+  String _formatDateForDisplay(String dateString) {
+    if (dateString == 'all' || dateString == 'All Time') return 'All Time';
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF667EEA),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text = _formatDateForApi(picked);
+      });
+
+      // Refresh data for selected date
+      _loadAbsents();
+    }
+  }
+
+  void _showTodayData() {
+    setState(() {
+      _selectedDate = DateTime.now();
+      _dateController.text = _formatDateForApi(_selectedDate!);
+    });
+
+    // Refresh data for today
+    _loadAbsents();
+  }
+
+  // Target date getter
+  String get _targetDate {
+    if (_selectedDate != null) {
+      return _formatDateForApi(_selectedDate!);
+    }
+    return DateFormat('yyyy-MM-dd').format(DateTime.now());
   }
 
   // Format date for display
@@ -56,24 +151,6 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
     return DateFormat('dd MMM yyyy').format(date);
   }
 
-  @override
-  void initState() {
-    super.initState();
-
-    // Delay the API call until after the widget is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadAbsents();
-    });
-
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   Future<void> _pullToRefresh() async {
     if (_isRefreshing) return;
 
@@ -83,7 +160,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
 
     try {
       final provider = Provider.of<AbsentProvider>(context, listen: false);
-      await provider.fetchAbsents(date: widget.selectedDate);
+      await provider.fetchAbsents(date: _targetDate);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Absent data refreshed!'),
@@ -113,7 +190,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
     // Debug logging
     print('=== LOADING ABSENTS DEBUG ===');
     print('Selected date from widget: ${widget.selectedDate}');
-    print('Target date: $_targetDate');
+    print('Selected date from state: $_targetDate');
     print('Has token: ${authProvider.token != null}');
     if (authProvider.token != null) {
       print('Token length: ${authProvider.token!.length}');
@@ -129,7 +206,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
     // Also set admin status if available
     provider.setAdminStatus(authProvider.isAdmin);
 
-    await provider.fetchAbsents(date: widget.selectedDate);
+    await provider.fetchAbsents(date: _targetDate);
 
     // Debug: Check results after fetch
     print('After fetch - filtered absents: ${provider.filteredAbsents.length}');
@@ -156,6 +233,17 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
     }
   }
 
+  String _getTitleText() {
+    if (widget.selectedDate != null) {
+      return "Absent Employees - ${_formatDate(_targetDate)}";
+    } else if (_selectedDate != null &&
+        _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())) {
+      return "Absent Employees - ${_formatDate(_targetDate)}";
+    } else {
+      return "Today's Absent Employees";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -166,7 +254,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF667EEA),
         title: Text(
-          "Absent Employees - ${_formatDate(_targetDate)}",
+          _getTitleText(),
           style: TextStyle(
             fontSize: screenWidth < 360 ? 18 : screenWidth < 600 ? 22 : 24,
             fontWeight: FontWeight.bold,
@@ -219,7 +307,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
                       size: screenWidth < 360 ? 20 : 24,
                     ),
                     onPressed: () {
-                      provider.fetchAbsents(date: widget.selectedDate);
+                      provider.fetchAbsents(date: _targetDate);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Refreshing absent list...'),
@@ -254,9 +342,15 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
           ),
           child: Column(
             children: [
-              // Date Header Card
+              // Date Filter Widget
+              _buildDateFilter(screenWidth),
+
+              // Date Header Card (simplified)
               Container(
-                margin: EdgeInsets.all(screenWidth < 360 ? 12 : 16),
+                margin: EdgeInsets.symmetric(
+                  horizontal: screenWidth < 360 ? 12 : 16,
+                  vertical: screenWidth < 360 ? 6 : 8,
+                ),
                 padding: EdgeInsets.all(screenWidth < 360 ? 12 : 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -396,20 +490,6 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
                 ),
               ),
 
-              // Statistics Cards
-              Consumer<AbsentProvider>(
-                builder: (context, provider, child) {
-                  final stats = provider.getAbsentStats();
-                  return _buildStatisticsCards(
-                    screenWidth: screenWidth,
-                    totalAbsents: stats['total'] ?? 0,
-                    todayAbsents: stats['today'] ?? 0,
-                    yesterdayAbsents: stats['yesterday'] ?? 0,
-                    thisWeekAbsents: stats['thisWeek'] ?? 0,
-                  );
-                },
-              ),
-
               SizedBox(height: screenWidth < 360 ? 12 : 16),
 
               // Absent List
@@ -442,122 +522,139 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
     );
   }
 
-  Widget _buildStatisticsCards({
-    required double screenWidth,
-    required int totalAbsents,
-    required int todayAbsents,
-    required int yesterdayAbsents,
-    required int thisWeekAbsents,
-  }) {
-    final isSmallScreen = screenWidth < 360;
-    double cardHeight = isSmallScreen ? 90 : 110;
+  // Date Filter Widget
+  Widget _buildDateFilter(double screenWidth) {
+    final displayDate = _dateController.text == 'All Time'
+        ? 'All Time'
+        : _formatDateForDisplay(_dateController.text);
 
-    return SizedBox(
-      height: cardHeight,
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          crossAxisSpacing: isSmallScreen ? 6 : 8,
-          mainAxisSpacing: isSmallScreen ? 6 : 8,
-          childAspectRatio: isSmallScreen ? 0.8 : 1.0,
-        ),
-        padding: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 12 : 16,
-          vertical: isSmallScreen ? 6 : 8,
-        ),
-        itemCount: 4,
-        itemBuilder: (context, index) {
-          final stats = [
-            {
-              'icon': Iconsax.profile_2user,
-              'title': 'Total',
-              'count': totalAbsents.toString(),
-              'color': const Color(0xFF667EEA),
-            },
-            {
-              'icon': Iconsax.calendar,
-              'title': 'Today',
-              'count': todayAbsents.toString(),
-              'color': const Color(0xFF4CAF50),
-            },
-            {
-              'icon': Iconsax.calendar_1,
-              'title': 'Yesterday',
-              'count': yesterdayAbsents.toString(),
-              'color': const Color(0xFFFF9800),
-            },
-            {
-              'icon': Iconsax.calendar,
-              'title': 'This Week',
-              'count': thisWeekAbsents.toString(),
-              'color': const Color(0xFF9C27B0),
-            },
-          ];
-
-          final stat = stats[index];
-          return Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
+    return Container(
+      margin: EdgeInsets.symmetric(
+        horizontal: screenWidth < 360 ? 12 : 16,
+        vertical: screenWidth < 360 ? 6 : 8,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: screenWidth < 360 ? 14 : 18,
+        vertical: screenWidth < 360 ? 10 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(screenWidth < 360 ? 14 : 16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: screenWidth < 360 ? 36 : 40,
+                height: screenWidth < 360 ? 36 : 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF667EEA).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(screenWidth < 360 ? 10 : 12),
                 ),
-              ],
-            ),
-            padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: isSmallScreen ? 24 : 28,
-                  height: isSmallScreen ? 24 : 28,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        (stat['color'] as Color).withOpacity(0.2),
-                        (stat['color'] as Color).withOpacity(0.1),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                child: const Icon(
+                  Iconsax.calendar_1,
+                  color: Color(0xFF667EEA),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select Date',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey,
+                      ),
                     ),
-                    shape: BoxShape.circle,
+                    const SizedBox(height: 2),
+                    GestureDetector(
+                      onTap: () => _selectDate(context),
+                      child: AbsorbPointer(
+                        child: TextFormField(
+                          controller: _dateController,
+                          decoration: InputDecoration(
+                            hintText: 'Select Date',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: screenWidth < 360 ? 12 : 14,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            isDense: true,
+                            suffixIcon: Icon(
+                              Iconsax.calendar,
+                              color: Colors.grey[500],
+                              size: screenWidth < 360 ? 16 : 18,
+                            ),
+                          ),
+                          style: TextStyle(
+                            fontSize: screenWidth < 360 ? 12 : 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: screenWidth < 360 ? 8 : 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _showTodayData,
+                style: TextButton.styleFrom(
+                  backgroundColor: _dateController.text ==
+                      DateFormat('yyyy-MM-dd').format(DateTime.now())
+                      ? const Color(0xFF667EEA).withOpacity(0.1)
+                      : Colors.transparent,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenWidth < 360 ? 12 : 16,
+                    vertical: screenWidth < 360 ? 6 : 8,
                   ),
-                  child: Icon(
-                    stat['icon'] as IconData,
-                    color: stat['color'] as Color,
-                    size: isSmallScreen ? 14 : 16,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(screenWidth < 360 ? 10 : 12),
+                    side: BorderSide(
+                      color: _dateController.text ==
+                          DateFormat('yyyy-MM-dd').format(DateTime.now())
+                          ? const Color(0xFF667EEA)
+                          : Colors.grey[300]!,
+                    ),
                   ),
                 ),
-                SizedBox(height: isSmallScreen ? 2 : 4),
-                Text(
-                  stat['count'] as String,
+                child: Text(
+                  'Today',
                   style: TextStyle(
-                    fontSize: isSmallScreen ? 12 : 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    fontSize: screenWidth < 360 ? 11 : 12,
+                    fontWeight: _dateController.text ==
+                        DateFormat('yyyy-MM-dd').format(DateTime.now())
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+                    color: _dateController.text ==
+                        DateFormat('yyyy-MM-dd').format(DateTime.now())
+                        ? const Color(0xFF667EEA)
+                        : Colors.grey[600],
                   ),
-                  maxLines: 1,
                 ),
-                SizedBox(height: isSmallScreen ? 1 : 2),
-                Text(
-                  stat['title'] as String,
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 8 : 9,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                ),
-              ],
-            ),
-          );
-        },
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1001,6 +1098,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
       ),
     );
   }
+
   Widget _buildLoadingScreen(double screenWidth) {
     return Center(
       child: Column(
@@ -1014,9 +1112,10 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
           ),
           SizedBox(height: screenWidth < 360 ? 16 : 20),
           Text(
-            widget.selectedDate != null
+            _selectedDate != null &&
+                _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
                 ? 'Loading absents for ${_formatDate(_targetDate)}...'
-                : 'Loading all absents...',
+                : 'Loading today\'s absents...',
             style: TextStyle(
               fontSize: screenWidth < 360 ? 14 : 16,
               color: Colors.grey[600],
@@ -1071,7 +1170,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
             ),
             SizedBox(height: screenWidth < 360 ? 16 : 20),
             ElevatedButton(
-              onPressed: () => provider.fetchAbsents(date: widget.selectedDate),
+              onPressed: () => provider.fetchAbsents(date: _targetDate),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF667EEA),
                 shape: RoundedRectangleBorder(
@@ -1114,9 +1213,10 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
             ),
             SizedBox(height: screenWidth < 360 ? 12 : 16),
             Text(
-              widget.selectedDate != null
+              _selectedDate != null &&
+                  _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
                   ? 'No Absent Employees'
-                  : 'No Absent Records',
+                  : 'No Absent Records Today',
               style: TextStyle(
                 fontSize: screenWidth < 360 ? 16 : 18,
                 color: Colors.grey[600],
@@ -1125,9 +1225,10 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
             ),
             SizedBox(height: screenWidth < 360 ? 6 : 8),
             Text(
-              widget.selectedDate != null
+              _selectedDate != null &&
+                  _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
                   ? 'No employees were absent on ${_formatDate(_targetDate)}'
-                  : 'No absent records found',
+                  : 'No employees are absent today',
               style: TextStyle(
                 fontSize: screenWidth < 360 ? 12 : 14,
                 color: Colors.grey[400],
@@ -1148,7 +1249,7 @@ class _AbsentListScreenState extends State<AbsentListScreen> {
             ElevatedButton(
               onPressed: () {
                 final provider = Provider.of<AbsentProvider>(context, listen: false);
-                provider.fetchAbsents(date: widget.selectedDate);
+                provider.fetchAbsents(date: _targetDate);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF667EEA),
