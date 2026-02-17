@@ -159,24 +159,6 @@ class _ChartWidgetState extends State<ChartWidget> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                provider.chartTitle,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade800,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 0),
-            ],
-          ),
-        ),
-
         // Controls
         Row(
           children: [
@@ -191,14 +173,14 @@ class _ChartWidgetState extends State<ChartWidget> {
                 _buildMonthSelector(),
 
             // Refresh Button
-            IconButton(
-              icon: Icon(
-                Icons.refresh,
-                color: provider.isLoading ? Colors.grey : Colors.blue,
-              ),
-              onPressed: provider.isLoading ? null : _refreshData,
-              tooltip: 'Refresh',
-            ),
+            // IconButton(
+            //   icon: Icon(
+            //     Icons.refresh,
+            //     color: provider.isLoading ? Colors.grey : Colors.blue,
+            //   ),
+            //   onPressed: provider.isLoading ? null : _refreshData,
+            //   tooltip: 'Refresh',
+            // ),
           ],
         ),
       ],

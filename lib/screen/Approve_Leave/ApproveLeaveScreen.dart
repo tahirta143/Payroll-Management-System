@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -16,26 +15,56 @@ class ApproveLeaveScreen extends StatefulWidget {
 class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
   final TextEditingController _searchController = TextEditingController();
 
+  // ── Pull-to-refresh ───────────────────────────────────────────────────────
+  final ScrollController _scrollController = ScrollController();
+  bool _isRefreshing = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<LeaveProvider>(context, listen: false);
-
-      // Initialize user data
       await provider.initializeUserData();
-
-      // Debug
-      print('=== INIT COMPLETE ===');
-      print('User Role: ${provider.userRole}');
-      print('isAdmin: ${provider.isAdmin}');
-      print('User ID: ${provider.currentUserId}');
-      print('User Name: ${provider.currentEmployeeName}');
-      print('Department ID: ${provider.currentDepartmentId}');
-
-      // Fetch leaves
       await provider.fetchLeaves();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ── Refresh handler ───────────────────────────────────────────────────────
+  Future<void> _onRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      final provider = Provider.of<LeaveProvider>(context, listen: false);
+      await provider.fetchLeaves();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Leave data refreshed!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error refreshing: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
   }
 
   @override
@@ -44,19 +73,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
 
-    // Debug: Print admin status
-    print('=== SCREEN BUILD ===');
-    print('isAdmin: ${leaveProvider.isAdmin}');
-    print('leaves count: ${leaveProvider.leaves.length}');
-    print('User Name: ${leaveProvider.currentEmployeeName}');
-    print('Department ID: ${leaveProvider.currentDepartmentId}');
-    if (leaveProvider.leaves.isNotEmpty) {
-      print('First leave employee: ${leaveProvider.leaves.first.employeeName}');
-      print('First leave status: ${leaveProvider.leaves.first.status}');
-      print('First leave department: ${leaveProvider.leaves.first.departmentName}');
-    }
-
-    // Show success/error messages
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (leaveProvider.successMessage.isNotEmpty) {
         _showSnackBar(leaveProvider.successMessage);
@@ -69,115 +85,29 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
-      // No app bar
+      backgroundColor: const Color(0xFFF8FAFF),
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark.copyWith(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
         ),
         child: Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF8FAFF), // Match scaffold background
-          ),
+          decoration: const BoxDecoration(color: Color(0xFFF8FAFF)),
           child: Column(
             children: [
-              // Add some top padding to account for status bar
               SizedBox(height: MediaQuery.of(context).padding.top + 8),
-
-              // Custom Header with Menu Icon (like attendance screen)
-              // Padding(
-              //   padding: EdgeInsets.symmetric(
-              //     horizontal: isSmallScreen ? 16 : 20,
-              //   ),
-              //   child: Row(
-              //     children: [
-              //       // Menu/Drawer icon to open drawer
-              //       Builder(
-              //         builder: (context) {
-              //           return Container(
-              //             decoration: BoxDecoration(
-              //               color: Colors.white,
-              //               borderRadius: BorderRadius.circular(12),
-              //               boxShadow: [
-              //                 BoxShadow(
-              //                   color: Colors.black.withOpacity(0.05),
-              //                   blurRadius: 8,
-              //                   offset: const Offset(0, 2),
-              //                 ),
-              //               ],
-              //             ),
-              //             child: IconButton(
-              //               icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
-              //               onPressed: () {
-              //                 Scaffold.of(context).openDrawer();
-              //               },
-              //             ),
-              //           );
-              //         },
-              //       ),
-              //       const SizedBox(width: 12),
-              //       Text(
-              //         leaveProvider.isAdmin ? 'Leave Management' : 'My Leaves',
-              //         style: TextStyle(
-              //           fontSize: isSmallScreen ? 20 : 24,
-              //           fontWeight: FontWeight.bold,
-              //           color: const Color(0xFF667EEA),
-              //         ),
-              //       ),
-              //       const Spacer(),
-              //       // Refresh button
-              //       Container(
-              //         decoration: BoxDecoration(
-              //           color: Colors.white,
-              //           borderRadius: BorderRadius.circular(12),
-              //           boxShadow: [
-              //             BoxShadow(
-              //               color: Colors.black.withOpacity(0.05),
-              //               blurRadius: 8,
-              //               offset: const Offset(0, 2),
-              //             ),
-              //           ],
-              //         ),
-              //         child: IconButton(
-              //           icon: Icon(
-              //             Iconsax.refresh,
-              //             size: isSmallScreen ? 20 : 22,
-              //             color: const Color(0xFF667EEA),
-              //           ),
-              //           onPressed: () => leaveProvider.fetchLeaves(),
-              //           tooltip: 'Refresh',
-              //         ),
-              //       ),
-              //       if (leaveProvider.isLoading)
-              //         const Padding(
-              //           padding: EdgeInsets.only(left: 8),
-              //           child: Center(
-              //             child: SizedBox(
-              //               width: 20,
-              //               height: 20,
-              //               child: CircularProgressIndicator(
-              //                 strokeWidth: 2,
-              //                 color: Color(0xFF667EEA),
-              //               ),
-              //             ),
-              //           ),
-              //         ),
-              //     ],
-              //   ),
-              // ),
-
               const SizedBox(height: 16),
 
-              // Search and Filter Section
+              // Search and Filter
               _buildSearchFilterSection(leaveProvider, isSmallScreen),
 
-              // Statistics Cards - Only show for admin
-              if (leaveProvider.isAdmin) _buildStatisticsCards(leaveProvider, isSmallScreen),
+              // Stats cards (admin only)
+              if (leaveProvider.isAdmin)
+                _buildStatisticsCards(leaveProvider, isSmallScreen),
 
               const SizedBox(height: 16),
 
-              // Leave Requests List
+              // Leave list wrapped in RefreshIndicator
               Expanded(
                 child: Container(
                   margin: EdgeInsets.fromLTRB(
@@ -197,53 +127,52 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                       ),
                     ],
                   ),
-                  child: _buildLeaveList(leaveProvider, isSmallScreen),
+                  // ClipRRect keeps the pull indicator inside the rounded card
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: RefreshIndicator(
+                      onRefresh: _onRefresh,
+                      color: const Color(0xFF667EEA),
+                      backgroundColor: Colors.white,
+                      strokeWidth: 2.5,
+                      displacement: 40,
+                      child: _buildLeaveList(leaveProvider, isSmallScreen),
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
         ),
       ),
-      // Floating Action Button for New Leave Request
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          print('=== NEW LEAVE BUTTON PRESSED ===');
-          print('isAdmin: ${leaveProvider.isAdmin}');
-          print('isLoading: ${leaveProvider.isLoading}');
-          print('User Name: ${leaveProvider.currentEmployeeName}');
-          print('Department ID: ${leaveProvider.currentDepartmentId}');
-
-          // Check if widget is mounted
           if (!mounted) return;
-
-          // Use Future.microtask to ensure build completes
           Future.microtask(() {
             try {
-              // Use a separate variable for context
-              final currentContext = context;
               if (mounted) {
-                _showNewLeaveDialog(currentContext, leaveProvider);
+                _showNewLeaveDialog(context, leaveProvider);
               }
             } catch (e, stackTrace) {
               print('Error showing dialog: $e');
               print('Stack trace: $stackTrace');
-              if (mounted) {
-                _showSnackBar('Error: $e', isError: true);
-              }
+              if (mounted) _showSnackBar('Error: $e', isError: true);
             }
           });
         },
         backgroundColor: const Color(0xFF667EEA),
-        child: const Icon(
-          Iconsax.add,
-          color: Colors.white,
-        ),
         tooltip: 'New Leave Request',
+        child: const Icon(Iconsax.add, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildSearchFilterSection(LeaveProvider provider, bool isSmallScreen) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Search & Filter Section
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildSearchFilterSection(
+      LeaveProvider provider, bool isSmallScreen) {
     return Container(
       margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
       padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -260,7 +189,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       ),
       child: Column(
         children: [
-          // Search Bar - Full width always
+          // Search Bar
           Container(
             decoration: BoxDecoration(
               color: Colors.grey[50],
@@ -306,38 +235,29 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Filter Row - Always exactly 3 in a row, no wrapping
+          // Filters
           if (provider.isAdmin)
-          // For admin: Show all three filters in a single row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Employee Filter - 33% width
                 Expanded(
-                  child: _buildEmployeeFilter(provider, isSmallScreen),
-                ),
+                    child: _buildEmployeeFilter(provider, isSmallScreen)),
                 const SizedBox(width: 8),
-                // Department Filter - 33% width
                 Expanded(
-                  child: _buildDepartmentFilter(provider, isSmallScreen),
-                ),
+                    child: _buildDepartmentFilter(provider, isSmallScreen)),
                 const SizedBox(width: 8),
-                // Status Filter - 33% width
                 Expanded(
-                  child: _buildStatusFilter(provider, isSmallScreen),
-                ),
+                    child: _buildStatusFilter(provider, isSmallScreen)),
               ],
             )
           else
-          // For non-admin: Show only status filter, centered at 33% width
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Spacer(flex: 1),
                 Expanded(
-                  flex: 1,
-                  child: _buildStatusFilter(provider, isSmallScreen),
-                ),
+                    flex: 1,
+                    child: _buildStatusFilter(provider, isSmallScreen)),
                 const Spacer(flex: 1),
               ],
             ),
@@ -352,15 +272,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF667EEA).withOpacity(0.2),
-          width: 1.5,
-        ),
+            color: const Color(0xFF667EEA).withOpacity(0.2), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3))
         ],
       ),
       child: DropdownButtonHideUnderline(
@@ -373,11 +290,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               color: const Color(0xFF667EEA).withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(
-              Iconsax.arrow_down_1,
-              size: isSmallScreen ? 12 : 14,
-              color: const Color(0xFF667EEA),
-            ),
+            child: Icon(Iconsax.arrow_down_1,
+                size: isSmallScreen ? 12 : 14,
+                color: const Color(0xFF667EEA)),
           ),
           elevation: 2,
           style: TextStyle(
@@ -391,101 +306,84 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           borderRadius: BorderRadius.circular(12),
           menuMaxHeight: 300,
           onChanged: (String? value) {
-            if (value != null) {
-              provider.setEmployeeFilter(value);
-            }
+            if (value != null) provider.setEmployeeFilter(value);
           },
           items: [
             DropdownMenuItem<String>(
               value: 'All',
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 6 : 8,
-                  vertical: isSmallScreen ? 4 : 6,
-                ),
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: isSmallScreen ? 4 : 6),
                 child: Row(
                   children: [
                     Container(
                       width: isSmallScreen ? 24 : 28,
                       height: isSmallScreen ? 24 : 28,
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        shape: BoxShape.circle,
-                      ),
+                          color: Colors.grey[300], shape: BoxShape.circle),
                       child: const Center(
-                        child: Text(
-                          '👥',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
+                          child: Text('👥',
+                              style: TextStyle(fontSize: 12))),
                     ),
                     SizedBox(width: isSmallScreen ? 6 : 8),
                     Expanded(
-                      child: Text(
-                        'All Employees',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 12,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      child: Text('All Employees',
+                          style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500)),
                     ),
                   ],
                 ),
               ),
             ),
-            ...provider.employees.where((emp) => emp != 'All').map((String value) {
+            ...provider.employees.where((emp) => emp != 'All').map((value) {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 6 : 8,
-                    vertical: isSmallScreen ? 4 : 6,
-                  ),
+                      horizontal: isSmallScreen ? 6 : 8,
+                      vertical: isSmallScreen ? 4 : 6),
                   child: Row(
                     children: [
                       Container(
                         width: isSmallScreen ? 24 : 28,
                         height: isSmallScreen ? 24 : 28,
                         decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Color(0xFF667EEA),
-                              Color(0xFF764BA2),
-                            ],
-                          ),
+                          gradient: LinearGradient(colors: [
+                            Color(0xFF667EEA),
+                            Color(0xFF764BA2)
+                          ]),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
                           child: Text(
-                            value.isNotEmpty ? value.substring(0, 1).toUpperCase() : '?',
+                            value.isNotEmpty
+                                ? value.substring(0, 1).toUpperCase()
+                                : '?',
                             style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isSmallScreen ? 10 : 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                                color: Colors.white,
+                                fontSize: isSmallScreen ? 10 : 12,
+                                fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
                       SizedBox(width: isSmallScreen ? 6 : 8),
                       Expanded(
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 12,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text(value,
+                            style: TextStyle(
+                                fontSize: isSmallScreen ? 11 : 12,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                       ),
-                      if (value == provider.selectedEmployeeFilter && value != 'All')
-                        Icon(
-                          Iconsax.tick_circle,
-                          size: isSmallScreen ? 14 : 16,
-                          color: const Color(0xFF4CAF50),
-                        ),
+                      if (value == provider.selectedEmployeeFilter &&
+                          value != 'All')
+                        Icon(Iconsax.tick_circle,
+                            size: isSmallScreen ? 14 : 16,
+                            color: const Color(0xFF4CAF50)),
                     ],
                   ),
                 ),
@@ -503,15 +401,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF667EEA).withOpacity(0.2),
-          width: 1.5,
-        ),
+            color: const Color(0xFF667EEA).withOpacity(0.2), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3))
         ],
       ),
       child: DropdownButtonHideUnderline(
@@ -524,11 +419,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               color: const Color(0xFF667EEA).withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(
-              Iconsax.arrow_down_1,
-              size: isSmallScreen ? 12 : 14,
-              color: const Color(0xFF667EEA),
-            ),
+            child: Icon(Iconsax.arrow_down_1,
+                size: isSmallScreen ? 12 : 14,
+                color: const Color(0xFF667EEA)),
           ),
           elevation: 2,
           style: TextStyle(
@@ -542,62 +435,55 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           borderRadius: BorderRadius.circular(12),
           menuMaxHeight: 300,
           onChanged: (String? value) {
-            if (value != null) {
-              provider.setDepartmentFilter(value);
-            }
+            if (value != null) provider.setDepartmentFilter(value);
           },
           items: provider.departments.toSet().map((String value) {
             return DropdownMenuItem<String>(
               value: value,
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 6 : 8,
-                  vertical: isSmallScreen ? 4 : 6,
-                ),
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: isSmallScreen ? 4 : 6),
                 child: Row(
                   children: [
                     Container(
                       width: isSmallScreen ? 24 : 28,
                       height: isSmallScreen ? 24 : 28,
                       decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0xFF667EEA),
-                            Color(0xFF764BA2),
-                          ],
-                        ),
+                        gradient: LinearGradient(colors: [
+                          Color(0xFF667EEA),
+                          Color(0xFF764BA2)
+                        ]),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
                         child: Text(
-                          value.isNotEmpty ? value.substring(0, 1).toUpperCase() : '?',
+                          value.isNotEmpty
+                              ? value.substring(0, 1).toUpperCase()
+                              : '?',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: isSmallScreen ? 10 : 12,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              color: Colors.white,
+                              fontSize: isSmallScreen ? 10 : 12,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
                     SizedBox(width: isSmallScreen ? 6 : 8),
                     Expanded(
                       child: Text(
-                        value == 'All' ? 'All Departments' : value,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 12,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                          value == 'All' ? 'All Departments' : value,
+                          style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 12,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                     ),
-                    if (value == provider.selectedDepartmentFilter && value != 'All')
-                      Icon(
-                        Iconsax.tick_circle,
-                        size: isSmallScreen ? 14 : 16,
-                        color: const Color(0xFF4CAF50),
-                      ),
+                    if (value == provider.selectedDepartmentFilter &&
+                        value != 'All')
+                      Icon(Iconsax.tick_circle,
+                          size: isSmallScreen ? 14 : 16,
+                          color: const Color(0xFF4CAF50)),
                   ],
                 ),
               ),
@@ -614,15 +500,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF667EEA).withOpacity(0.2),
-          width: 1.5,
-        ),
+            color: const Color(0xFF667EEA).withOpacity(0.2), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3))
         ],
       ),
       child: DropdownButtonHideUnderline(
@@ -635,11 +518,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               color: const Color(0xFF667EEA).withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(
-              Iconsax.arrow_down_1,
-              size: isSmallScreen ? 12 : 14,
-              color: const Color(0xFF667EEA),
-            ),
+            child: Icon(Iconsax.arrow_down_1,
+                size: isSmallScreen ? 12 : 14,
+                color: const Color(0xFF667EEA)),
           ),
           elevation: 2,
           style: TextStyle(
@@ -653,9 +534,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           borderRadius: BorderRadius.circular(12),
           menuMaxHeight: 300,
           onChanged: (String? value) {
-            if (value != null) {
-              provider.setStatusFilter(value);
-            }
+            if (value != null) provider.setStatusFilter(value);
           },
           items: provider.statusOptions.map((String value) {
             Color statusColor = _getStatusColor(value);
@@ -663,9 +542,8 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               value: value,
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 6 : 8,
-                  vertical: isSmallScreen ? 4 : 6,
-                ),
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: isSmallScreen ? 4 : 6),
                 child: Row(
                   children: [
                     Container(
@@ -674,35 +552,36 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         shape: BoxShape.circle,
-                        border: Border.all(color: statusColor.withOpacity(0.3)),
+                        border: Border.all(
+                            color: statusColor.withOpacity(0.3)),
                       ),
                       child: Icon(
-                        value == 'All' ? Iconsax.filter :
-                        value == 'Pending' ? Iconsax.clock :
-                        value == 'Approved' ? Iconsax.tick_circle : Iconsax.close_circle,
+                        value == 'All'
+                            ? Iconsax.filter
+                            : value == 'Pending'
+                            ? Iconsax.clock
+                            : value == 'Approved'
+                            ? Iconsax.tick_circle
+                            : Iconsax.close_circle,
                         size: isSmallScreen ? 12 : 14,
                         color: statusColor,
                       ),
                     ),
                     SizedBox(width: isSmallScreen ? 6 : 8),
                     Expanded(
-                      child: Text(
-                        value == 'All' ? 'All Status' : value,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 12,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(value == 'All' ? 'All Status' : value,
+                          style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 12,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                     ),
-                    if (value == provider.selectedStatusFilter && value != 'All')
-                      Icon(
-                        Iconsax.tick_circle,
-                        size: isSmallScreen ? 14 : 16,
-                        color: const Color(0xFF4CAF50),
-                      ),
+                    if (value == provider.selectedStatusFilter &&
+                        value != 'All')
+                      Icon(Iconsax.tick_circle,
+                          size: isSmallScreen ? 14 : 16,
+                          color: const Color(0xFF4CAF50)),
                   ],
                 ),
               ),
@@ -713,14 +592,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Statistics Cards
+  // ─────────────────────────────────────────────────────────────────────────
+
   Widget _buildStatisticsCards(LeaveProvider provider, bool isSmallScreen) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isVerySmallScreen = screenWidth < 400;
 
-    // Calculate responsive height based on screen size
-    final cardHeight = isVerySmallScreen
-        ? 140.0
-        : (isSmallScreen ? 150.0 : 170.0);
+    final cardHeight =
+    isVerySmallScreen ? 140.0 : (isSmallScreen ? 150.0 : 170.0);
 
     return SizedBox(
       height: cardHeight,
@@ -728,16 +609,20 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3, // Changed from 4 to 3
-          crossAxisSpacing: isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 10),
-          mainAxisSpacing: isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 10),
-          childAspectRatio: isVerySmallScreen ? 0.9 : (isSmallScreen ? 1.0 : 1.1),
+          crossAxisCount: 3,
+          crossAxisSpacing:
+          isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 10),
+          mainAxisSpacing:
+          isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 10),
+          childAspectRatio:
+          isVerySmallScreen ? 0.9 : (isSmallScreen ? 1.0 : 1.1),
         ),
         padding: EdgeInsets.symmetric(
-          horizontal: isVerySmallScreen ? 12 : (isSmallScreen ? 16 : 20),
+          horizontal:
+          isVerySmallScreen ? 12 : (isSmallScreen ? 16 : 20),
           vertical: isVerySmallScreen ? 4 : (isSmallScreen ? 6 : 8),
         ),
-        itemCount: 3, // Changed from 4 to 3
+        itemCount: 3,
         itemBuilder: (context, index) {
           final stats = [
             {
@@ -758,7 +643,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               'count': provider.rejectedCount.toString(),
               'color': const Color(0xFFF44336),
             },
-            // Removed the Total Days card
           ];
           final stat = stats[index];
           return Container(
@@ -767,59 +651,65 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               borderRadius: BorderRadius.circular(15),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 4),
-                ),
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 4))
               ],
             ),
-            padding: EdgeInsets.all(isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 10)),
+            padding: EdgeInsets.all(
+                isVerySmallScreen ? 6 : (isSmallScreen ? 8 : 10)),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: isVerySmallScreen ? 28 : (isSmallScreen ? 32 : 36),
-                  height: isVerySmallScreen ? 26 : (isSmallScreen ? 30 : 34),
+                  width:
+                  isVerySmallScreen ? 28 : (isSmallScreen ? 32 : 36),
+                  height:
+                  isVerySmallScreen ? 26 : (isSmallScreen ? 30 : 34),
                   decoration: BoxDecoration(
                     color: (stat['color'] as Color).withOpacity(0.1),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (stat['color'] as Color).withOpacity(0.3),
-                      width: 1.5,
-                    ),
+                        color: (stat['color'] as Color).withOpacity(0.3),
+                        width: 1.5),
                   ),
                   child: Center(
-                    child: Icon(
-                      stat['icon'] as IconData,
-                      color: stat['color'] as Color,
-                      size: isVerySmallScreen ? 14 : (isSmallScreen ? 16 : 18),
-                    ),
+                    child: Icon(stat['icon'] as IconData,
+                        color: stat['color'] as Color,
+                        size: isVerySmallScreen
+                            ? 14
+                            : (isSmallScreen ? 16 : 18)),
                   ),
                 ),
-                SizedBox(height: isVerySmallScreen ? 4 : (isSmallScreen ? 6 : 8)),
-                Text(
-                  stat['count'] as String,
-                  style: TextStyle(
-                    fontSize: isVerySmallScreen ? 14 : (isSmallScreen ? 16 : 18),
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                SizedBox(height: isVerySmallScreen ? 2 : (isSmallScreen ? 3 : 4)),
-                Text(
-                  stat['title'] as String,
-                  style: TextStyle(
-                    fontSize: isVerySmallScreen ? 9 : (isSmallScreen ? 10 : 11),
-                    color: (stat['color'] as Color).withOpacity(0.8),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                SizedBox(
+                    height: isVerySmallScreen
+                        ? 4
+                        : (isSmallScreen ? 6 : 8)),
+                Text(stat['count'] as String,
+                    style: TextStyle(
+                        fontSize: isVerySmallScreen
+                            ? 14
+                            : (isSmallScreen ? 16 : 18),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                SizedBox(
+                    height: isVerySmallScreen
+                        ? 2
+                        : (isSmallScreen ? 3 : 4)),
+                Text(stat['title'] as String,
+                    style: TextStyle(
+                        fontSize: isVerySmallScreen
+                            ? 9
+                            : (isSmallScreen ? 10 : 11),
+                        color:
+                        (stat['color'] as Color).withOpacity(0.8),
+                        fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           );
@@ -827,74 +717,106 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       ),
     );
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Leave List  (RefreshIndicator is on the parent — here we just need
+  // AlwaysScrollableScrollPhysics so the gesture fires even on short lists)
+  // ─────────────────────────────────────────────────────────────────────────
+
   Widget _buildLeaveList(LeaveProvider provider, bool isSmallScreen) {
+    // Loading
     if (provider.isLoading && provider.leaves.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Error state — wrapped so RefreshIndicator still fires
     if (provider.error.isNotEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Iconsax.warning_2, size: 60, color: Colors.grey[300]),
-            const SizedBox(height: 16),
-            Text(
-              'Error: ${provider.error}',
-              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
-              textAlign: TextAlign.center,
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: 300,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Iconsax.warning_2, size: 60, color: Colors.grey[300]),
+                const SizedBox(height: 16),
+                Text('Error: ${provider.error}',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _onRefresh,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF667EEA),
+                      foregroundColor: Colors.white),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => provider.fetchLeaves(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF667EEA),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       );
     }
 
+    // Empty state — wrapped so RefreshIndicator still fires
     if (provider.leaves.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Iconsax.note_remove, size: 60, color: Colors.grey[300]),
-            const SizedBox(height: 16),
-            Text(
-              'No leave requests found',
-              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              provider.isAdmin
-                  ? 'Try adjusting your filters'
-                  : 'You have no leave requests yet',
-              style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-            ),
-            if (!provider.isAdmin)
-              ElevatedButton(
-                onPressed: () {
-                  _showNewLeaveDialog(context, provider);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF667EEA),
-                  foregroundColor: Colors.white,
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: 300,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Iconsax.note_remove, size: 60, color: Colors.grey[300]),
+                const SizedBox(height: 16),
+                Text('No leave requests found',
+                    style:
+                    TextStyle(fontSize: 16, color: Colors.grey[500])),
+                const SizedBox(height: 8),
+                Text(
+                  provider.isAdmin
+                      ? 'Try adjusting your filters'
+                      : 'You have no leave requests yet',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[400]),
                 ),
-                child: const Text('Create Your First Leave Request'),
-              ),
-          ],
+                const SizedBox(height: 12),
+                // Pull-down hint
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.arrow_downward_rounded,
+                        size: 14, color: Colors.grey[400]),
+                    const SizedBox(width: 4),
+                    Text('Pull down to refresh',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey[400])),
+                  ],
+                ),
+                if (!provider.isAdmin) ...[
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      _showNewLeaveDialog(context, provider);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF667EEA),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Create Your First Leave Request'),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       );
     }
 
     return Column(
       children: [
-        // Table Header for larger screens
+        // Table header (wide screens only)
         if (MediaQuery.of(context).size.width > 600)
           Container(
             padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -905,63 +827,51 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                 topRight: Radius.circular(20),
               ),
               border: Border(
-                bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-              ),
+                  bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
             ),
             child: Row(
               children: [
                 const Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Employee',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
+                    flex: 3,
+                    child: Text('Employee',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87))),
                 const Expanded(
-                  child: Text(
-                    'Leave Type',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
+                    child: Text('Leave Type',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87))),
                 const Expanded(
-                  child: Text(
-                    'Days',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
+                    child: Text('Days',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87))),
                 const Expanded(
-                  child: Text(
-                    'Status',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
+                    child: Text('Status',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87))),
                 if (provider.isAdmin) const SizedBox(width: 60),
               ],
             ),
           ),
+
+        // Scrollable list — AlwaysScrollableScrollPhysics is the key
         Expanded(
           child: ListView.builder(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: provider.leaves.length,
             itemBuilder: (context, index) {
               final leave = provider.leaves[index];
-              return _buildLeaveRequestCard(leave, provider, isSmallScreen);
+              return _buildLeaveRequestCard(
+                  leave, provider, isSmallScreen);
             },
           ),
         ),
@@ -969,7 +879,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     );
   }
 
-  Widget _buildLeaveRequestCard(ApproveLeave leave, LeaveProvider provider, bool isSmallScreen) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Leave Request Card
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildLeaveRequestCard(
+      ApproveLeave leave, LeaveProvider provider, bool isSmallScreen) {
     final isWideScreen = MediaQuery.of(context).size.width > 600;
     final statusColor = _getStatusColor(leave.status);
 
@@ -980,10 +895,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2))
         ],
       ),
       child: isWideScreen
@@ -992,7 +906,8 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     );
   }
 
-  Widget _buildWideCard(ApproveLeave leave, Color statusColor, LeaveProvider provider, bool isSmallScreen) {
+  Widget _buildWideCard(ApproveLeave leave, Color statusColor,
+      LeaveProvider provider, bool isSmallScreen) {
     final isPending = leave.status.toLowerCase() == 'pending';
     final shouldShowButtons = provider.isAdmin && isPending;
 
@@ -1014,22 +929,22 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                       width: isSmallScreen ? 32 : 36,
                       height: isSmallScreen ? 32 : 36,
                       decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0xFF667EEA),
-                            Color(0xFF764BA2),
-                          ],
-                        ),
+                        gradient: LinearGradient(colors: [
+                          Color(0xFF667EEA),
+                          Color(0xFF764BA2)
+                        ]),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
                         child: Text(
-                          leave.employeeName.split(' ').map((n) => n[0]).join(),
+                          leave.employeeName
+                              .split(' ')
+                              .map((n) => n[0])
+                              .join(),
                           style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: isSmallScreen ? 10 : 12,
-                          ),
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: isSmallScreen ? 10 : 12),
                         ),
                       ),
                     ),
@@ -1039,25 +954,19 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            leave.employeeName,
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 11 : 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            leave.employeeCode,
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 9 : 10,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          Text(leave.employeeName,
+                              style: TextStyle(
+                                  fontSize: isSmallScreen ? 11 : 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                          Text(leave.employeeCode,
+                              style: TextStyle(
+                                  fontSize: isSmallScreen ? 9 : 10,
+                                  color: Colors.grey[600]),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),
@@ -1070,25 +979,24 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           Expanded(
             child: Container(
               padding: EdgeInsets.symmetric(
-                horizontal: isSmallScreen ? 4 : 6,
-                vertical: isSmallScreen ? 3 : 4,
-              ),
+                  horizontal: isSmallScreen ? 4 : 6,
+                  vertical: isSmallScreen ? 3 : 4),
               margin: const EdgeInsets.only(top: 6),
               decoration: BoxDecoration(
-                color: _getLeaveTypeColor(leave.natureOfLeave).withOpacity(0.1),
+                color: _getLeaveTypeColor(leave.natureOfLeave)
+                    .withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: _getLeaveTypeColor(leave.natureOfLeave).withOpacity(0.3),
-                ),
+                    color: _getLeaveTypeColor(leave.natureOfLeave)
+                        .withOpacity(0.3)),
               ),
               child: Text(
                 _formatLeaveType(leave.natureOfLeave),
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 9 : 10,
-                  fontWeight: FontWeight.w500,
-                  color: _getLeaveTypeColor(leave.natureOfLeave),
-                ),
+                    fontSize: isSmallScreen ? 9 : 10,
+                    fontWeight: FontWeight.w500,
+                    color: _getLeaveTypeColor(leave.natureOfLeave)),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1099,23 +1007,18 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
             child: Center(
               child: Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 6 : 8,
-                  vertical: isSmallScreen ? 3 : 4,
-                ),
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: isSmallScreen ? 3 : 4),
                 margin: const EdgeInsets.only(top: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFF667EEA).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  '${leave.days}d',
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 9 : 10,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF667EEA),
-                  ),
-                  maxLines: 1,
-                ),
+                child: Text('${leave.days}d',
+                    style: TextStyle(
+                        fontSize: isSmallScreen ? 9 : 10,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF667EEA))),
               ),
             ),
           ),
@@ -1123,9 +1026,8 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           Expanded(
             child: Container(
               padding: EdgeInsets.symmetric(
-                horizontal: isSmallScreen ? 4 : 6,
-                vertical: isSmallScreen ? 3 : 4,
-              ),
+                  horizontal: isSmallScreen ? 4 : 6,
+                  vertical: isSmallScreen ? 3 : 4),
               margin: const EdgeInsets.only(top: 6),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.1),
@@ -1135,16 +1037,15 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                 _capitalizeStatus(leave.status),
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 9 : 10,
-                  fontWeight: FontWeight.w600,
-                  color: statusColor,
-                ),
+                    fontSize: isSmallScreen ? 9 : 10,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
-          // Action Buttons - Only show if admin and leave is pending
+          // Action buttons
           SizedBox(
             width: 60,
             child: shouldShowButtons
@@ -1152,36 +1053,34 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 IconButton(
-                  onPressed: () => _approveLeave(leave.id, provider),
+                  onPressed: () =>
+                      _approveLeave(leave.id, provider),
                   icon: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4CAF50).withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
+                        color: const Color(0xFF4CAF50)
+                            .withOpacity(0.1),
+                        shape: BoxShape.circle),
                     padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Iconsax.tick_circle,
-                      size: isSmallScreen ? 14 : 16,
-                      color: const Color(0xFF4CAF50),
-                    ),
+                    child: Icon(Iconsax.tick_circle,
+                        size: isSmallScreen ? 14 : 16,
+                        color: const Color(0xFF4CAF50)),
                   ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   tooltip: 'Approve',
                 ),
                 IconButton(
-                  onPressed: () => _rejectLeave(leave.id, provider),
+                  onPressed: () =>
+                      _rejectLeave(leave.id, provider),
                   icon: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF44336).withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
+                        color: const Color(0xFFF44336)
+                            .withOpacity(0.1),
+                        shape: BoxShape.circle),
                     padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Iconsax.close_circle,
-                      size: isSmallScreen ? 14 : 16,
-                      color: const Color(0xFFF44336),
-                    ),
+                    child: Icon(Iconsax.close_circle,
+                        size: isSmallScreen ? 14 : 16,
+                        color: const Color(0xFFF44336)),
                   ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -1192,12 +1091,13 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                 : Container(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                isPending ? 'Pending' : _capitalizeStatus(leave.status),
+                isPending
+                    ? 'Pending'
+                    : _capitalizeStatus(leave.status),
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 9 : 10,
-                  color: statusColor,
-                  fontWeight: FontWeight.w500,
-                ),
+                    fontSize: isSmallScreen ? 9 : 10,
+                    color: statusColor,
+                    fontWeight: FontWeight.w500),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -1207,8 +1107,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     );
   }
 
-  Widget _buildCompactCard(ApproveLeave leave, Color statusColor, LeaveProvider provider, bool isSmallScreen) {
-    final shouldShowButtons = provider.isAdmin && _isPendingStatus(leave.status);
+  Widget _buildCompactCard(ApproveLeave leave, Color statusColor,
+      LeaveProvider provider, bool isSmallScreen) {
+    final shouldShowButtons =
+        provider.isAdmin && _isPendingStatus(leave.status);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1217,10 +1119,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2))
         ],
       ),
       child: Padding(
@@ -1228,29 +1129,26 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Employee info
+            // Employee row
             Row(
               children: [
                 Container(
                   width: isSmallScreen ? 36 : 40,
                   height: isSmallScreen ? 36 : 40,
                   decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Color(0xFF667EEA),
-                        Color(0xFF764BA2),
-                      ],
-                    ),
+                    gradient: LinearGradient(colors: [
+                      Color(0xFF667EEA),
+                      Color(0xFF764BA2)
+                    ]),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: Text(
                       leave.employeeName.split(' ').map((n) => n[0]).join(),
                       style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: isSmallScreen ? 12 : 14,
-                      ),
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: isSmallScreen ? 12 : 14),
                     ),
                   ),
                 ),
@@ -1259,26 +1157,20 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        leave.employeeName,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 13 : 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (provider.isAdmin)
-                        Text(
-                          leave.departmentName,
+                      Text(leave.employeeName,
                           style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 12,
-                            color: Colors.grey[600],
-                          ),
+                              fontSize: isSmallScreen ? 13 : 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87),
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          overflow: TextOverflow.ellipsis),
+                      if (provider.isAdmin)
+                        Text(leave.departmentName,
+                            style: TextStyle(
+                                fontSize: isSmallScreen ? 11 : 12,
+                                color: Colors.grey[600]),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
@@ -1286,12 +1178,11 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Pay mode indicator
+            // Pay mode badge
             Container(
               padding: EdgeInsets.symmetric(
-                horizontal: isSmallScreen ? 6 : 8,
-                vertical: isSmallScreen ? 3 : 4,
-              ),
+                  horizontal: isSmallScreen ? 6 : 8,
+                  vertical: isSmallScreen ? 3 : 4),
               decoration: BoxDecoration(
                 color: leave.payMode == 'with_pay'
                     ? Colors.green.withOpacity(0.1)
@@ -1302,56 +1193,57 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    leave.payMode == 'with_pay' ? Iconsax.money_add : Iconsax.money_remove,
+                    leave.payMode == 'with_pay'
+                        ? Iconsax.money_add
+                        : Iconsax.money_remove,
                     size: isSmallScreen ? 10 : 12,
-                    color: leave.payMode == 'with_pay' ? Colors.green : Colors.orange,
+                    color: leave.payMode == 'with_pay'
+                        ? Colors.green
+                        : Colors.orange,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    _formatPayMode(leave.payMode),
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 10 : 11,
-                      color: leave.payMode == 'with_pay' ? Colors.green : Colors.orange,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  Text(_formatPayMode(leave.payMode),
+                      style: TextStyle(
+                          fontSize: isSmallScreen ? 10 : 11,
+                          color: leave.payMode == 'with_pay'
+                              ? Colors.green
+                              : Colors.orange,
+                          fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
             const SizedBox(height: 8),
 
-            // Leave type, days, status row
+            // Chips
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 Container(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 6 : 8,
-                    vertical: isSmallScreen ? 4 : 6,
-                  ),
+                      horizontal: isSmallScreen ? 6 : 8,
+                      vertical: isSmallScreen ? 4 : 6),
                   decoration: BoxDecoration(
-                    color: _getLeaveTypeColor(leave.natureOfLeave).withOpacity(0.1),
+                    color: _getLeaveTypeColor(leave.natureOfLeave)
+                        .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: _getLeaveTypeColor(leave.natureOfLeave).withOpacity(0.3),
-                    ),
+                        color: _getLeaveTypeColor(leave.natureOfLeave)
+                            .withOpacity(0.3)),
                   ),
                   child: Text(
                     _formatLeaveType(leave.natureOfLeave),
                     style: TextStyle(
-                      fontSize: isSmallScreen ? 10 : 11,
-                      fontWeight: FontWeight.w500,
-                      color: _getLeaveTypeColor(leave.natureOfLeave),
-                    ),
+                        fontSize: isSmallScreen ? 10 : 11,
+                        fontWeight: FontWeight.w500,
+                        color: _getLeaveTypeColor(leave.natureOfLeave)),
                     maxLines: 1,
                   ),
                 ),
                 Container(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 8 : 12,
-                    vertical: isSmallScreen ? 4 : 6,
-                  ),
+                      horizontal: isSmallScreen ? 8 : 12,
+                      vertical: isSmallScreen ? 4 : 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFF667EEA).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -1359,17 +1251,15 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   child: Text(
                     '${leave.days} ${leave.days == 1 ? 'Day' : 'Days'}',
                     style: TextStyle(
-                      fontSize: isSmallScreen ? 11 : 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF667EEA),
-                    ),
+                        fontSize: isSmallScreen ? 11 : 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF667EEA)),
                   ),
                 ),
                 Container(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 8 : 12,
-                    vertical: isSmallScreen ? 4 : 6,
-                  ),
+                      horizontal: isSmallScreen ? 8 : 12,
+                      vertical: isSmallScreen ? 4 : 6),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -1377,10 +1267,9 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                   child: Text(
                     _capitalizeStatus(leave.status),
                     style: TextStyle(
-                      fontSize: isSmallScreen ? 11 : 12,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor,
-                    ),
+                        fontSize: isSmallScreen ? 11 : 12,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor),
                   ),
                 ),
               ],
@@ -1390,15 +1279,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
             // Date range
             Row(
               children: [
-                Icon(Iconsax.calendar, size: isSmallScreen ? 10 : 12, color: Colors.grey[500]),
+                Icon(Iconsax.calendar,
+                    size: isSmallScreen ? 10 : 12,
+                    color: Colors.grey[500]),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     '${_formatDate(leave.fromDate)} to ${_formatDate(leave.toDate)}',
                     style: TextStyle(
-                      fontSize: isSmallScreen ? 10 : 11,
-                      color: Colors.grey[600],
-                    ),
+                        fontSize: isSmallScreen ? 10 : 11,
+                        color: Colors.grey[600]),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1407,7 +1297,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Action Buttons - Only show if admin and leave is pending
+            // Approve / Reject buttons
             if (shouldShowButtons && leave.id != null)
               Column(
                 children: [
@@ -1416,55 +1306,43 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _approveLeave(leave.id!, provider),
+                          onPressed: () =>
+                              _approveLeave(leave.id!, provider),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             padding: EdgeInsets.symmetric(
-                              vertical: isSmallScreen ? 6 : 8,
-                            ),
+                                vertical: isSmallScreen ? 6 : 8),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                                borderRadius: BorderRadius.circular(8)),
                           ),
-                          icon: Icon(
-                            Iconsax.tick_circle,
-                            size: isSmallScreen ? 14 : 16,
-                            color: Colors.white,
-                          ),
-                          label: Text(
-                            'Approve',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 11 : 12,
-                              color: Colors.white,
-                            ),
-                          ),
+                          icon: Icon(Iconsax.tick_circle,
+                              size: isSmallScreen ? 14 : 16,
+                              color: Colors.white),
+                          label: Text('Approve',
+                              style: TextStyle(
+                                  fontSize: isSmallScreen ? 11 : 12,
+                                  color: Colors.white)),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _rejectLeave(leave.id!, provider),
+                          onPressed: () =>
+                              _rejectLeave(leave.id!, provider),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             padding: EdgeInsets.symmetric(
-                              vertical: isSmallScreen ? 6 : 8,
-                            ),
+                                vertical: isSmallScreen ? 6 : 8),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                                borderRadius: BorderRadius.circular(8)),
                           ),
-                          icon: Icon(
-                            Iconsax.close_circle,
-                            size: isSmallScreen ? 14 : 16,
-                            color: Colors.white,
-                          ),
-                          label: Text(
-                            'Reject',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 11 : 12,
-                              color: Colors.white,
-                            ),
-                          ),
+                          icon: Icon(Iconsax.close_circle,
+                              size: isSmallScreen ? 14 : 16,
+                              color: Colors.white),
+                          label: Text('Reject',
+                              style: TextStyle(
+                                  fontSize: isSmallScreen ? 11 : 12,
+                                  color: Colors.white)),
                         ),
                       ),
                     ],
@@ -1477,44 +1355,36 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
   bool _isPendingStatus(String status) {
-    final lowerStatus = status.toLowerCase();
-    return lowerStatus.contains('pending') ||
-        lowerStatus == 'p' ||
-        lowerStatus == '0' ||
-        lowerStatus.contains('waiting') ||
-        lowerStatus.contains('request');
+    final s = status.toLowerCase();
+    return s.contains('pending') ||
+        s == 'p' ||
+        s == '0' ||
+        s.contains('waiting') ||
+        s.contains('request');
   }
 
   Color _getStatusColor(String status) {
-    final lowerStatus = status.toLowerCase();
-    if (lowerStatus.contains('approved') || lowerStatus == '1') {
-      return const Color(0xFF4CAF50);
-    } else if (lowerStatus.contains('rejected') || lowerStatus == '2') {
-      return const Color(0xFFF44336);
-    } else if (_isPendingStatus(status)) {
-      return const Color(0xFFFF9800);
-    } else {
-      return const Color(0xFF9E9E9E);
-    }
+    final s = status.toLowerCase();
+    if (s.contains('approved') || s == '1') return const Color(0xFF4CAF50);
+    if (s.contains('rejected') || s == '2') return const Color(0xFFF44336);
+    if (_isPendingStatus(status)) return const Color(0xFFFF9800);
+    return const Color(0xFF9E9E9E);
   }
 
   Color _getLeaveTypeColor(String type) {
     switch (type) {
-      case 'sick_leave':
-        return const Color(0xFF2196F3);
-      case 'annual_leave':
-        return const Color(0xFF4CAF50);
-      case 'emergency_leave':
-        return const Color(0xFFF44336);
-      case 'maternity_leave':
-        return const Color(0xFF9C27B0);
-      case 'urgent_work':
-        return const Color(0xFFFF9800);
-      case 'casual_leave':
-        return const Color(0xFFFF5722);
-      default:
-        return const Color(0xFF667EEA);
+      case 'sick_leave':       return const Color(0xFF2196F3);
+      case 'annual_leave':     return const Color(0xFF4CAF50);
+      case 'emergency_leave':  return const Color(0xFFF44336);
+      case 'maternity_leave':  return const Color(0xFF9C27B0);
+      case 'urgent_work':      return const Color(0xFFFF9800);
+      case 'casual_leave':     return const Color(0xFFFF5722);
+      default:                 return const Color(0xFF667EEA);
     }
   }
 
@@ -1555,44 +1425,37 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
 
   void _showSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-
-    final snackBar = SnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(message),
       backgroundColor: isError ? Colors.red : const Color(0xFF4CAF50),
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 3),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    ));
   }
 
   Future<void> _approveLeave(int leaveId, LeaveProvider provider) async {
     if (!mounted) return;
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Approve Leave'),
-        content: const Text('Are you sure you want to approve this leave request?'),
+        content: const Text(
+            'Are you sure you want to approve this leave request?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
-              foregroundColor: Colors.white,
-            ),
+                backgroundColor: const Color(0xFF4CAF50),
+                foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Approve'),
           ),
         ],
       ),
     );
-
     if (confirmed != true || !mounted) return;
-
     try {
       await provider.approveLeave(leaveId);
       _showSnackBar('Leave approved successfully!');
@@ -1603,31 +1466,27 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
 
   Future<void> _rejectLeave(int leaveId, LeaveProvider provider) async {
     if (!mounted) return;
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reject Leave'),
-        content: const Text('Are you sure you want to reject this leave request?'),
+        content: const Text(
+            'Are you sure you want to reject this leave request?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF44336),
-              foregroundColor: Colors.white,
-            ),
+                backgroundColor: const Color(0xFFF44336),
+                foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Reject'),
           ),
         ],
       ),
     );
-
     if (confirmed != true || !mounted) return;
-
     try {
       await provider.rejectLeave(leaveId);
       _showSnackBar('Leave rejected successfully!');
@@ -1636,18 +1495,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     }
   }
 
-  // NOTE: The _showNewLeaveDialog method remains exactly the same as your original code
-  // I'm not including it here to keep the response manageable, but you should keep your
-  // existing _showNewLeaveDialog method exactly as it was in your original code
-  Future<void> _showNewLeaveDialog(BuildContext context, LeaveProvider provider) async {
-    print('=== SHOW NEW LEAVE DIALOG START ===');
-    print('User is admin: ${provider.isAdmin}');
-    print('User Name: ${provider.currentEmployeeName}');
-    print('Department ID: ${provider.currentDepartmentId}');
+  // ─────────────────────────────────────────────────────────────────────────
+  // New Leave Dialog (unchanged from your original)
+  // ─────────────────────────────────────────────────────────────────────────
 
-    // Variables for form
+  Future<void> _showNewLeaveDialog(
+      BuildContext context, LeaveProvider provider) async {
+    print('=== SHOW NEW LEAVE DIALOG START ===');
+
     int? selectedEmployeeId;
-    int? selectedDepartmentId; // This will store the actual department_id integer
+    int? selectedDepartmentId;
     String? selectedLeaveType;
     String? selectedPayMode;
     DateTime? fromDate;
@@ -1655,7 +1512,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     int days = 0;
     String reason = '';
 
-    // Store filtered employees by department
     List<Map<String, dynamic>> filteredEmployees = [];
 
     void calculateDays() {
@@ -1664,87 +1520,36 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       }
     }
 
-    // Function to filter employees by department - for admin only
     void filterEmployeesByDepartment(int? departmentId) {
       if (departmentId == null || provider.allEmployees.isEmpty) {
         filteredEmployees = [];
         selectedEmployeeId = null;
         return;
       }
-
-      print('=== FILTERING EMPLOYEES BY DEPARTMENT ===');
-      print('Selected department ID: $departmentId');
-      print('Total employees in provider: ${provider.allEmployees.length}');
-
-      // Filter employees by department ID
-      filteredEmployees = provider.allEmployees.where((emp) {
-        final empDeptId = emp['department_id'];
-        return empDeptId == departmentId;
-      }).toList();
-
-      print('Filtered ${filteredEmployees.length} employees for department ID: $departmentId');
-
-      // If no matches by ID, try to find department name from leaves and filter by name
+      filteredEmployees = provider.allEmployees
+          .where((emp) => emp['department_id'] == departmentId)
+          .toList();
       if (filteredEmployees.isEmpty) {
-        print('No matches by department ID, trying to find department name...');
-
-        String? departmentName;
-        final leaves = provider.allLeaves;
-        for (var leave in leaves) {
-          if (leave.departmentId == departmentId) {
-            departmentName = leave.departmentName;
-            break;
-          }
-        }
-
-        if (departmentName != null) {
-          print('Found department name: "$departmentName"');
-          filteredEmployees = provider.allEmployees.where((emp) {
-            final empDeptName = emp['department_name']?.toString() ?? '';
-            return empDeptName == departmentName;
-          }).toList();
-          print('Now found ${filteredEmployees.length} employees by department name');
-        }
-      }
-
-      // Debug filtered employees
-      if (filteredEmployees.isNotEmpty) {
-        print('--- Filtered Employees ---');
-        for (var emp in filteredEmployees) {
-          print('  - ${emp['name']} (Dept ID: ${emp['department_id']}, Name: "${emp['department_name']}")');
-        }
-      } else {
-        print('WARNING: No employees found for department ID: $departmentId');
-        // Fallback: show all employees
         filteredEmployees = List.from(provider.allEmployees);
-        print('Fallback: showing all ${filteredEmployees.length} employees');
       }
     }
 
-    // For non-admin users, automatically set employee and department to themselves
     if (!provider.isAdmin && provider.currentEmployeeId != null) {
       selectedEmployeeId = provider.currentEmployeeId;
       selectedDepartmentId = provider.currentDepartmentId ?? 1;
-      print('NON-ADMIN: Auto-selected employee ID: $selectedEmployeeId, Dept ID: $selectedDepartmentId');
-
-      // For non-admin, add themselves to filteredEmployees
       if (provider.currentEmployeeName != null) {
         filteredEmployees.add({
           'id': provider.currentEmployeeId!,
           'name': provider.currentEmployeeName!,
           'employee_code': provider.currentEmployeeCode ?? '',
           'department_id': selectedDepartmentId,
-          'department_name': provider.departments.firstWhere(
-                (dept) => dept != 'All',
-            orElse: () => 'My Department',
-          ),
+          'department_name': provider.departments
+              .firstWhere((dept) => dept != 'All', orElse: () => 'My Department'),
         });
       }
     }
 
-    // For admin users, fetch employees first
     if (provider.isAdmin) {
-      // Show loading indicator
       if (!context.mounted) return;
 
       showDialog(
@@ -1764,25 +1569,16 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
 
       try {
         await provider.fetchAllEmployeesForDropdown();
-
-        // Close loading dialog
         if (context.mounted && Navigator.canPop(context)) {
           Navigator.pop(context);
         }
-
         if (provider.allEmployees.isEmpty) {
           if (context.mounted) {
-            _showSnackBar('No employees found. Please try again.', isError: true);
+            _showSnackBar('No employees found. Please try again.',
+                isError: true);
           }
           return;
         }
-
-        print('=== ADMIN: EMPLOYEE DATA LOADED ===');
-        print('Total employees loaded: ${provider.allEmployees.length}');
-        if (provider.allEmployees.isNotEmpty) {
-          print('Sample employee: ${provider.allEmployees.first}');
-        }
-
       } catch (e) {
         if (context.mounted && Navigator.canPop(context)) {
           Navigator.pop(context);
@@ -1794,7 +1590,6 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
       }
     }
 
-    // Now show the main dialog
     if (!context.mounted) return;
 
     await showDialog(
@@ -1804,8 +1599,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
           builder: (context, setState) {
             return Dialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+                  borderRadius: BorderRadius.circular(16)),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.9,
@@ -1826,20 +1620,23 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Iconsax.note_add, color: Colors.white, size: 24),
+                          const Icon(Iconsax.note_add,
+                              color: Colors.white, size: 24),
                           const SizedBox(width: 10),
                           Text(
-                            provider.isAdmin ? 'New Leave Request' : 'Apply for Leave',
+                            provider.isAdmin
+                                ? 'New Leave Request'
+                                : 'Apply for Leave',
                             style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
                           ),
                           const Spacer(),
                           IconButton(
                             onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                            icon: const Icon(Icons.close,
+                                color: Colors.white, size: 20),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           ),
@@ -1847,7 +1644,7 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                       ),
                     ),
 
-                    // Form Content
+                    // Form
                     Expanded(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(16),
@@ -1855,26 +1652,25 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Employee Info - For non-admin, show their name
+                            // Non-admin: show their own info
                             if (!provider.isAdmin)
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Employee',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
+                                  const Text('Employee',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.black87)),
                                   const SizedBox(height: 8),
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
                                       color: Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey[300]!),
+                                      borderRadius:
+                                      BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.grey[300]!),
                                     ),
                                     child: Row(
                                       children: [
@@ -1883,44 +1679,49 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                           height: 40,
                                           decoration: const BoxDecoration(
                                             gradient: LinearGradient(
-                                              colors: [
-                                                Color(0xFF667EEA),
-                                                Color(0xFF764BA2),
-                                              ],
-                                            ),
+                                                colors: [
+                                                  Color(0xFF667EEA),
+                                                  Color(0xFF764BA2)
+                                                ]),
                                             shape: BoxShape.circle,
                                           ),
                                           child: Center(
                                             child: Text(
-                                              provider.currentEmployeeName?.substring(0, 1).toUpperCase() ?? 'U',
+                                              provider.currentEmployeeName
+                                                  ?.substring(0, 1)
+                                                  .toUpperCase() ??
+                                                  'U',
                                               style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                              ),
+                                                  color: Colors.white,
+                                                  fontWeight:
+                                                  FontWeight.bold,
+                                                  fontSize: 16),
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                provider.currentEmployeeName ?? 'You',
+                                                provider.currentEmployeeName ??
+                                                    'You',
                                                 style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.black87,
-                                                ),
+                                                    fontSize: 16,
+                                                    fontWeight:
+                                                    FontWeight.w600,
+                                                    color: Colors.black87),
                                               ),
-                                              if (provider.currentEmployeeCode != null)
+                                              if (provider.currentEmployeeCode !=
+                                                  null)
                                                 Text(
                                                   'ID: ${provider.currentEmployeeCode}',
                                                   style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[600],
-                                                  ),
+                                                      fontSize: 12,
+                                                      color:
+                                                      Colors.grey[600]),
                                                 ),
                                             ],
                                           ),
@@ -1932,106 +1733,103 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                 ],
                               ),
 
-                            // Department Selection - Show for both admin and non-admin
-                            const Text(
-                              'Department *',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                            ),
+                            // Department
+                            const Text('Department *',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87)),
                             const SizedBox(height: 8),
                             Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
+                                border: Border.all(
+                                    color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<int>(
                                   value: selectedDepartmentId ??
-                                      (!provider.isAdmin ? provider.currentDepartmentId : null),
+                                      (!provider.isAdmin
+                                          ? provider.currentDepartmentId
+                                          : null),
                                   isExpanded: true,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
                                   icon: const Icon(Iconsax.arrow_down_1),
                                   elevation: 2,
                                   style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.black87,
-                                  ),
+                                      fontSize: 14, color: Colors.black87),
                                   hint: const Text('Select Department'),
                                   onChanged: provider.isAdmin
                                       ? (int? value) {
-                                    print('Department changed to ID: $value');
                                     setState(() {
                                       selectedDepartmentId = value;
-                                      selectedEmployeeId = null; // Reset employee when department changes
-                                      filterEmployeesByDepartment(value);
+                                      selectedEmployeeId = null;
+                                      filterEmployeesByDepartment(
+                                          value);
                                     });
                                   }
-                                      : null, // Non-admin cannot change department
+                                      : null,
                                   items: provider.isAdmin
                                       ? [
-                                    // Get unique department IDs and names from leaves
                                     ...provider.allLeaves
                                         .where((leave) =>
-                                    leave.departmentId != null &&
-                                        leave.departmentName.isNotEmpty)
-                                        .fold<Map<int, String>>({}, (map, leave) {
-                                      map[leave.departmentId!] = leave.departmentName;
+                                    leave.departmentId !=
+                                        null &&
+                                        leave.departmentName
+                                            .isNotEmpty)
+                                        .fold<Map<int, String>>(
+                                        {}, (map, leave) {
+                                      map[leave.departmentId!] =
+                                          leave.departmentName;
                                       return map;
                                     })
                                         .entries
-                                        .map((entry) {
-                                      return DropdownMenuItem<int>(
-                                        value: entry.key, // Use department_id as value
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 32,
-                                              height: 32,
-                                              decoration: const BoxDecoration(
-                                                gradient: LinearGradient(
-                                                  colors: [
-                                                    Color(0xFF667EEA),
-                                                    Color(0xFF764BA2),
-                                                  ],
+                                        .map((entry) =>
+                                        DropdownMenuItem<int>(
+                                          value: entry.key,
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 32,
+                                                height: 32,
+                                                decoration: const BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                      colors: [
+                                                        Color(0xFF667EEA),
+                                                        Color(0xFF764BA2)
+                                                      ]),
+                                                  shape: BoxShape.circle,
                                                 ),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Center(
-                                                child: Text(
-                                                  entry.value.substring(0, 1).toUpperCase(),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
+                                                child: Center(
+                                                  child: Text(
+                                                    entry.value
+                                                        .substring(0, 1)
+                                                        .toUpperCase(),
+                                                    style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 12),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                entry.value, // Display department name
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.black87,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(entry.value,
+                                                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                                    overflow: TextOverflow.ellipsis),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(),
+                                            ],
+                                          ),
+                                        ))
+                                        .toList(),
                                   ]
                                       : [
-                                    // For non-admin, show only their department
-                                    if (provider.currentDepartmentId != null &&
-                                        provider.currentEmployeeName != null)
+                                    if (provider.currentDepartmentId !=
+                                        null)
                                       DropdownMenuItem<int>(
-                                        value: provider.currentDepartmentId,
+                                        value: provider
+                                            .currentDepartmentId,
                                         child: Row(
                                           children: [
                                             Container(
@@ -2039,35 +1837,31 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                               height: 32,
                                               decoration: const BoxDecoration(
                                                 gradient: LinearGradient(
-                                                  colors: [
-                                                    Color(0xFF667EEA),
-                                                    Color(0xFF764BA2),
-                                                  ],
-                                                ),
+                                                    colors: [
+                                                      Color(0xFF667EEA),
+                                                      Color(0xFF764BA2)
+                                                    ]),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Center(
                                                 child: Text(
-                                                  provider.currentEmployeeName!
-                                                      .substring(0, 1)
-                                                      .toUpperCase(),
+                                                  provider.currentEmployeeName
+                                                      ?.substring(0, 1)
+                                                      .toUpperCase() ??
+                                                      'D',
                                                   style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
-                                                  ),
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12),
                                                 ),
                                               ),
                                             ),
                                             const SizedBox(width: 10),
                                             const Expanded(
-                                              child: Text(
-                                                'My Department',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.black87,
-                                                ),
-                                              ),
+                                              child: Text('My Department',
+                                                  style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: Colors.black87)),
                                             ),
                                           ],
                                         ),
@@ -2078,33 +1872,32 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Employee Dropdown - ONLY FOR ADMIN (and only show after department is selected)
+                            // Employee dropdown (admin only)
                             if (provider.isAdmin) ...[
-                              const Text(
-                                'Select Employee *',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.black87,
-                                ),
-                              ),
+                              const Text('Select Employee *',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.black87)),
                               const SizedBox(height: 8),
                               Container(
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
+                                  border: Border.all(
+                                      color: Colors.grey[300]!),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: DropdownButtonHideUnderline(
                                   child: DropdownButton<int>(
                                     value: selectedEmployeeId,
                                     isExpanded: true,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    icon: const Icon(Iconsax.arrow_down_1),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                    icon:
+                                    const Icon(Iconsax.arrow_down_1),
                                     elevation: 2,
                                     style: const TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.black87,
-                                    ),
+                                        fontSize: 14,
+                                        color: Colors.black87),
                                     hint: Text(
                                       selectedDepartmentId == null
                                           ? 'Select Department First'
@@ -2112,23 +1905,28 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                           ? 'No employees in this department'
                                           : 'Select Employee',
                                       style: TextStyle(
-                                        color: selectedDepartmentId == null || filteredEmployees.isEmpty
-                                            ? Colors.grey
-                                            : Colors.black87,
-                                      ),
+                                          color: selectedDepartmentId ==
+                                              null ||
+                                              filteredEmployees.isEmpty
+                                              ? Colors.grey
+                                              : Colors.black87),
                                     ),
-                                    onChanged: selectedDepartmentId != null && filteredEmployees.isNotEmpty
-                                        ? (value) {
-                                      setState(() {
-                                        selectedEmployeeId = value;
-                                      });
-                                    }
+                                    onChanged: selectedDepartmentId !=
+                                        null &&
+                                        filteredEmployees.isNotEmpty
+                                        ? (value) => setState(
+                                            () => selectedEmployeeId = value)
                                         : null,
                                     items: filteredEmployees.map((employee) {
-                                      final empId = employee['id'] as int? ?? 0;
-                                      final empName = employee['name']?.toString() ?? 'Unknown';
-                                      final empCode = employee['employee_code']?.toString() ?? '';
-
+                                      final empId =
+                                          employee['id'] as int? ?? 0;
+                                      final empName =
+                                          employee['name']?.toString() ??
+                                              'Unknown';
+                                      final empCode =
+                                          employee['employee_code']
+                                              ?.toString() ??
+                                              '';
                                       return DropdownMenuItem<int>(
                                         value: empId,
                                         child: Row(
@@ -2138,49 +1936,51 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                               height: 36,
                                               decoration: const BoxDecoration(
                                                 gradient: LinearGradient(
-                                                  colors: [
-                                                    Color(0xFF667EEA),
-                                                    Color(0xFF764BA2),
-                                                  ],
-                                                ),
+                                                    colors: [
+                                                      Color(0xFF667EEA),
+                                                      Color(0xFF764BA2)
+                                                    ]),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Center(
                                                 child: Text(
-                                                  empName.isNotEmpty ? empName.substring(0, 1).toUpperCase() : '?',
+                                                  empName.isNotEmpty
+                                                      ? empName
+                                                      .substring(0, 1)
+                                                      .toUpperCase()
+                                                      : '?',
                                                   style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 14,
-                                                  ),
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                      FontWeight.bold,
+                                                      fontSize: 14),
                                                 ),
                                               ),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                                 children: [
-                                                  Text(
-                                                    empName,
-                                                    style: const TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.w500,
-                                                      color: Colors.black87,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                  if (empCode.isNotEmpty)
-                                                    Text(
-                                                      'ID: $empCode',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey[600],
-                                                      ),
+                                                  Text(empName,
+                                                      style: const TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                          FontWeight.w500,
+                                                          color: Colors.black87),
                                                       maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
+                                                      overflow:
+                                                      TextOverflow.ellipsis),
+                                                  if (empCode.isNotEmpty)
+                                                    Text('ID: $empCode',
+                                                        style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: Colors
+                                                                .grey[600]),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis),
                                                 ],
                                               ),
                                             ),
@@ -2194,97 +1994,95 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            // Leave Type Dropdown
-                            const Text(
-                              'Leave Type *',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                            ),
+                            // Leave Type
+                            const Text('Leave Type *',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87)),
                             const SizedBox(height: 8),
                             Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
+                                border: Border.all(
+                                    color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: selectedLeaveType,
                                   isExpanded: true,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  icon: const Icon(Iconsax.arrow_down_1),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  icon:
+                                  const Icon(Iconsax.arrow_down_1),
                                   elevation: 2,
                                   style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.black87,
-                                  ),
+                                      fontSize: 14, color: Colors.black87),
                                   hint: const Text('Select Leave Type'),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedLeaveType = value;
-                                    });
-                                  },
-                                  items: provider.leaveTypes.toSet().map((type) {
-                                    String displayName = type.replaceAll('_', ' ').toTitleCase();
-                                    return DropdownMenuItem<String>(
-                                      value: type,
-                                      child: Text(
-                                        displayName,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                    );
-                                  }).toList(),
+                                  onChanged: (value) => setState(
+                                          () => selectedLeaveType = value),
+                                  items: provider.leaveTypes
+                                      .toSet()
+                                      .map((type) =>
+                                      DropdownMenuItem<String>(
+                                        value: type,
+                                        child: Text(
+                                          type
+                                              .replaceAll('_', ' ')
+                                              .toTitleCase(),
+                                          style: const TextStyle(
+                                              fontSize: 14),
+                                        ),
+                                      ))
+                                      .toList(),
                                 ),
                               ),
                             ),
                             const SizedBox(height: 16),
 
                             // Date Range
-                            const Text(
-                              'Date Range *',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                            ),
+                            const Text('Date Range *',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87)),
                             const SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
-                                        'From Date',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
+                                      const Text('From Date',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey)),
                                       const SizedBox(height: 4),
                                       GestureDetector(
                                         onTap: () async {
-                                          final selectedDate = await showDatePicker(
+                                          final selectedDate =
+                                          await showDatePicker(
                                             context: context,
                                             initialDate: DateTime.now(),
                                             firstDate: DateTime.now(),
-                                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                                            builder: (context, child) {
-                                              return Theme(
-                                                data: Theme.of(context).copyWith(
-                                                  colorScheme: const ColorScheme.light(
-                                                    primary: Color(0xFF667EEA),
-                                                    onPrimary: Colors.white,
-                                                    surface: Colors.white,
-                                                    onSurface: Colors.black,
+                                            lastDate: DateTime.now().add(
+                                                const Duration(days: 365)),
+                                            builder: (context, child) =>
+                                                Theme(
+                                                  data: Theme.of(context)
+                                                      .copyWith(
+                                                    colorScheme:
+                                                    const ColorScheme.light(
+                                                      primary:
+                                                      Color(0xFF667EEA),
+                                                      onPrimary: Colors.white,
+                                                      surface: Colors.white,
+                                                      onSurface: Colors.black,
+                                                    ),
                                                   ),
+                                                  child: child!,
                                                 ),
-                                                child: child!,
-                                              );
-                                            },
                                           );
                                           if (selectedDate != null) {
                                             setState(() {
@@ -2296,20 +2094,29 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                         child: Container(
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.grey[300]!),
-                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: Colors.grey[300]!),
+                                            borderRadius:
+                                            BorderRadius.circular(8),
                                           ),
                                           child: Row(
                                             children: [
-                                              const Icon(Iconsax.calendar_1, size: 18, color: Colors.grey),
+                                              const Icon(
+                                                  Iconsax.calendar_1,
+                                                  size: 18,
+                                                  color: Colors.grey),
                                               const SizedBox(width: 8),
                                               Expanded(
                                                 child: Text(
-                                                  fromDate == null ? 'Select Date' : _formatDate(fromDate!),
+                                                  fromDate == null
+                                                      ? 'Select Date'
+                                                      : _formatDate(
+                                                      fromDate!),
                                                   style: TextStyle(
-                                                    fontSize: 14,
-                                                    color: fromDate == null ? Colors.grey : Colors.black87,
-                                                  ),
+                                                      fontSize: 14,
+                                                      color: fromDate == null
+                                                          ? Colors.grey
+                                                          : Colors.black87),
                                                 ),
                                               ),
                                             ],
@@ -2322,36 +2129,40 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
-                                        'To Date',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
+                                      const Text('To Date',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey)),
                                       const SizedBox(height: 4),
                                       GestureDetector(
                                         onTap: () async {
-                                          final selectedDate = await showDatePicker(
+                                          final selectedDate =
+                                          await showDatePicker(
                                             context: context,
-                                            initialDate: fromDate ?? DateTime.now(),
-                                            firstDate: fromDate ?? DateTime.now(),
-                                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                                            builder: (context, child) {
-                                              return Theme(
-                                                data: Theme.of(context).copyWith(
-                                                  colorScheme: const ColorScheme.light(
-                                                    primary: Color(0xFF667EEA),
-                                                    onPrimary: Colors.white,
-                                                    surface: Colors.white,
-                                                    onSurface: Colors.black,
+                                            initialDate:
+                                            fromDate ?? DateTime.now(),
+                                            firstDate:
+                                            fromDate ?? DateTime.now(),
+                                            lastDate: DateTime.now().add(
+                                                const Duration(days: 365)),
+                                            builder: (context, child) =>
+                                                Theme(
+                                                  data: Theme.of(context)
+                                                      .copyWith(
+                                                    colorScheme:
+                                                    const ColorScheme.light(
+                                                      primary:
+                                                      Color(0xFF667EEA),
+                                                      onPrimary: Colors.white,
+                                                      surface: Colors.white,
+                                                      onSurface: Colors.black,
+                                                    ),
                                                   ),
+                                                  child: child!,
                                                 ),
-                                                child: child!,
-                                              );
-                                            },
                                           );
                                           if (selectedDate != null) {
                                             setState(() {
@@ -2363,20 +2174,28 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                         child: Container(
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.grey[300]!),
-                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: Colors.grey[300]!),
+                                            borderRadius:
+                                            BorderRadius.circular(8),
                                           ),
                                           child: Row(
                                             children: [
-                                              const Icon(Iconsax.calendar_1, size: 18, color: Colors.grey),
+                                              const Icon(
+                                                  Iconsax.calendar_1,
+                                                  size: 18,
+                                                  color: Colors.grey),
                                               const SizedBox(width: 8),
                                               Expanded(
                                                 child: Text(
-                                                  toDate == null ? 'Select Date' : _formatDate(toDate!),
+                                                  toDate == null
+                                                      ? 'Select Date'
+                                                      : _formatDate(toDate!),
                                                   style: TextStyle(
-                                                    fontSize: 14,
-                                                    color: toDate == null ? Colors.grey : Colors.black87,
-                                                  ),
+                                                      fontSize: 14,
+                                                      color: toDate == null
+                                                          ? Colors.grey
+                                                          : Colors.black87),
                                                 ),
                                               ),
                                             ],
@@ -2390,109 +2209,105 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Days Counter
+                            // Days counter
                             if (days > 0)
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF667EEA).withOpacity(0.1),
+                                  color: const Color(0xFF667EEA)
+                                      .withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: const Color(0xFF667EEA).withOpacity(0.3),
-                                  ),
+                                      color: const Color(0xFF667EEA)
+                                          .withOpacity(0.3)),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text(
-                                      'Total Days:',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF667EEA),
-                                      ),
-                                    ),
+                                    const Text('Total Days:',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF667EEA))),
                                     Text(
                                       '$days ${days == 1 ? 'Day' : 'Days'}',
                                       style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: Color(0xFF667EEA),
-                                      ),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Color(0xFF667EEA)),
                                     ),
                                   ],
                                 ),
                               ),
                             if (days > 0) const SizedBox(height: 16),
 
-                            // Pay Mode Dropdown
-                            const Text(
-                              'Pay Mode *',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                            ),
+                            // Pay Mode
+                            const Text('Pay Mode *',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87)),
                             const SizedBox(height: 8),
                             Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
+                                border: Border.all(
+                                    color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: selectedPayMode,
                                   isExpanded: true,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  icon: const Icon(Iconsax.arrow_down_1),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  icon:
+                                  const Icon(Iconsax.arrow_down_1),
                                   elevation: 2,
                                   style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.black87,
-                                  ),
+                                      fontSize: 14, color: Colors.black87),
                                   hint: const Text('Select Pay Mode'),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedPayMode = value;
-                                    });
-                                  },
-                                  items: provider.payModes.toSet().map((mode) {
-                                    return DropdownMenuItem<String>(
-                                      value: mode,
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            mode == 'With Pay' ? Iconsax.money_add : Iconsax.money_remove,
-                                            color: mode == 'With Pay' ? Colors.green : Colors.orange,
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            mode,
-                                            style: const TextStyle(fontSize: 14),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
+                                  onChanged: (value) => setState(
+                                          () => selectedPayMode = value),
+                                  items: provider.payModes
+                                      .toSet()
+                                      .map((mode) =>
+                                      DropdownMenuItem<String>(
+                                        value: mode,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              mode == 'With Pay'
+                                                  ? Iconsax.money_add
+                                                  : Iconsax.money_remove,
+                                              color: mode == 'With Pay'
+                                                  ? Colors.green
+                                                  : Colors.orange,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(mode,
+                                                style: const TextStyle(
+                                                    fontSize: 14)),
+                                          ],
+                                        ),
+                                      ))
+                                      .toList(),
                                 ),
                               ),
                             ),
                             const SizedBox(height: 16),
 
-                            // Reason TextField
-                            const Text(
-                              'Reason (Optional)',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                            ),
+                            // Reason
+                            const Text('Reason (Optional)',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87)),
                             const SizedBox(height: 8),
                             Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
+                                border: Border.all(
+                                    color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
@@ -2501,11 +2316,10 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                   contentPadding: EdgeInsets.all(12),
                                   border: InputBorder.none,
                                   hintText: 'Enter reason for leave...',
-                                  hintStyle: TextStyle(color: Colors.grey),
+                                  hintStyle:
+                                  TextStyle(color: Colors.grey),
                                 ),
-                                onChanged: (value) {
-                                  reason = value;
-                                },
+                                onChanged: (value) => reason = value,
                               ),
                             ),
                             const SizedBox(height: 24),
@@ -2514,14 +2328,13 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                       ),
                     ),
 
-                    // Action Buttons
+                    // Footer buttons
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: Colors.grey[50],
                         border: Border(
-                          top: BorderSide(color: Colors.grey[200]!),
-                        ),
+                            top: BorderSide(color: Colors.grey[200]!)),
                       ),
                       child: Row(
                         children: [
@@ -2529,83 +2342,76 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                             child: OutlinedButton(
                               onPressed: () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                side: BorderSide(color: Colors.grey[400]!),
+                                    borderRadius:
+                                    BorderRadius.circular(8)),
+                                side: BorderSide(
+                                    color: Colors.grey[400]!),
                               ),
-                              child: const Text(
-                                'Cancel',
-                                style: TextStyle(fontSize: 14),
-                              ),
+                              child: const Text('Cancel',
+                                  style: TextStyle(fontSize: 14)),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () async {
-                                // ============= VALIDATION =============
-                                // Admin: Check if employee selected
-                                if (provider.isAdmin && selectedEmployeeId == null) {
-                                  _showSnackBar('Please select an employee', isError: true);
+                                // Validation
+                                if (provider.isAdmin &&
+                                    selectedEmployeeId == null) {
+                                  _showSnackBar(
+                                      'Please select an employee',
+                                      isError: true);
                                   return;
                                 }
-
-                                // Check department
                                 if (selectedDepartmentId == null) {
-                                  _showSnackBar('Please select department', isError: true);
+                                  _showSnackBar(
+                                      'Please select department',
+                                      isError: true);
                                   return;
                                 }
-
-                                // Check leave type
                                 if (selectedLeaveType == null) {
-                                  _showSnackBar('Please select leave type', isError: true);
+                                  _showSnackBar(
+                                      'Please select leave type',
+                                      isError: true);
                                   return;
                                 }
-
-                                // Check pay mode
                                 if (selectedPayMode == null) {
-                                  _showSnackBar('Please select pay mode', isError: true);
+                                  _showSnackBar(
+                                      'Please select pay mode',
+                                      isError: true);
                                   return;
                                 }
-
-                                // Check dates
                                 if (fromDate == null) {
-                                  _showSnackBar('Please select from date', isError: true);
+                                  _showSnackBar(
+                                      'Please select from date',
+                                      isError: true);
                                   return;
                                 }
                                 if (toDate == null) {
-                                  _showSnackBar('Please select to date', isError: true);
+                                  _showSnackBar(
+                                      'Please select to date',
+                                      isError: true);
                                   return;
                                 }
                                 if (toDate!.isBefore(fromDate!)) {
-                                  _showSnackBar('To date cannot be before from date', isError: true);
+                                  _showSnackBar(
+                                      'To date cannot be before from date',
+                                      isError: true);
                                   return;
                                 }
                                 if (days <= 0) {
-                                  _showSnackBar('Please select valid dates', isError: true);
+                                  _showSnackBar(
+                                      'Please select valid dates',
+                                      isError: true);
                                   return;
                                 }
 
-                                // ============= DEBUG LOG =============
-                                print('=== LEAVE SUBMISSION DEBUG ===');
-                                print('User Type: ${provider.isAdmin ? "ADMIN" : "NON-ADMIN"}');
-                                print('Selected Employee ID: $selectedEmployeeId');
-                                print('Selected Department ID: $selectedDepartmentId');
-                                print('Selected Leave Type: $selectedLeaveType');
-                                print('Pay Mode: $selectedPayMode');
-                                print('From Date: $fromDate');
-                                print('To Date: $toDate');
-                                print('Days: $days');
-                                print('Reason: $reason');
-
-                                // ============= SUBMIT =============
-                                bool success;
-
-                                // Show loading indicator
                                 if (!context.mounted) return;
 
+                                // Loading dialog
                                 showDialog(
                                   context: context,
                                   barrierDismissible: false,
@@ -2615,79 +2421,87 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
                                       children: [
                                         CircularProgressIndicator(),
                                         SizedBox(width: 16),
-                                        Text('Submitting leave request...'),
+                                        Text(
+                                            'Submitting leave request...'),
                                       ],
                                     ),
                                   ),
                                 );
 
                                 try {
-                                  // Set department ID in provider
                                   if (selectedDepartmentId != null) {
-                                    provider.setCurrentDepartmentId(selectedDepartmentId);
+                                    provider.setCurrentDepartmentId(
+                                        selectedDepartmentId);
                                   }
 
-                                  // Call appropriate method based on user role
+                                  bool success;
                                   if (provider.isAdmin) {
                                     success = await provider.submitLeave(
-                                      selectedEmployeeId: selectedEmployeeId!,
+                                      selectedEmployeeId:
+                                      selectedEmployeeId!,
                                       natureOfLeave: selectedLeaveType!,
                                       fromDate: fromDate!,
                                       toDate: toDate!,
                                       days: days,
                                       payMode: selectedPayMode!,
-                                      reason: reason.isNotEmpty ? reason : null,
+                                      reason: reason.isNotEmpty
+                                          ? reason
+                                          : null,
                                     );
                                   } else {
-                                    success = await provider.submitLeaveForSelf(
+                                    success = await provider
+                                        .submitLeaveForSelf(
                                       natureOfLeave: selectedLeaveType!,
                                       fromDate: fromDate!,
                                       toDate: toDate!,
                                       days: days,
                                       payMode: selectedPayMode!,
-                                      reason: reason.isNotEmpty ? reason : null,
+                                      reason: reason.isNotEmpty
+                                          ? reason
+                                          : null,
                                     );
                                   }
 
-                                  // Close loading dialog
-                                  if (context.mounted && Navigator.canPop(context)) {
+                                  if (context.mounted &&
+                                      Navigator.canPop(context)) {
                                     Navigator.pop(context);
                                   }
 
-                                  // Handle result
                                   if (success && context.mounted) {
-                                    // Show success message
-                                    final successMessage = provider.successMessage.isNotEmpty
+                                    final msg = provider
+                                        .successMessage.isNotEmpty
                                         ? provider.successMessage
                                         : 'Leave request submitted successfully!';
-
-                                    _showSnackBar(successMessage);
-                                    Navigator.pop(context); // Close the form dialog
+                                    _showSnackBar(msg);
+                                    Navigator.pop(context);
                                   }
                                 } catch (e) {
-                                  // Close loading dialog
-                                  if (context.mounted && Navigator.canPop(context)) {
+                                  if (context.mounted &&
+                                      Navigator.canPop(context)) {
                                     Navigator.pop(context);
                                   }
                                   if (context.mounted) {
-                                    _showSnackBar('Error: $e', isError: true);
+                                    _showSnackBar('Error: $e',
+                                        isError: true);
                                   }
                                 }
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF667EEA),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
+                                    borderRadius:
+                                    BorderRadius.circular(8)),
                               ),
                               child: Text(
-                                provider.isAdmin ? 'Submit Request' : 'Apply for Leave',
+                                provider.isAdmin
+                                    ? 'Submit Request'
+                                    : 'Apply for Leave',
                                 style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
@@ -2704,8 +2518,12 @@ class _ApproveLeaveScreenState extends State<ApproveLeaveScreen> {
     );
 
     print('=== SHOW NEW LEAVE DIALOG END ===');
-  }}
+  }
+}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Extension
+// ─────────────────────────────────────────────────────────────────────────────
 
 extension StringExtension on String {
   String toTitleCase() {

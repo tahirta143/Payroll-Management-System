@@ -95,7 +95,7 @@ class Attendance {
           (json['department'] != null ? json['department']['name'] ?? '' : ''),
       dutyShiftName: json['duty_shift_name'] ?? '',
       dutyShiftStart: json['duty_shift_start'] ?? '09:00',
-      dutyShiftEnd: json['duty_shift_end'] ?? '17:00',
+      dutyShiftEnd: json['duty_shift_end'] ?? '6:00',
       lateMinutesStr: json['late_minutes']?.toString(),
       overtimeMinutesStr: json['overtime_minutes']?.toString(),
     );
@@ -166,6 +166,12 @@ class Attendance {
   bool get isPresent => timeIn.isNotEmpty;
 
   // ============ Calculate late minutes ============
+  // NEW CODE - CORRECT
+// Rule:
+//   9:15 ya pehle aye → late nhi (0 minutes)
+//   9:15 ke baad aye  → late minutes = timeIn - 9:00
+//   Example: 9:17 aye → 17 minutes late  (9:17 - 9:00)
+//   Example: 9:15 aye → 0 minutes late
   int get lateMinutes {
     if (lateMinutesStr != null) {
       return int.tryParse(lateMinutesStr!) ?? 0;
@@ -174,12 +180,15 @@ class Attendance {
     if (timeIn.isEmpty) return 0;
 
     try {
-      final officeStart = DateTime(date.year, date.month, date.day, 9, 15);
-      final timeInTime = _parseTime(timeIn);
-      if (timeInTime.isAfter(officeStart)) {
-        return timeInTime.difference(officeStart).inMinutes;
-      }
-      return 0;
+      final officeStart   = DateTime(date.year, date.month, date.day, 9,  0); // 9:00
+      final graceDeadline = DateTime(date.year, date.month, date.day, 9, 15); // 9:15
+      final timeInTime    = _parseTime(timeIn);
+
+      // 9:15 ya usse pehle aya → late nhi
+      if (!timeInTime.isAfter(graceDeadline)) return 0;
+
+      // 9:15 ke baad aya → late = timeIn - 9:00
+      return timeInTime.difference(officeStart).inMinutes;
     } catch (e) {
       print('Error calculating late minutes: $e');
       return 0;

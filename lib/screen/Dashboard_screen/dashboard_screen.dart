@@ -399,7 +399,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     screens.add(_buildHomeScreen());
 
     if (p.hasPermission('can-view-attendence')) {
-      screens.add(const AttendanceScreen());
+      // Add a unique key to force rebuild when needed
+      screens.add(
+          AttendanceScreen(
+            key: ValueKey('attendance_screen_${DateTime.now().millisecondsSinceEpoch}'),
+          )
+      );
     }
 
     screens.add(const ApproveLeaveScreen());
@@ -425,7 +430,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return screens;
   }
-
   int _getScreenIndexForItem(String itemTitle, PermissionProvider p) {
     final screens = _getScreens(p);
     final Map<String, int> titleToIndex = {};

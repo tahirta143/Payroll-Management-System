@@ -57,7 +57,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     final borderRadius = isSmallScreen ? 12.0 : isMediumScreen ? 16.0 : 20.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
+      backgroundColor: const Color(0xFFF8FAFF),
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark.copyWith(
           statusBarColor: Colors.transparent,
@@ -65,43 +65,20 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
         ),
         child: Consumer<MonthlyReportProvider>(
           builder: (context, provider, child) {
+            final isAdmin = provider.isAdmin;
+
             return Column(
               children: [
                 // Add some top padding to account for status bar
                 SizedBox(height: MediaQuery.of(context).padding.top + 8),
 
-                // Custom Header with Menu Icon (like attendance screen)
+                // Custom Header
                 Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: isSmallScreen ? 16 : 20,
                   ),
                   child: Row(
                     children: [
-                      // Menu/Drawer icon to open drawer
-                      // Builder(
-                      //   builder: (context) {
-                      //     return Container(
-                      //       decoration: BoxDecoration(
-                      //         color: Colors.white,
-                      //         borderRadius: BorderRadius.circular(12),
-                      //         boxShadow: [
-                      //           BoxShadow(
-                      //             color: Colors.black.withOpacity(0.05),
-                      //             blurRadius: 8,
-                      //             offset: const Offset(0, 2),
-                      //           ),
-                      //         ],
-                      //       ),
-                      //       child: IconButton(
-                      //         icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
-                      //         onPressed: () {
-                      //           Scaffold.of(context).openDrawer();
-                      //         },
-                      //       ),
-                      //     );
-                      //   },
-                      // ),
-                      const SizedBox(width: 12),
                       Text(
                         'Monthly Attendance',
                         style: TextStyle(
@@ -169,8 +146,8 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
 
                 SizedBox(height: paddingValue),
 
-                // Filters Section
-                _buildFilters(
+                // Filters Section - Now in one row with responsive layout
+                _buildFiltersRow(
                   provider,
                   screenWidth,
                   isSmallScreen,
@@ -181,6 +158,48 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
                   iconSize,
                   fontSizeMedium,
                 ),
+
+                // Show current user info for non-admin users
+                if (!isAdmin && provider.currentUserName != null) ...[
+                  SizedBox(height: paddingValue / 2),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: paddingValue),
+                    child: Container(
+                      padding: EdgeInsets.all(paddingValue),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF667EEA).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(borderRadius / 2),
+                        border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person, color: const Color(0xFF667EEA), size: iconSize * 0.8),
+                          SizedBox(width: paddingValue / 2),
+                          Expanded(
+                            child: Text(
+                              'Viewing: ${provider.currentUserName}',
+                              style: TextStyle(
+                                fontSize: fontSizeMedium,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF667EEA),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+
+                // Error widget
+                if (provider.error != null) ...[
+                  SizedBox(height: paddingValue),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: paddingValue),
+                    child: _buildErrorWidget(provider.error!, paddingValue, fontSizeSmall: fontSizeSmall),
+                  ),
+                ],
 
                 SizedBox(height: paddingValue),
 
@@ -222,8 +241,8 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
     );
   }
 
-  // ==================== FILTERS SECTION ====================
-  Widget _buildFilters(
+  // ==================== FILTERS ROW SECTION ====================
+  Widget _buildFiltersRow(
       MonthlyReportProvider provider,
       double screenWidth,
       bool isSmallScreen,
@@ -251,53 +270,36 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Month selection - show for everyone
-          if (isSmallScreen)
-            _buildMonthSelectionVertical(provider, padding, borderRadius, iconSize, fontSize)
-          else
-            _buildMonthSelectionHorizontal(provider, padding, borderRadius, iconSize, fontSize),
+          // Filters Row
+          Row(
+            children: [
+              // Month Filter
+              Expanded(
+                child: _buildMonthDropdown(provider, padding, borderRadius, fontSize),
+              ),
 
-          // 🔴 Only show admin filters for admin users
-          if (isAdmin) ...[
-            SizedBox(height: padding),
-            Row(
-              children: [
-                Icon(Icons.business, size: iconSize, color: const Color(0xFF667EEA)),
-                SizedBox(width: padding),
-                Text(
-                  'Department:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: fontSize,
-                  ),
-                ),
+              // Department Filter (Admin only)
+              if (isAdmin) ...[
                 SizedBox(width: padding),
                 Expanded(
                   child: _buildDepartmentDropdown(provider, padding, borderRadius, fontSize),
                 ),
               ],
-            ),
-            SizedBox(height: padding),
-            Row(
-              children: [
-                Icon(Icons.person, size: iconSize, color: const Color(0xFF667EEA)),
-                SizedBox(width: padding),
-                Text(
-                  'Employee:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: fontSize,
-                  ),
-                ),
+
+              // Employee Filter (Admin only)
+              if (isAdmin) ...[
                 SizedBox(width: padding),
                 Expanded(
                   child: _buildEmployeeDropdown(provider, padding, borderRadius, fontSize),
                 ),
               ],
-            ),
-            SizedBox(height: padding * 1.5),
+            ],
+          ),
+
+          // Apply/Clear Buttons Row (Admin only)
+          if (isAdmin) ...[
+            SizedBox(height: padding),
             Row(
               children: [
                 Expanded(
@@ -310,173 +312,97 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
               ],
             ),
           ],
-
-          // 🔴 Show current employee info for non-admin users
-          if (!isAdmin && provider.currentUserName != null) ...[
-            SizedBox(height: padding),
-            Container(
-              padding: EdgeInsets.all(padding),
-              decoration: BoxDecoration(
-                color: const Color(0xFF667EEA).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(borderRadius / 2),
-                border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.person, color: const Color(0xFF667EEA), size: iconSize * 0.8),
-                  SizedBox(width: padding / 2),
-                  Expanded(
-                    child: Text(
-                      'Viewing: ${provider.currentUserName}',
-                      style: TextStyle(
-                        fontSize: fontSize,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF667EEA),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // Error widget
-          if (provider.error != null) ...[
-            SizedBox(height: padding),
-            _buildErrorWidget(provider.error!, padding, fontSizeSmall: fontSize),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildMonthSelectionHorizontal(
+  // Month Dropdown
+  Widget _buildMonthDropdown(
       MonthlyReportProvider provider,
       double padding,
       double borderRadius,
-      double iconSize,
       double fontSize,
       ) {
-    return Row(
-      children: [
-        Icon(Icons.calendar_today, size: iconSize, color: const Color(0xFF667EEA)),
-        SizedBox(width: padding),
-        Text(
-          'Month:',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: fontSize,
-          ),
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF667EEA).withOpacity(0.2),
+          width: 1.5,
         ),
-        SizedBox(width: padding),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-              borderRadius: BorderRadius.circular(borderRadius / 2),
-              color: Colors.grey[50],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: provider.selectedMonth,
+          isExpanded: true,
+          icon: Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Iconsax.arrow_down_1,
+              size: 16,
+              color: const Color(0xFF667EEA),
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: provider.selectedMonth,
-                isExpanded: true,
-                padding: EdgeInsets.symmetric(horizontal: padding),
-                icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF667EEA)),
-                items: _getMonths().map((month) {
-                  return DropdownMenuItem<String>(
-                    value: month,
-                    child: Text(
-                      _formatMonth(month),
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    provider.setSelectedMonth(value);
-                    // 🔴 Auto-reload for non-admin users
-                    if (!provider.isAdmin && provider.currentEmployeeId != null) {
-                      provider.loadReport(
-                        employeeId: provider.currentEmployeeId,
-                        month: value,
-                      );
-                    }
-                  }
-                },
+          ),
+          elevation: 2,
+          style: TextStyle(
+            fontSize: fontSize,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'Select Month',
+              style: TextStyle(
+                fontSize: fontSize,
+                color: Colors.grey,
               ),
             ),
           ),
+          onChanged: (String? value) {
+            if (value != null) {
+              provider.setSelectedMonth(value);
+              // Auto-reload for non-admin users
+              if (!provider.isAdmin && provider.currentEmployeeId != null) {
+                provider.loadReport(
+                  employeeId: provider.currentEmployeeId,
+                  month: value,
+                );
+              }
+            }
+          },
+          items: _getMonths().map((month) {
+            return DropdownMenuItem<String>(
+              value: month,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  _formatMonth(month),
+                  style: TextStyle(fontSize: fontSize),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            );
+          }).toList(),
         ),
-      ],
+      ),
     );
   }
 
-// Same for vertical version
-  Widget _buildMonthSelectionVertical(
-      MonthlyReportProvider provider,
-      double padding,
-      double borderRadius,
-      double iconSize,
-      double fontSize,
-      ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.calendar_today, size: iconSize, color: const Color(0xFF667EEA)),
-            SizedBox(width: padding),
-            Text(
-              'Month:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: fontSize,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: padding / 2),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-            borderRadius: BorderRadius.circular(borderRadius / 2),
-            color: Colors.grey[50],
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: provider.selectedMonth,
-              isExpanded: true,
-              padding: EdgeInsets.symmetric(horizontal: padding),
-              icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF667EEA)),
-              items: _getMonths().map((month) {
-                return DropdownMenuItem<String>(
-                  value: month,
-                  child: Text(
-                    _formatMonth(month),
-                    style: TextStyle(fontSize: fontSize),
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  provider.setSelectedMonth(value);
-                  // 🔴 Auto-reload for non-admin users
-                  if (!provider.isAdmin && provider.currentEmployeeId != null) {
-                    provider.loadReport(
-                      employeeId: provider.currentEmployeeId,
-                      month: value,
-                    );
-                  }
-                }
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  // Department Dropdown
   Widget _buildDepartmentDropdown(
       MonthlyReportProvider provider,
       double padding,
@@ -484,34 +410,68 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       double fontSize,
       ) {
     return Container(
+      height: 50,
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(borderRadius / 2),
         color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF667EEA).withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int?>(
           value: provider.selectedDepartmentId,
           isExpanded: true,
-          style: TextStyle(fontSize: fontSize, color: Colors.black87),
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(borderRadius / 2),
-          icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF667EEA)),
-          hint: Padding(
-            padding: EdgeInsets.symmetric(horizontal: padding),
-            child: Text(
-              'All Departments',
-              style: TextStyle(color: Colors.grey, fontSize: fontSize),
+          icon: Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Iconsax.arrow_down_1,
+              size: 16,
+              color: provider.departments.isEmpty
+                  ? Colors.grey[400]
+                  : const Color(0xFF667EEA),
             ),
           ),
-          items: [
+          elevation: 2,
+          style: TextStyle(
+            fontSize: fontSize,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              provider.departments.isEmpty ? 'No Departments' : 'All Departments',
+              style: TextStyle(
+                fontSize: fontSize,
+                color: provider.departments.isEmpty ? Colors.grey[500] : Colors.grey,
+              ),
+            ),
+          ),
+          onChanged: provider.isLoading || !provider.isAdmin
+              ? null
+              : (value) => provider.setSelectedDepartmentId(value),
+          items: provider.departments.isEmpty
+              ? []
+              : [
             DropdownMenuItem<int?>(
               value: null,
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
                   'All Departments',
-                  style: TextStyle(color: Colors.grey, fontSize: fontSize),
+                  style: TextStyle(fontSize: fontSize, color: Colors.grey),
                 ),
               ),
             ),
@@ -519,74 +479,109 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
               return DropdownMenuItem<int?>(
                 value: dept.id,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-                  child: Text(dept.name, style: TextStyle(fontSize: fontSize)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    dept.name,
+                    style: TextStyle(fontSize: fontSize),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               );
             }).toList(),
           ],
-          onChanged: provider.isLoading
-              ? null
-              : (value) => provider.setSelectedDepartmentId(value),
         ),
       ),
     );
   }
 
+  // Employee Dropdown
   Widget _buildEmployeeDropdown(
       MonthlyReportProvider provider,
       double padding,
       double borderRadius,
       double fontSize,
       ) {
-    // 🔴 FIX: Create unique employee list
+    // Create unique employee list
     final uniqueEmployees = <int, Employee>{};
     for (var emp in provider.employees) {
       uniqueEmployees[emp.id] = emp;
     }
-    final uniqueEmployeeList = uniqueEmployees.values.toList();
-
+    final uniqueEmployeeList = uniqueEmployees.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
     return Container(
+      height: 50,
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(borderRadius / 2),
         color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF667EEA).withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int?>(
           value: provider.selectedEmployeeId,
           isExpanded: true,
-          style: TextStyle(fontSize: fontSize, color: Colors.black87),
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(borderRadius / 2),
-          icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF667EEA)),
-          hint: Padding(
-            padding: EdgeInsets.symmetric(horizontal: padding),
-            child: Text(
-              'Select Employee',
-              style: TextStyle(color: Colors.grey, fontSize: fontSize),
+          icon: Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Iconsax.arrow_down_1,
+              size: 16,
+              color: uniqueEmployeeList.isEmpty
+                  ? Colors.grey[400]
+                  : const Color(0xFF667EEA),
             ),
           ),
-          items: [
-            // Add "Select Employee" item
+          elevation: 2,
+          style: TextStyle(
+            fontSize: fontSize,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              uniqueEmployeeList.isEmpty ? 'No Employees' : 'Select Employee',
+              style: TextStyle(
+                fontSize: fontSize,
+                color: uniqueEmployeeList.isEmpty ? Colors.grey[500] : Colors.grey,
+              ),
+            ),
+          ),
+          onChanged: provider.isLoading || !provider.isAdmin
+              ? null
+              : (value) => provider.setSelectedEmployeeId(value),
+          items: uniqueEmployeeList.isEmpty
+              ? []
+              : [
             DropdownMenuItem<int?>(
               value: null,
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
                   'Select Employee',
-                  style: TextStyle(color: Colors.grey, fontSize: fontSize),
+                  style: TextStyle(fontSize: fontSize, color: Colors.grey),
                 ),
               ),
             ),
-            // 🔴 FIXED: Use uniqueEmployeeList instead of provider.employees
             ...uniqueEmployeeList.map((emp) {
               return DropdownMenuItem<int?>(
                 value: emp.id,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  // (${emp.empId})
                   child: Text(
-                    '${emp.name} (${emp.empId})',
+                    '${emp.name} ',
                     style: TextStyle(fontSize: fontSize),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
@@ -595,13 +590,11 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
               );
             }).toList(),
           ],
-          onChanged: provider.isLoading || !provider.isAdmin // 🔴 Also disable for non-admin
-              ? null
-              : (value) => provider.setSelectedEmployeeId(value),
         ),
       ),
     );
   }
+
   Widget _buildApplyButton(
       MonthlyReportProvider provider,
       double padding,
@@ -840,7 +833,6 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       70,   // Duration
       50,   // Late
       50,   // Early
-      // 50,   // OT
       60,  // Status
     ];
 
@@ -987,8 +979,6 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       SizedBox(width: columnWidths[6], child: Text('Late', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
       SizedBox(width: columnWidths[7], child: Text('Early', style: headerTextStyle, textAlign: TextAlign.center)),
-      // SizedBox(width: padding / 2),
-      // SizedBox(width: columnWidths[8], child: Text('OT', style: headerTextStyle, textAlign: TextAlign.center)),
       SizedBox(width: padding / 2),
       SizedBox(width: columnWidths[8], child: Text('Status', style: headerTextStyle, textAlign: TextAlign.center)),
     ];
@@ -1031,39 +1021,13 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       ),
       SizedBox(width: padding / 2),
 
-      // Day & Status combined
+      // Day
       SizedBox(
         width: columnWidths[2],
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _formatWeekday(day.weekday),
-              style: rowTextStyle,
-              textAlign: TextAlign.center,
-            ),
-            // const SizedBox(height: 2),
-            // Container(
-            //   padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
-            //   decoration: BoxDecoration(
-            //     color: _getStatusBackgroundColor(day),
-            //     borderRadius: BorderRadius.circular(4),
-            //     border: Border.all(
-            //       color: _getStatusBorderColor(day).withOpacity(0.3),
-            //       width: 0.5,
-            //     ),
-            //   ),
-            //   child: Text(
-            //     _getStatusText(day),
-            //     style: TextStyle(
-            //       color: _getStatusTextColor(day),
-            //       fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
-            //       fontWeight: FontWeight.w600,
-            //     ),
-            //     textAlign: TextAlign.center,
-            //   ),
-            // ),
-          ],
+        child: Text(
+          _formatWeekday(day.weekday),
+          style: rowTextStyle,
+          textAlign: TextAlign.center,
         ),
       ),
       SizedBox(width: padding / 2),
@@ -1151,32 +1115,7 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       ),
       SizedBox(width: padding / 2),
 
-      // OT
-      // SizedBox(
-      //   width: columnWidths[8],
-      //   child: day.overtimeMinutes > 0
-      //       ? Container(
-      //     padding: EdgeInsets.symmetric(horizontal: padding / 2, vertical: 2),
-      //     decoration: BoxDecoration(
-      //       color: Colors.green.shade50,
-      //       borderRadius: BorderRadius.circular(4),
-      //       border: Border.all(color: Colors.green.shade200, width: 0.5),
-      //     ),
-      //     child: Text(
-      //       day.overtimeLabel ?? '${day.overtimeMinutes}m',
-      //       style: TextStyle(
-      //         color: Colors.green.shade700,
-      //         fontSize: isSmallScreen ? fontSizeSmall - 1 : fontSizeSmall,
-      //         fontWeight: FontWeight.w600,
-      //       ),
-      //       textAlign: TextAlign.center,
-      //     ),
-      //   )
-      //       : Text('-', style: rowTextStyle, textAlign: TextAlign.center),
-      // ),
-      // SizedBox(width: padding / 2),
-
-      // Status (removed from here since it's now combined with day)
+      // Status
       SizedBox(
         width: columnWidths[8],
         child: Container(
@@ -1241,19 +1180,6 @@ class _MonthlyAttendanceScreenState extends State<MonthlyAttendanceScreen> {
       return Colors.green.shade700;
     }
     return Colors.grey.shade700;
-  }
-
-  String _getStatusText(AttendanceDay day) {
-    if (day.status == 'holiday' && day.holiday != null) {
-      return 'Holiday';
-    }
-    if (day.status == 'absent'||day.isFullAbsent) {
-      return 'Absent';
-    }
-    if (day.status == 'present') {
-      return 'Present';
-    }
-    return day.status.toUpperCase();
   }
 
   String _getDetailedStatusText(AttendanceDay day) {

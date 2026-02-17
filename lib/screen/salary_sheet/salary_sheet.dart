@@ -82,7 +82,7 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
     final borderRadius = isSmallScreen ? 12.0 : isMediumScreen ? 16.0 : 20.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
+      backgroundColor: const Color(0xFFF8FAFF),
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark.copyWith(
           statusBarColor: Colors.transparent,
@@ -92,41 +92,15 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
           builder: (context, provider, child) {
             return Column(
               children: [
-                // Add some top padding to account for status bar
                 SizedBox(height: MediaQuery.of(context).padding.top + 8),
 
-                // Custom Header with Menu Icon (like attendance screen)
+                // Custom Header
                 Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: isSmallScreen ? 16 : 20,
                   ),
                   child: Row(
                     children: [
-                      // Menu/Drawer icon to open drawer
-                      // Builder(
-                      //   builder: (context) {
-                      //     return Container(
-                      //       decoration: BoxDecoration(
-                      //         color: Colors.white,
-                      //         borderRadius: BorderRadius.circular(12),
-                      //         boxShadow: [
-                      //           BoxShadow(
-                      //             color: Colors.black.withOpacity(0.05),
-                      //             blurRadius: 8,
-                      //             offset: const Offset(0, 2),
-                      //           ),
-                      //         ],
-                      //       ),
-                      //       child: IconButton(
-                      //         icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
-                      //         onPressed: () {
-                      //           Scaffold.of(context).openDrawer();
-                      //         },
-                      //       ),
-                      //     );
-                      //   },
-                      // ),
-                      const SizedBox(width: 12),
                       Text(
                         'Salary Sheet',
                         style: TextStyle(
@@ -183,6 +157,9 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
                           tooltip: 'Refresh',
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // Debug toggle button (optional - can be removed in production)
+                      //
                     ],
                   ),
                 ),
@@ -195,10 +172,9 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
                 if (_showApiDataPanel && _apiTestResults != null)
                   _buildApiDataPanel(provider, screenWidth, isSmallScreen),
 
-                // Filters Section
-                _buildFilters(
+                // Filters Section - NOW IN ONE ROW like attendance screen
+                _buildFiltersRow(
                   provider,
-                  screenWidth,
                   isSmallScreen,
                   isMediumScreen,
                   isLargeScreen,
@@ -210,7 +186,15 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
 
                 SizedBox(height: paddingValue),
 
-                // Loading/Error/Salary Sheet - THIS NEEDS TO BE EXPANDED
+                // Search Bar (moved below filters)
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: paddingValue),
+                  child: _buildSearchBar(paddingValue, borderRadius, fontSizeMedium),
+                ),
+
+                SizedBox(height: paddingValue),
+
+                // Loading/Error/Salary Sheet
                 Expanded(
                   child: Container(
                     margin: EdgeInsets.all(paddingValue),
@@ -246,6 +230,259 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
       ),
     );
   }
+
+  // NEW: Filters in one row like attendance screen
+  Widget _buildFiltersRow(
+      SalarySheetProvider provider,
+      bool isSmallScreen,
+      bool isMediumScreen,
+      bool isLargeScreen,
+      double padding,
+      double borderRadius,
+      double iconSize,
+      double fontSize,
+      ) {
+    return Container(
+      margin: EdgeInsets.all(padding),
+      padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: padding,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Month Filter
+          Expanded(
+            child: _buildMonthDropdown(provider, padding, borderRadius, fontSize),
+          ),
+          SizedBox(width: padding),
+
+          // Department Filter
+          Expanded(
+            child: _buildDepartmentDropdown(provider, padding, borderRadius, fontSize),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Month Dropdown (like attendance screen)
+  Widget _buildMonthDropdown(
+      SalarySheetProvider provider,
+      double padding,
+      double borderRadius,
+      double fontSize,
+      ) {
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF667EEA).withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: provider.selectedMonth.isNotEmpty ? provider.selectedMonth : null,
+          isExpanded: true,
+          icon: Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Iconsax.arrow_down_1,
+              size: 16,
+              color: const Color(0xFF667EEA),
+            ),
+          ),
+          elevation: 2,
+          style: TextStyle(
+            fontSize: fontSize,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'Select Month',
+              style: TextStyle(
+                fontSize: fontSize,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          onChanged: (String? value) {
+            if (value != null) {
+              provider.selectedMonth = value;
+              if (provider.selectedDepartmentId != null) {
+                provider.fetchSalarySheet();
+              }
+            }
+          },
+          items: provider.availableMonths.map((month) {
+            return DropdownMenuItem<String>(
+              value: month,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  _formatMonth(month),
+                  style: TextStyle(fontSize: fontSize),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  // Department Dropdown (updated to match attendance screen style)
+  Widget _buildDepartmentDropdown(
+      SalarySheetProvider provider,
+      double padding,
+      double borderRadius,
+      double fontSize,
+      ) {
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF667EEA).withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: provider.selectedDepartmentId,
+          isExpanded: true,
+          icon: Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Iconsax.arrow_down_1,
+              size: 16,
+              color: provider.departments.isEmpty
+                  ? Colors.grey[400]
+                  : const Color(0xFF667EEA),
+            ),
+          ),
+          elevation: 2,
+          style: TextStyle(
+            fontSize: fontSize,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              provider.departments.isEmpty ? 'No Departments' : 'Select Department',
+              style: TextStyle(
+                fontSize: fontSize,
+                color: provider.departments.isEmpty ? Colors.grey[500] : Colors.grey,
+              ),
+            ),
+          ),
+          onChanged: provider.departments.isEmpty
+              ? null
+              : (int? value) {
+            if (value != null) {
+              provider.selectedDepartmentId = value;
+              if (provider.selectedMonth.isNotEmpty) {
+                provider.fetchSalarySheet();
+              }
+            }
+          },
+          items: provider.departments.isEmpty
+              ? []
+              : [
+            ...provider.departments.map((dept) {
+              return DropdownMenuItem<int?>(
+                value: dept.id,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    dept.name,
+                    style: TextStyle(fontSize: fontSize),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              );
+            }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Search Bar (separate widget)
+  Widget _buildSearchBar(double padding, double borderRadius, double fontSize) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: padding / 2,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search employees...',
+          hintStyle: TextStyle(color: Colors.grey, fontSize: fontSize),
+          prefixIcon: Icon(Icons.search, color: const Color(0xFF667EEA)),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: padding, vertical: padding),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+            onPressed: () {
+              _searchController.clear();
+              setState(() => _searchQuery = '');
+            },
+            icon: Icon(Icons.clear, color: const Color(0xFF667EEA)),
+          )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  // Keep all your existing methods below (_buildDebugPanel, _buildApiDataPanel,
+  // _buildContent, _buildSummaryCard, _buildEmployeeCard, _buildTableHeader,
+  // _buildTableRow, _buildTableFooter, _showMonthPicker, _refreshData,
+  // _showFilterDialog, _formatMonth, _formatNumber, dispose, etc.)
 
   Widget _buildDebugPanel(SalarySheetProvider provider, double screenWidth, bool isSmallScreen) {
     final padding = isSmallScreen ? 8.0 : 12.0;
@@ -429,426 +666,6 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
     if (value is List) return '[List of ${value.length} items]';
     if (value is Map) return '{Map with ${value.length} keys}';
     return value.toString();
-  }
-
-  Future<void> _runApiTests(BuildContext context) async {
-    final provider = context.read<SalarySheetProvider>();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Running API tests...'),
-        backgroundColor: Colors.blue,
-      ),
-    );
-
-    try {
-      final results = await provider.testAllEndpointsDetailed();
-      setState(() {
-        _apiTestResults = results;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('API tests completed'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('API test failed: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Widget _buildFilters(
-      SalarySheetProvider provider,
-      double screenWidth,
-      bool isSmallScreen,
-      bool isMediumScreen,
-      bool isLargeScreen,
-      double padding,
-      double borderRadius,
-      double iconSize,
-      double fontSize,
-      ) {
-    return Container(
-      margin: EdgeInsets.all(padding),
-      padding: EdgeInsets.all(padding),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: padding,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Month Selection with responsive layout
-          if (isSmallScreen)
-            _buildMonthSelectionVertical(provider, padding, borderRadius, iconSize, fontSize)
-          else
-            _buildMonthSelectionHorizontal(provider, padding, borderRadius, iconSize, fontSize),
-
-          SizedBox(height: padding),
-
-          // Department Selection
-          Row(
-            children: [
-              Icon(Icons.business, size: iconSize, color: const Color(0xFF667EEA)),
-              SizedBox(width: padding),
-              Text(
-                'Department:',
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: fontSize,
-                ),
-              ),
-              SizedBox(width: padding),
-              Expanded(
-                child: _buildDepartmentDropdown(provider, padding, borderRadius, fontSize),
-              ),
-            ],
-          ),
-
-          SizedBox(height: padding),
-
-          // Search Bar
-          _buildSearchBar(padding, borderRadius, fontSize),
-
-          SizedBox(height: padding * 1.5),
-
-          // Info Card
-          // _buildInfoCard(provider, padding, borderRadius, iconSize, fontSize),
-
-          // SizedBox(height: padding * 1.5),
-
-          // Fetch Button
-          _buildFetchButton(provider, padding, borderRadius, fontSize),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMonthSelectionVertical(
-      SalarySheetProvider provider,
-      double padding,
-      double borderRadius,
-      double iconSize,
-      double fontSize,
-      ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.calendar_today, size: iconSize, color: const Color(0xFF667EEA)),
-            SizedBox(width: padding),
-            Text(
-              'Month:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: fontSize,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: padding / 2),
-        GestureDetector(
-          onTap: () => _showMonthPicker(context, provider),
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-              borderRadius: BorderRadius.circular(borderRadius / 2),
-              color: Colors.grey[50],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    provider.selectedMonth.isNotEmpty
-                        ? _formatMonth(provider.selectedMonth)
-                        : 'Select Month',
-                    style: TextStyle(
-                      color: provider.selectedMonth.isNotEmpty ? Colors.black : Colors.grey,
-                      fontSize: fontSize,
-                    ),
-                  ),
-                ),
-                Icon(Icons.arrow_drop_down, size: iconSize, color: const Color(0xFF667EEA)),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMonthSelectionHorizontal(
-      SalarySheetProvider provider,
-      double padding,
-      double borderRadius,
-      double iconSize,
-      double fontSize,
-      ) {
-    return Row(
-      children: [
-        Icon(Icons.calendar_today, size: iconSize, color: const Color(0xFF667EEA)),
-        SizedBox(width: padding),
-        Text(
-          'Month:',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: fontSize,
-          ),
-        ),
-        SizedBox(width: padding),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => _showMonthPicker(context, provider),
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-                borderRadius: BorderRadius.circular(borderRadius / 2),
-                color: Colors.grey[50],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      provider.selectedMonth.isNotEmpty
-                          ? _formatMonth(provider.selectedMonth)
-                          : 'Select Month',
-                      style: TextStyle(
-                        color: provider.selectedMonth.isNotEmpty ? Colors.black : Colors.grey,
-                        fontSize: fontSize,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.arrow_drop_down, size: iconSize, color: const Color(0xFF667EEA)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDepartmentDropdown(
-      SalarySheetProvider provider,
-      double padding,
-      double borderRadius,
-      double fontSize,
-      ) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(borderRadius / 2),
-        color: Colors.white,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int?>(
-          value: provider.selectedDepartmentId,
-          isExpanded: true,
-          style: TextStyle(fontSize: fontSize, color: Colors.black87),
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(borderRadius / 2),
-          icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF667EEA)),
-          hint: Padding(
-            padding: EdgeInsets.symmetric(horizontal: padding),
-            child: Text(
-              'Select Department',
-              style: TextStyle(color: Colors.grey, fontSize: fontSize),
-            ),
-          ),
-          items: [
-            DropdownMenuItem(
-              value: null,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-                child: Text(
-                  '-- Select Department --',
-                  style: TextStyle(color: Colors.grey, fontSize: fontSize),
-                ),
-              ),
-            ),
-            ...provider.departments.map((dept) {
-              return DropdownMenuItem<int?>(
-                value: dept.id,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-                  child: Text(dept.name, style: TextStyle(fontSize: fontSize)),
-                ),
-              );
-            }).toList(),
-          ],
-          onChanged: (value) {
-            provider.selectedDepartmentId = value;
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar(double padding, double borderRadius, double fontSize) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(borderRadius / 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: padding / 2,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search employees...',
-          hintStyle: TextStyle(color: Colors.grey, fontSize: fontSize),
-          prefixIcon: Icon(Icons.search, color: const Color(0xFF667EEA)),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: padding, vertical: padding),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-            onPressed: () {
-              _searchController.clear();
-              setState(() => _searchQuery = '');
-            },
-            icon: Icon(Icons.clear, color: const Color(0xFF667EEA)),
-          )
-              : null,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(
-      SalarySheetProvider provider,
-      double padding,
-      double borderRadius,
-      double iconSize,
-      double fontSize,
-      ) {
-    return Container(
-      padding: EdgeInsets.all(padding),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF667EEA).withOpacity(0.1),
-            const Color(0xFF764BA2).withOpacity(0.1),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(borderRadius / 2),
-        border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: iconSize * 2,
-            height: iconSize * 2,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.people, color: Colors.white, size: iconSize),
-          ),
-          SizedBox(width: padding),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Department Salary Sheet',
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF667EEA),
-                  ),
-                ),
-                SizedBox(height: padding / 4),
-                Text(
-                  provider.selectedMonth.isNotEmpty && provider.selectedDepartmentId != null
-                      ? '${_formatMonth(provider.selectedMonth)} • ${provider.getDepartmentName(provider.selectedDepartmentId)}'
-                      : 'Select month and department',
-                  style: TextStyle(fontSize: fontSize - 2, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          if (provider.salarySheet != null)
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                ),
-                borderRadius: BorderRadius.all(Radius.circular(20)),
-              ),
-              child: Text(
-                '${provider.salarySheet!.rows.length}',
-                style: TextStyle(color: Colors.white, fontSize: fontSize),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFetchButton(
-      SalarySheetProvider provider,
-      double padding,
-      double borderRadius,
-      double fontSize,
-      ) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: provider.isLoading || provider.selectedMonth.isEmpty || provider.selectedDepartmentId == null
-            ? null
-            : () => provider.fetchSalarySheet(),
-        style: ElevatedButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: padding),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius / 2),
-          ),
-          backgroundColor: provider.selectedMonth.isNotEmpty && provider.selectedDepartmentId != null
-              ? const Color(0xFF667EEA)
-              : Colors.grey,
-          foregroundColor: Colors.white
-        ),
-        child: provider.isLoading
-            ? SizedBox(
-          width: fontSize * 1.5,
-          height: fontSize * 1.5,
-          child: const CircularProgressIndicator(color: Colors.white),
-        )
-            : Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search, size: fontSize),
-            SizedBox(width: padding / 2),
-            Text('Get Salary Sheet', style: TextStyle(fontSize: fontSize)),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildContent(
@@ -1224,7 +1041,6 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
     );
   }
 
-// Update _getColumnWidths to include more columns
   List<double> _getColumnWidths(
       double screenWidth,
       bool isSmallScreen,
@@ -1502,6 +1318,7 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
       ),
     ];
   }
+
   Widget _buildSummaryCard({
     required String title,
     required String value,
@@ -1585,166 +1402,6 @@ class _SalarySheetScreenState extends State<SalarySheetScreen> {
           ],
         ),
       ),
-    );
-  }
-  Widget _buildEmployeeCard(
-      SalaryRow employee,
-      bool isSmallScreen,
-      bool isMediumScreen,
-      double padding,
-      double fontSizeSmall,
-      double fontSizeMedium,
-      double borderRadius,
-      ) {
-    final cardPadding = isSmallScreen ? padding : padding * 1.2;
-    final statusSize = isSmallScreen ? fontSizeSmall : fontSizeMedium;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(borderRadius / 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: padding / 2,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(cardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row with name and status
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    employee.employee,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: isSmallScreen ? fontSizeMedium : fontSizeMedium * 1.1,
-                      color: Colors.black87,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: padding / 2,
-                    vertical: padding / 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: employee.isCalculated
-                        ? Colors.green.withOpacity(0.1)
-                        : Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(statusSize / 2),
-                    border: Border.all(
-                      color: employee.isCalculated ? Colors.green : Colors.orange,
-                    ),
-                  ),
-                  child: Text(
-                    employee.isCalculated ? '✓' : '…',
-                    style: TextStyle(
-                      color: employee.isCalculated ? Colors.green : Colors.orange,
-                      fontSize: statusSize,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: padding / 2),
-
-            // Employee details
-            Row(
-              children: [
-                Icon(Icons.badge, size: fontSizeSmall, color: Colors.grey),
-                SizedBox(width: padding / 4),
-                Text(employee.meta.empId, style: TextStyle(fontSize: fontSizeSmall, color: Colors.grey)),
-                SizedBox(width: padding),
-                Icon(Icons.work, size: fontSizeSmall, color: Colors.grey),
-                SizedBox(width: padding / 4),
-                Expanded(
-                  child: Text(
-                    employee.designation ?? 'No Designation',
-                    style: TextStyle(fontSize: fontSizeSmall, color: Colors.grey),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: padding),
-
-            Divider(color: Colors.grey.shade300, height: 1),
-
-            SizedBox(height: padding),
-
-            // Salary stats
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatColumn(
-                  label: 'Salary',
-                  value: '${_formatNumber(employee.salary)}',
-                  color: Colors.black87,
-                  fontSizeSmall: fontSizeSmall,
-                  fontSizeMedium: fontSizeMedium,
-                ),
-                _buildStatColumn(
-                  label: 'Net Salary',
-                  value: '${_formatNumber(employee.total)}',
-                  color: const Color(0xFF667EEA),
-                  fontSizeSmall: fontSizeSmall,
-                  fontSizeMedium: fontSizeMedium,
-                ),
-                _buildStatColumn(
-                  label: 'Days',
-                  value: employee.days.toString(),
-                  color: Colors.black87,
-                  fontSizeSmall: fontSizeSmall,
-                  fontSizeMedium: fontSizeMedium,
-                  additionalInfo: Column(
-                    children: [
-                      Text(
-                        'L:${employee.late}',
-                        style: TextStyle(fontSize: fontSizeSmall - 2, color: Colors.orange),
-                      ),
-                      Text(
-                        'H:${employee.leaves}',
-                        style: TextStyle(fontSize: fontSizeSmall - 2, color: Colors.red),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatColumn({
-    required String label,
-    required String value,
-    required Color color,
-    required double fontSizeSmall,
-    required double fontSizeMedium,
-    Widget? additionalInfo,
-  }) {
-    return Column(
-      children: [
-        Text(label, style: TextStyle(fontSize: fontSizeSmall, color: Colors.grey)),
-        SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: fontSizeMedium, fontWeight: FontWeight.bold, color: color)),
-        if (additionalInfo != null) additionalInfo,
-      ],
     );
   }
 

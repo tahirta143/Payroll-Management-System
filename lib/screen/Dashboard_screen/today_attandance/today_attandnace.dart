@@ -5,7 +5,12 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../../model/attendance_model/attendance_model.dart';
+import '../../../model/absents_model/absents_model.dart';
+import '../../../model/leave_approve_model/leave_approve.dart';
 import '../../../provider/attendance_provider/attendance_provider.dart';
+import '../../../provider/absents_provider/absents_provider.dart';
+import '../../../provider/leave_approve_provider/leave_approve.dart';
+import '../../../provider/Auth_provider/Auth_provider.dart';
 
 class TodayAttendance extends StatefulWidget {
   final String? selectedDate;
@@ -23,6 +28,22 @@ class _TodayAttendanceState extends State<TodayAttendance> {
   String _selectedStatusFilter = 'All';
   DateTime? _selectedDate;
 
+  // Track which provider data to show
+  bool _showAbsentFromProvider = false;
+  bool _showLeavesFromProvider = false;
+  Color _getDepartmentColor(String departmentName) {
+    final name = departmentName.toLowerCase();
+
+    if (name.contains('infinity')) {
+      return Colors.orange; // Infinity - Orange
+    } else if (name.contains('coretech') || name.contains('core tech')) {
+      return Colors.brown; // Coretech - Purple
+    } else if (name.contains('skylink') || name.contains('sky link')) {
+      return Colors.blue; // Skylink - Teal (or any color you prefer)
+    } else {
+      return const Color(0xFF667EEA); // Default - Purple/Blue gradient color
+    }
+  }
   @override
   void initState() {
     super.initState();
@@ -42,9 +63,9 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = Provider.of<AttendanceProvider>(context, listen: false);
-      provider.fetchAllData();
+      _loadData();
     });
+
     _scrollController.addListener(_onScroll);
   }
 
@@ -61,16 +82,41 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     }
   }
 
+  Future<void> _loadData() async {
+    final attendanceProvider = Provider.of<AttendanceProvider>(context, listen: false);
+    final absentProvider = Provider.of<AbsentProvider>(context, listen: false);
+    final leaveProvider = Provider.of<LeaveProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    // Set auth token in absent provider
+    if (authProvider.token != null) {
+      absentProvider.setAuthToken(authProvider.token!);
+      print('✅ Auth token set in AbsentProvider from TodayAttendance');
+    } else {
+      print('❌ No auth token available in TodayAttendance');
+    }
+
+    // Set admin status in absent provider
+    absentProvider.setAdminStatus(authProvider.isAdmin);
+
+    // Fetch data
+    await Future.wait([
+      attendanceProvider.fetchAllData(),
+      absentProvider.fetchAbsents(date: _targetDate),
+      leaveProvider.fetchLeaves(),
+    ]);
+  }
+
   Future<void> _pullToRefresh() async {
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
     try {
-      final provider = Provider.of<AttendanceProvider>(context, listen: false);
-      await provider.fetchAttendance();
+      await _loadData();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Attendance data refreshed!'),
+            content: Text('Data refreshed!'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 1),
           ),
@@ -99,9 +145,43 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     if (dateString == 'all' || dateString == 'All Time') return 'All Time';
     try {
       final date = DateTime.parse(dateString);
-      return DateFormat('dd MMM yyyy').format(date);
+      return _formatDisplayDate(date);
     } catch (e) {
       return dateString;
+    }
+  }
+
+  // New method to format date as "17 Feb 2026"
+  String _formatDisplayDate(DateTime date) {
+    return DateFormat('d MMM yyyy').format(date);
+  }
+
+  // New method to format time to 12-hour format with AM/PM
+  String _formatTime(String? timeString) {
+    if (timeString == null || timeString.isEmpty || timeString == '--:--') {
+      return '--:--';
+    }
+
+    try {
+      // Handle different time formats
+      if (timeString.contains(':')) {
+        // Parse time string (assuming format like "14:30" or "09:15")
+        final parts = timeString.split(':');
+        if (parts.length >= 2) {
+          final hour = int.tryParse(parts[0]) ?? 0;
+          final minute = parts[1].substring(0, 2);
+
+          // Create a DateTime object with today's date and the given time
+          final now = DateTime.now();
+          final time = DateTime(now.year, now.month, now.day, hour, int.parse(minute));
+
+          // Format to 12-hour format with AM/PM
+          return DateFormat('h:mm a').format(time);
+        }
+      }
+      return timeString;
+    } catch (e) {
+      return timeString;
     }
   }
 
@@ -131,11 +211,14 @@ class _TodayAttendanceState extends State<TodayAttendance> {
       setState(() {
         _selectedDate = picked;
         _dateController.text = _formatDateForApi(picked);
+        // Reset filter when date changes
+        _selectedStatusFilter = 'All';
+        _showAbsentFromProvider = false;
+        _showLeavesFromProvider = false;
       });
 
       // Refresh data for selected date
-      final provider = Provider.of<AttendanceProvider>(context, listen: false);
-      provider.fetchAttendance();
+      _loadData();
     }
   }
 
@@ -143,11 +226,13 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     setState(() {
       _selectedDate = DateTime.now();
       _dateController.text = _formatDateForApi(_selectedDate!);
+      _selectedStatusFilter = 'All';
+      _showAbsentFromProvider = false;
+      _showLeavesFromProvider = false;
     });
 
     // Refresh data for today
-    final provider = Provider.of<AttendanceProvider>(context, listen: false);
-    provider.fetchAttendance();
+    _loadData();
   }
 
   String get _targetDate {
@@ -170,6 +255,39 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     }
   }
 
+  // Check if a leave covers the target date
+  bool _isLeaveForDate(ApproveLeave leave, String targetDate) {
+    try {
+      // Check if leave is APPROVED
+      if (leave.status.toLowerCase() != 'approved') {
+        return false;
+      }
+
+      // Parse target date
+      final target = DateTime.parse(targetDate);
+
+      // Get leave dates
+      final fromDate = leave.fromDate;
+      final toDate = leave.toDate;
+
+      // Normalize all dates to just the date part (remove time)
+      final targetNormalized = DateTime(target.year, target.month, target.day);
+      final startNormalized = DateTime(fromDate.year, fromDate.month, fromDate.day);
+      final endNormalized = DateTime(toDate.year, toDate.month, toDate.day);
+
+      // Check if target date is within the leave range (inclusive)
+      return (targetNormalized.isAfter(startNormalized.subtract(const Duration(days: 1))) &&
+          targetNormalized.isBefore(endNormalized.add(const Duration(days: 1))));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Get approved leaves for a specific date
+  List<ApproveLeave> _getLeavesForDate(List<ApproveLeave> allLeaves, String targetDate) {
+    return allLeaves.where((leave) => _isLeaveForDate(leave, targetDate)).toList();
+  }
+
   int _deptPriority(String deptName) {
     final name = deptName.toLowerCase();
     if (name.contains('coretech') || name.contains('core tech')) return 0;
@@ -179,20 +297,20 @@ class _TodayAttendanceState extends State<TodayAttendance> {
   }
 
   List<Attendance> _getFilteredAttendance(List<Attendance> attendanceList) {
+    if (_showAbsentFromProvider || _showLeavesFromProvider) return [];
+
     List<Attendance> filtered = attendanceList;
 
     if (_selectedStatusFilter != 'All') {
       filtered = filtered.where((a) {
         switch (_selectedStatusFilter) {
           case 'Present':
-            return a.isPresent;
+            return a.isPresent && a.lateMinutes == 0;
           case 'Late':
             return a.isPresent && a.lateMinutes > 0;
           case 'Absent':
-            return !a.isPresent;
+            return !a.isPresent && !a.status.toLowerCase().contains('leave');
           case 'On Leave':
-          // You need to add a field in Attendance model to track leave
-          // For now, we'll consider employees with no timeIn and no timeOut as on leave
             return !a.isPresent && a.status.toLowerCase().contains('leave');
           default:
             return true;
@@ -219,14 +337,23 @@ class _TodayAttendanceState extends State<TodayAttendance> {
   String _formatDate(String dateString) {
     try {
       final date = DateTime.parse(dateString);
-      return DateFormat('dd MMM yyyy').format(date);
+      return _formatDisplayDate(date);
     } catch (e) {
       return dateString;
     }
   }
 
+  // Format DateTime for display
+  String _formatDateTime(DateTime date) {
+    return _formatDisplayDate(date);
+  }
+
   String _getTitleText() {
-    if (widget.selectedDate != null) {
+    if (_showAbsentFromProvider) {
+      return "Absent Employees - ${_formatDate(_targetDate)}";
+    } else if (_showLeavesFromProvider) {
+      return "On Leave Employees - ${_formatDate(_targetDate)}";
+    } else if (widget.selectedDate != null) {
       return "Attendance - ${_formatDate(_targetDate)}";
     } else if (_selectedDate != null &&
         _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())) {
@@ -234,6 +361,22 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     } else {
       return "Today's Attendance";
     }
+  }
+
+  void _handleAbsentCardTap() {
+    setState(() {
+      _showAbsentFromProvider = true;
+      _showLeavesFromProvider = false;
+      _selectedStatusFilter = 'All';
+    });
+  }
+
+  void _handleOnLeaveCardTap() {
+    setState(() {
+      _showLeavesFromProvider = true;
+      _showAbsentFromProvider = false;
+      _selectedStatusFilter = 'All';
+    });
   }
 
   @override
@@ -291,10 +434,10 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                   IconButton(
                     icon: const Icon(Iconsax.refresh),
                     onPressed: () {
-                      provider.fetchAttendance();
+                      _loadData();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Refreshing attendance...'),
+                          content: Text('Refreshing data...'),
                           backgroundColor: Colors.blue,
                           duration: Duration(seconds: 1),
                         ),
@@ -326,22 +469,27 @@ class _TodayAttendanceState extends State<TodayAttendance> {
               _buildDateFilter(),
 
               // Statistics Cards
-              Consumer<AttendanceProvider>(
-                builder: (context, provider, child) {
+              Consumer4<AttendanceProvider, AbsentProvider, LeaveProvider, AuthProvider>(
+                builder: (context, attendanceProvider, absentProvider, leaveProvider, authProvider, child) {
                   final dateAttendance =
-                  _getDateAttendance(provider.allAttendance);
+                  _getDateAttendance(attendanceProvider.allAttendance);
 
                   final totalPresent =
-                      dateAttendance.where((a) => a.isPresent).length;
+                      dateAttendance.where((a) => a.isPresent && a.lateMinutes == 0).length;
                   final totalLate = dateAttendance
                       .where((a) => a.isPresent && a.lateMinutes > 0)
                       .length;
-                  final totalOnLeave = dateAttendance
-                      .where((a) => !a.isPresent && a.status.toLowerCase().contains('leave'))
-                      .length;
+
+                  // Get leaves for selected date
+                  final dateLeaves = _getLeavesForDate(leaveProvider.allLeaves, _targetDate);
+                  final totalOnLeave = dateLeaves.length;
+
                   final totalAbsent = dateAttendance
                       .where((a) => !a.isPresent && !a.status.toLowerCase().contains('leave'))
                       .length;
+
+                  // Get absent count from AbsentProvider for the selected date
+                  final absentCount = absentProvider.filteredAbsents.length;
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -355,9 +503,10 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                                 title: 'Present',
                                 count: totalPresent.toString(),
                                 color: const Color(0xFF4CAF50),
-                                isSelected:
-                                _selectedStatusFilter == 'Present',
+                                isSelected: !_showAbsentFromProvider && !_showLeavesFromProvider && _selectedStatusFilter == 'Present',
                                 onTap: () => setState(() {
+                                  _showAbsentFromProvider = false;
+                                  _showLeavesFromProvider = false;
                                   _selectedStatusFilter =
                                   _selectedStatusFilter == 'Present'
                                       ? 'All'
@@ -373,8 +522,10 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                                 title: 'Late',
                                 count: totalLate.toString(),
                                 color: const Color(0xFFFF9800),
-                                isSelected: _selectedStatusFilter == 'Late',
+                                isSelected: !_showAbsentFromProvider && !_showLeavesFromProvider && _selectedStatusFilter == 'Late',
                                 onTap: () => setState(() {
+                                  _showAbsentFromProvider = false;
+                                  _showLeavesFromProvider = false;
                                   _selectedStatusFilter =
                                   _selectedStatusFilter == 'Late'
                                       ? 'All'
@@ -394,14 +545,8 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                                 title: 'On Leave',
                                 count: totalOnLeave.toString(),
                                 color: const Color(0xFF2196F3),
-                                isSelected:
-                                _selectedStatusFilter == 'On Leave',
-                                onTap: () => setState(() {
-                                  _selectedStatusFilter =
-                                  _selectedStatusFilter == 'On Leave'
-                                      ? 'All'
-                                      : 'On Leave';
-                                }),
+                                isSelected: _showLeavesFromProvider || (!_showAbsentFromProvider && !_showLeavesFromProvider && _selectedStatusFilter == 'On Leave'),
+                                onTap: _handleOnLeaveCardTap,
                                 size: size,
                               ),
                             ),
@@ -410,16 +555,10 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                               child: _buildClickableStatCard(
                                 icon: Iconsax.close_circle,
                                 title: 'Absent',
-                                count: totalAbsent.toString(),
+                                count: absentCount.toString(),
                                 color: const Color(0xFFF44336),
-                                isSelected:
-                                _selectedStatusFilter == 'Absent',
-                                onTap: () => setState(() {
-                                  _selectedStatusFilter =
-                                  _selectedStatusFilter == 'Absent'
-                                      ? 'All'
-                                      : 'Absent';
-                                }),
+                                isSelected: _showAbsentFromProvider || (!_showAbsentFromProvider && !_showLeavesFromProvider && _selectedStatusFilter == 'Absent'),
+                                onTap: _handleAbsentCardTap,
                                 size: size,
                               ),
                             ),
@@ -433,7 +572,80 @@ class _TodayAttendanceState extends State<TodayAttendance> {
 
               const SizedBox(height: 16),
 
-              // Attendance List
+              // Filter indicator
+              if (_selectedStatusFilter != 'All' || _showAbsentFromProvider || _showLeavesFromProvider)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showAbsentFromProvider
+                            ? Iconsax.close_circle
+                            : _showLeavesFromProvider
+                            ? Iconsax.calendar_remove
+                            : _getFilterIcon(),
+                        size: 16,
+                        color: _showAbsentFromProvider
+                            ? const Color(0xFFF44336)
+                            : _showLeavesFromProvider
+                            ? const Color(0xFF2196F3)
+                            : _getFilterColor(),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _showAbsentFromProvider
+                            ? 'Showing: Absent Employees'
+                            : _showLeavesFromProvider
+                            ? 'Showing: On Leave Employees'
+                            : 'Showing: $_selectedStatusFilter',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedStatusFilter = 'All';
+                            _showAbsentFromProvider = false;
+                            _showLeavesFromProvider = false;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 8),
+
+              // Attendance/Absent/Leave List
               Expanded(
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -448,7 +660,11 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                       ),
                     ],
                   ),
-                  child: _buildAttendanceList(),
+                  child: _showAbsentFromProvider
+                      ? _buildAbsentList()
+                      : _showLeavesFromProvider
+                      ? _buildLeaveList()
+                      : _buildAttendanceList(),
                 ),
               ),
             ],
@@ -458,11 +674,41 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     );
   }
 
+  IconData _getFilterIcon() {
+    switch (_selectedStatusFilter) {
+      case 'Present':
+        return Iconsax.tick_circle;
+      case 'Late':
+        return Iconsax.clock;
+      case 'Absent':
+        return Iconsax.close_circle;
+      case 'On Leave':
+        return Iconsax.calendar_remove;
+      default:
+        return Iconsax.filter;
+    }
+  }
+
+  Color _getFilterColor() {
+    switch (_selectedStatusFilter) {
+      case 'Present':
+        return const Color(0xFF4CAF50);
+      case 'Late':
+        return const Color(0xFFFF9800);
+      case 'Absent':
+        return const Color(0xFFF44336);
+      case 'On Leave':
+        return const Color(0xFF2196F3);
+      default:
+        return Colors.grey;
+    }
+  }
+
   // Date Filter Widget
   Widget _buildDateFilter() {
-    final displayDate = _dateController.text == 'All Time'
-        ? 'All Time'
-        : _formatDateForDisplay(_dateController.text);
+    final displayDate = _selectedDate != null
+        ? _formatDisplayDate(_selectedDate!)
+        : _formatDisplayDate(DateTime.now());
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -499,7 +745,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Select Date',
+                  'Selected Date',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -511,7 +757,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                   onTap: () => _selectDate(context),
                   child: AbsorbPointer(
                     child: TextFormField(
-                      controller: _dateController,
+                      controller: TextEditingController(text: displayDate),
                       decoration: InputDecoration(
                         hintText: 'Select Date',
                         hintStyle: TextStyle(color: Colors.grey[500]),
@@ -539,16 +785,16 @@ class _TodayAttendanceState extends State<TodayAttendance> {
           TextButton(
             onPressed: _showTodayData,
             style: TextButton.styleFrom(
-              backgroundColor: _dateController.text ==
-                  DateFormat('yyyy-MM-dd').format(DateTime.now())
+              backgroundColor: _selectedDate != null &&
+                  _formatDateForApi(_selectedDate!) == DateFormat('yyyy-MM-dd').format(DateTime.now())
                   ? const Color(0xFF667EEA).withOpacity(0.1)
                   : Colors.transparent,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(
-                  color: _dateController.text ==
-                      DateFormat('yyyy-MM-dd').format(DateTime.now())
+                  color: _selectedDate != null &&
+                      _formatDateForApi(_selectedDate!) == DateFormat('yyyy-MM-dd').format(DateTime.now())
                       ? const Color(0xFF667EEA)
                       : Colors.grey[300]!,
                 ),
@@ -558,12 +804,12 @@ class _TodayAttendanceState extends State<TodayAttendance> {
               'Today',
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: _dateController.text ==
-                    DateFormat('yyyy-MM-dd').format(DateTime.now())
+                fontWeight: _selectedDate != null &&
+                    _formatDateForApi(_selectedDate!) == DateFormat('yyyy-MM-dd').format(DateTime.now())
                     ? FontWeight.w600
                     : FontWeight.w500,
-                color: _dateController.text ==
-                    DateFormat('yyyy-MM-dd').format(DateTime.now())
+                color: _selectedDate != null &&
+                    _formatDateForApi(_selectedDate!) == DateFormat('yyyy-MM-dd').format(DateTime.now())
                     ? const Color(0xFF667EEA)
                     : Colors.grey[600],
               ),
@@ -765,6 +1011,221 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     );
   }
 
+  Widget _buildAbsentList() {
+    return Consumer<AbsentProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading && provider.filteredAbsents.isEmpty) {
+          return _buildLoadingScreen();
+        }
+
+        if (provider.error.isNotEmpty) {
+          return _buildErrorScreen(provider);
+        }
+
+        if (provider.filteredAbsents.isEmpty) {
+          return _buildEmptyAbsentScreen();
+        }
+
+        return NotificationListener<ScrollNotification>(
+          onNotification: (scrollNotification) {
+            if (scrollNotification is ScrollEndNotification &&
+                _scrollController.position.pixels == 0 &&
+                !_isRefreshing) {
+              _pullToRefresh();
+              return true;
+            }
+            return false;
+          },
+          child: Stack(
+            children: [
+              ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: provider.filteredAbsents.length,
+                itemBuilder: (context, index) {
+                  return _buildAbsentCard(provider.filteredAbsents[index]);
+                },
+              ),
+
+              if (_isRefreshing)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 60,
+                    color: Colors.white.withOpacity(0.9),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 30,
+                            width: 30,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  const Color(0xFF667EEA)),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Refreshing...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (provider.isLoading)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.white.withOpacity(0.8),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(
+                            strokeWidth: 3,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF667EEA)),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Loading absent employees...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLeaveList() {
+    return Consumer<LeaveProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading && provider.allLeaves.isEmpty) {
+          return _buildLoadingScreen();
+        }
+
+        if (provider.error.isNotEmpty) {
+          return _buildErrorScreen(provider);
+        }
+
+        // Get leaves for the selected date
+        final dateLeaves = _getLeavesForDate(provider.allLeaves, _targetDate);
+
+        if (dateLeaves.isEmpty) {
+          return _buildEmptyLeaveScreen();
+        }
+
+        return NotificationListener<ScrollNotification>(
+          onNotification: (scrollNotification) {
+            if (scrollNotification is ScrollEndNotification &&
+                _scrollController.position.pixels == 0 &&
+                !_isRefreshing) {
+              _pullToRefresh();
+              return true;
+            }
+            return false;
+          },
+          child: Stack(
+            children: [
+              ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: dateLeaves.length,
+                itemBuilder: (context, index) {
+                  return _buildLeaveCard(dateLeaves[index]);
+                },
+              ),
+
+              if (_isRefreshing)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 60,
+                    color: Colors.white.withOpacity(0.9),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 30,
+                            width: 30,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  const Color(0xFF667EEA)),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Refreshing...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (provider.isLoading)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.white.withOpacity(0.8),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(
+                            strokeWidth: 3,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF667EEA)),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Loading leave employees...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildAttendanceCard(Attendance attendance) {
     final Size size = MediaQuery.of(context).size;
 
@@ -789,6 +1250,10 @@ class _TodayAttendanceState extends State<TodayAttendance> {
       }
     }
 
+    // Format times to 12-hour format with AM/PM
+    String timeInFormatted = _formatTime(attendance.timeIn);
+    String timeOutFormatted = _formatTime(attendance.timeOut);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -810,35 +1275,35 @@ class _TodayAttendanceState extends State<TodayAttendance> {
             // Row 1: Image, Name and Department
             Row(
               children: [
-                _buildProfileImage(attendance, size),
+                _buildProfileImage(attendance.imageUrl, attendance.employeeName, size),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Row(
-                    spacing: 5,
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        attendance.employeeName,
-                        style: TextStyle(
-                          fontSize: size.width > 600 ? 16 : 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                      Expanded(
+                        child: Text(
+                          attendance.employeeName,
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 16 : 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(width: 8),
+                      // Find this section in _buildAttendanceCard:
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF667EEA).withOpacity(0.1),
+                          color: _getDepartmentColor(attendance.departmentName).withOpacity(0.2), // ← Updated
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           attendance.departmentName,
                           style: TextStyle(
                             fontSize: size.width > 600 ? 10 : 9,
-                            color: const Color(0xFF667EEA),
+                            color: _getDepartmentColor(attendance.departmentName), // ← Updated
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -878,11 +1343,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          attendance.isPresent && attendance.timeIn.isNotEmpty
-                              ? attendance.timeIn.length >= 5
-                              ? attendance.timeIn.substring(0, 5)
-                              : attendance.timeIn
-                              : '--:--',
+                          attendance.isPresent ? timeInFormatted : '--:--',
                           style: TextStyle(
                             fontSize: size.width > 600 ? 12 : 11,
                             fontWeight: FontWeight.w600,
@@ -923,9 +1384,7 @@ class _TodayAttendanceState extends State<TodayAttendance> {
                         ),
                         child: Text(
                           attendance.isPresent && attendance.timeOut.isNotEmpty
-                              ? attendance.timeOut.length >= 5
-                              ? attendance.timeOut.substring(0, 5)
-                              : attendance.timeOut
+                              ? timeOutFormatted
                               : '--:--',
                           style: TextStyle(
                             fontSize: size.width > 600 ? 12 : 11,
@@ -983,14 +1442,427 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     );
   }
 
-  Widget _buildProfileImage(Attendance attendance, Size size) {
+  Widget _buildAbsentCard(Absent absent) {
+    final Size size = MediaQuery.of(context).size;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(color: const Color(0xFFF44336).withOpacity(0.2), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            // Row 1: Image, Name and Department
+            Row(
+              children: [
+                _buildProfileImage(absent.imageUrl, absent.employeeName, size),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          absent.employeeName,
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 16 : 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Find this section in _buildAbsentCard:
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getDepartmentColor(absent.departmentName).withOpacity(0.2), // ← Updated
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          absent.departmentName,
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 10 : 9,
+                            color: _getDepartmentColor(absent.departmentName), // ← Updated
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Row 2: Employee ID and Reason
+            Row(
+              children: [
+                // Employee ID
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Employee ID',
+                        style: TextStyle(
+                          fontSize: size.width > 600 ? 11 : 10,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          absent.empId,
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 12 : 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Reason
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reason',
+                        style: TextStyle(
+                          fontSize: size.width > 600 ? 11 : 10,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: absent.reason != null && absent.reason!.isNotEmpty
+                              ? const Color(0xFFF44336).withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          absent.reason != null && absent.reason!.isNotEmpty
+                              ? absent.reason!.length > 15
+                              ? '${absent.reason!.substring(0, 15)}...'
+                              : absent.reason!
+                              : 'No reason provided',
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 12 : 11,
+                            fontWeight: FontWeight.w600,
+                            color: absent.reason != null && absent.reason!.isNotEmpty
+                                ? const Color(0xFFF44336)
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Status
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Status',
+                        style: TextStyle(
+                          fontSize: size.width > 600 ? 11 : 10,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF44336).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Absent',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFF44336),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLeaveCard(ApproveLeave leave) {
+    final Size size = MediaQuery.of(context).size;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(color: const Color(0xFF2196F3).withOpacity(0.2), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            // Row 1: Image, Name and Department
+            Row(
+              children: [
+                _buildProfileImage(leave.imageUrl, leave.employeeName, size),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          leave.employeeName,
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 16 : 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Find this section in _buildLeaveCard:
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getDepartmentColor(leave.departmentName).withOpacity(0.2), // ← Updated
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          leave.departmentName,
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 10 : 9,
+                            color: _getDepartmentColor(leave.departmentName), // ← Updated
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Row 2: Leave Details
+            Row(
+              children: [
+                // Leave Type
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Leave Type',
+                        style: TextStyle(
+                          fontSize: size.width > 600 ? 11 : 10,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          leave.natureOfLeave,
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 12 : 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Duration
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Duration',
+                        style: TextStyle(
+                          fontSize: size.width > 600 ? 11 : 10,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${leave.days} day${leave.days != 1 ? 's' : ''}',
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 12 : 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Status
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Status',
+                        style: TextStyle(
+                          fontSize: size.width > 600 ? 11 : 10,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Approved',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF4CAF50),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // Row 3: Leave Dates and Reason
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Iconsax.calendar,
+                        size: 12,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          '${_formatDisplayDate(leave.fromDate)} - ${_formatDisplayDate(leave.toDate)}',
+                          style: TextStyle(
+                            fontSize: size.width > 600 ? 11 : 10,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (leave.reason != null && leave.reason!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Reason: ${leave.reason!}',
+                      style: TextStyle(
+                        fontSize: size.width > 600 ? 11 : 10,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileImage(String? imageUrl, String employeeName, Size size) {
     const String baseUrl = 'https://api.afaqmis.com';
-    print('=== DEBUG: Building card for ${attendance.employeeName} ===');
-    print('Image URL: ${attendance.imageUrl}');
-    print('Has image URL: ${attendance.imageUrl != null}');
-    print('Image URL not empty: ${attendance.imageUrl?.isNotEmpty ?? false}');
-    final String initial = attendance.employeeName.isNotEmpty
-        ? attendance.employeeName[0].toUpperCase()
+    final String initial = employeeName.isNotEmpty
+        ? employeeName[0].toUpperCase()
         : 'E';
 
     Widget fallback = Container(
@@ -1016,22 +1888,19 @@ class _TodayAttendanceState extends State<TodayAttendance> {
       ),
     );
 
-    if (attendance.imageUrl == null || attendance.imageUrl!.trim().isEmpty) {
+    if (imageUrl == null || imageUrl.trim().isEmpty) {
       return fallback;
     }
 
-    String imageUrl = attendance.imageUrl!.trim();
-    if (!imageUrl.startsWith('http')) {
-      final cleanPath =
-      imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-      imageUrl = '$baseUrl/$cleanPath';
+    String fullImageUrl = imageUrl.trim();
+    if (!fullImageUrl.startsWith('http')) {
+      final cleanPath = fullImageUrl.startsWith('/') ? fullImageUrl.substring(1) : fullImageUrl;
+      fullImageUrl = '$baseUrl/$cleanPath';
     }
-
-    debugPrint('🖼️ Loading image: $imageUrl');
 
     return ClipOval(
       child: CachedNetworkImage(
-        imageUrl: imageUrl,
+        imageUrl: fullImageUrl,
         width: 50,
         height: 50,
         fit: BoxFit.cover,
@@ -1055,9 +1924,13 @@ class _TodayAttendanceState extends State<TodayAttendance> {
           ),
           const SizedBox(height: 20),
           Text(
-            widget.selectedDate != null
+            _showAbsentFromProvider
+                ? 'Loading absent employees...'
+                : _showLeavesFromProvider
+                ? 'Loading leave employees...'
+                : (widget.selectedDate != null
                 ? 'Loading attendance for ${_formatDate(_targetDate)}...'
-                : "Loading today's attendance...",
+                : "Loading today's attendance..."),
             style: const TextStyle(
               fontSize: 16,
               color: Colors.grey,
@@ -1069,7 +1942,12 @@ class _TodayAttendanceState extends State<TodayAttendance> {
     );
   }
 
-  Widget _buildErrorScreen(AttendanceProvider provider) {
+  Widget _buildErrorScreen(dynamic provider) {
+    String errorMessage = provider is AttendanceProvider
+        ? provider.error
+        : (provider is AbsentProvider ? provider.error :
+    (provider is LeaveProvider ? provider.error : 'Unknown error'));
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -1089,15 +1967,15 @@ class _TodayAttendanceState extends State<TodayAttendance> {
             ),
             const SizedBox(height: 8),
             Text(
-              provider.error.length > 100
-                  ? '${provider.error.substring(0, 100)}...'
-                  : provider.error,
+              errorMessage.length > 100
+                  ? '${errorMessage.substring(0, 100)}...'
+                  : errorMessage,
               style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () => provider.fetchAttendance(),
+              onPressed: () => _pullToRefresh(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF667EEA),
                 shape: RoundedRectangleBorder(
@@ -1129,16 +2007,28 @@ class _TodayAttendanceState extends State<TodayAttendance> {
       message = 'No attendance records found for today';
     }
 
+    if (_selectedStatusFilter != 'All') {
+      message = 'No $_selectedStatusFilter employees found';
+    }
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Iconsax.calendar_tick, size: 60, color: Colors.grey[300]),
+            Icon(
+                _selectedStatusFilter == 'Absent'
+                    ? Iconsax.close_circle
+                    : Iconsax.calendar_tick,
+                size: 60,
+                color: Colors.grey[300]
+            ),
             const SizedBox(height: 16),
             Text(
-              'No Attendance Data',
+              _selectedStatusFilter == 'Absent'
+                  ? 'No Absent Employees'
+                  : 'No Attendance Data',
               style: TextStyle(
                 fontSize: 18,
                 color: Colors.grey[600],
@@ -1154,10 +2044,113 @@ class _TodayAttendanceState extends State<TodayAttendance> {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                final provider = Provider.of<AttendanceProvider>(
-                    context,
-                    listen: false);
-                provider.fetchAttendance();
+                _loadData();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF667EEA),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Iconsax.refresh, size: 18),
+                  SizedBox(width: 8),
+                  Text('Check Again', style: TextStyle(fontSize: 14)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyAbsentScreen() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Iconsax.close_circle, size: 60, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              'No Absent Employees',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _selectedDate != null &&
+                  _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
+                  ? 'No employees were absent on ${_formatDate(_targetDate)}'
+                  : 'No employees are absent today',
+              style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                _loadData();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF667EEA),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Iconsax.refresh, size: 18),
+                  SizedBox(width: 8),
+                  Text('Check Again', style: TextStyle(fontSize: 14)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyLeaveScreen() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Iconsax.calendar_remove, size: 60, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              'No Employees on Leave',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _selectedDate != null &&
+                  _formatDateForApi(_selectedDate!) != DateFormat('yyyy-MM-dd').format(DateTime.now())
+                  ? 'No employees were on leave on ${_formatDate(_targetDate)}'
+                  : 'No employees are on leave today',
+              style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                _loadData();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF667EEA),

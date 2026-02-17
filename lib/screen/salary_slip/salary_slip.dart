@@ -39,7 +39,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     final isSmallScreen = screenWidth < 600;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF), // Light background like attendance screen
+      backgroundColor: const Color(0xFFF8FAFF),
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark.copyWith(
           statusBarColor: Colors.transparent,
@@ -49,41 +49,15 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
           builder: (context, provider, child) {
             return Column(
               children: [
-                // Add some top padding to account for status bar
                 SizedBox(height: MediaQuery.of(context).padding.top + 8),
 
-                // Custom Header with Menu Icon (like attendance screen)
+                // Header
                 Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: isSmallScreen ? 16 : 20,
                   ),
                   child: Row(
                     children: [
-                      // Menu/Drawer icon to open drawer
-                      // Builder(
-                      //   builder: (context) {
-                      //     return Container(
-                      //       decoration: BoxDecoration(
-                      //         color: Colors.white,
-                      //         borderRadius: BorderRadius.circular(12),
-                      //         boxShadow: [
-                      //           BoxShadow(
-                      //             color: Colors.black.withOpacity(0.05),
-                      //             blurRadius: 8,
-                      //             offset: const Offset(0, 2),
-                      //           ),
-                      //         ],
-                      //       ),
-                      //       child: IconButton(
-                      //         icon: const Icon(Iconsax.menu_1, color: Color(0xFF667EEA)),
-                      //         onPressed: () {
-                      //           Scaffold.of(context).openDrawer();
-                      //         },
-                      //       ),
-                      //     );
-                      //   },
-                      // ),
-                      const SizedBox(width: 12),
                       Text(
                         'Salary Slip',
                         style: TextStyle(
@@ -144,42 +118,14 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
                           tooltip: 'Refresh',
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // Debug button
-                      // Container(
-                      //   decoration: BoxDecoration(
-                      //     color: Colors.white,
-                      //     borderRadius: BorderRadius.circular(12),
-                      //     boxShadow: [
-                      //       BoxShadow(
-                      //         color: Colors.black.withOpacity(0.05),
-                      //         blurRadius: 8,
-                      //         offset: const Offset(0, 2),
-                      //       ),
-                      //     ],
-                      //   ),
-                      //   child: IconButton(
-                      //     onPressed: () {
-                      //       setState(() {
-                      //         _showDebugPanel = !_showDebugPanel;
-                      //       });
-                      //     },
-                      //     icon: Icon(
-                      //       _showDebugPanel ? Icons.bug_report : Icons.bug_report_outlined,
-                      //       color: const Color(0xFF667EEA),
-                      //       size: isSmallScreen ? 20 : 22,
-                      //     ),
-                      //     tooltip: 'Debug',
-                      //   ),
-                      // ),
                     ],
                   ),
                 ),
 
-                // Debug Panel
+                // Debug Panel (hidden by default)
                 if (_showDebugPanel) _buildDebugPanel(provider, screenWidth, isSmallScreen),
 
-                // Filters Section
+                // Filters Section - Now in a row like attendance screen
                 _buildFilters(provider, screenWidth, isSmallScreen),
 
                 SizedBox(height: isSmallScreen ? 12 : 16),
@@ -306,7 +252,7 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     );
   }
 
-  // ============ FILTERS SECTION ============
+  // ============ FILTERS SECTION - UPDATED TO ROW LAYOUT ============
   Widget _buildFilters(SalarySlipProvider provider, double screenWidth, bool isSmallScreen) {
     return Container(
       margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -323,157 +269,25 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Month Selection
+          // Filter Row - Month and Employee in a row like attendance screen
           Row(
             children: [
-              Icon(Icons.calendar_today,
-                  size: isSmallScreen ? 18 : 20,
-                  color: const Color(0xFF667EEA)
+              // Month Filter
+              Expanded(
+                child: _buildMonthFilter(provider, isSmallScreen),
               ),
               SizedBox(width: isSmallScreen ? 8 : 12),
-              Text('Month:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: isSmallScreen ? 14 : 16,
-                  )
-              ),
-              SizedBox(width: isSmallScreen ? 12 : 16),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _showMonthPicker(context, provider),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 12 : 16,
-                      vertical: isSmallScreen ? 12 : 14,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-                      borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
-                      color: Colors.grey[50],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            provider.selectedMonth.isNotEmpty
-                                ? _formatMonth(provider.selectedMonth)
-                                : 'Select Month',
-                            style: TextStyle(
-                              color: provider.selectedMonth.isNotEmpty ? Colors.black : Colors.grey,
-                              fontSize: isSmallScreen ? 13 : 14,
-                            ),
-                          ),
-                        ),
-                        Icon(Icons.arrow_drop_down,
-                            size: isSmallScreen ? 18 : 20,
-                            color: const Color(0xFF667EEA)
-                        ),
-                      ],
-                    ),
-                  ),
+
+              // Employee Filter (Admin only)
+              if (provider.isAdmin)
+                Expanded(
+                  child: _buildEmployeeFilter(provider, isSmallScreen),
                 ),
-              ),
             ],
           ),
 
-          SizedBox(height: isSmallScreen ? 16 : 20),
-
-          // 🔴 ADMIN SECTION - FORCE SHOW DROPDOWN
-          if (provider.isAdmin) ...[
-            Text(
-              'Select Employee',
-              style: TextStyle(
-                fontSize: isSmallScreen ? 14 : 16,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF667EEA),
-              ),
-            ),
-            SizedBox(height: isSmallScreen ? 8 : 12),
-
-            // Loading State
-            if (provider.isLoadingEmployees)
-              const Center(child: CircularProgressIndicator())
-
-            // Employee Dropdown
-            else
-              _buildEmployeeDropdown(provider, isSmallScreen),
-
-            SizedBox(height: isSmallScreen ? 16 : 20),
-          ],
-
-          // User Info Section
-          Container(
-            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: provider.isAdmin
-                    ? [const Color(0xFF667EEA).withOpacity(0.1), const Color(0xFF764BA2).withOpacity(0.1)]
-                    : [Colors.green.withOpacity(0.1), Colors.blue.withOpacity(0.1)],
-              ),
-              borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 16),
-              border: Border.all(
-                color: provider.isAdmin
-                    ? const Color(0xFF667EEA).withOpacity(0.3)
-                    : Colors.green.withOpacity(0.3),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: isSmallScreen ? 40 : 50,
-                  height: isSmallScreen ? 40 : 50,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: provider.isAdmin
-                          ? [const Color(0xFF667EEA), const Color(0xFF764BA2)]
-                          : [Colors.green, Colors.blue],
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    provider.isAdmin ? Icons.admin_panel_settings : Icons.person,
-                    color: Colors.white,
-                    size: isSmallScreen ? 20 : 24,
-                  ),
-                ),
-                SizedBox(width: isSmallScreen ? 12 : 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        provider.isAdmin ? 'Administrator Mode' : 'Employee Mode',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 14 : 16,
-                          fontWeight: FontWeight.bold,
-                          color: provider.isAdmin ? const Color(0xFF667EEA) : Colors.green,
-                        ),
-                      ),
-                      SizedBox(height: isSmallScreen ? 2 : 4),
-                      Text(
-                        provider.isAdmin
-                            ? 'You can view salary slips for any employee'
-                            : 'Viewing your own salary slip only',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 11 : 13,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          SizedBox(height: isSmallScreen ? 20 : 24),
+          SizedBox(height: isSmallScreen ? 12 : 16),
 
           // Fetch Button
           SizedBox(
@@ -513,214 +327,209 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
     );
   }
 
-  // 🔴 FIXED: Employee Dropdown Builder
-  Widget _buildEmployeeDropdown(SalarySlipProvider provider, bool isSmallScreen) {
-    if (provider.employees.isEmpty) {
-      return Container(
-        padding: EdgeInsets.symmetric(
-          vertical: isSmallScreen ? 12 : 14,
-          horizontal: isSmallScreen ? 12 : 16,
+  // Month Filter Dropdown
+  Widget _buildMonthFilter(SalarySlipProvider provider, bool isSmallScreen) {
+    // Generate list of months (last 12 months)
+    final List<Map<String, String>> months = [];
+    final now = DateTime.now();
+
+    for (int i = 0; i < 12; i++) {
+      final date = DateTime(now.year, now.month - i, 1);
+      final monthValue = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+      final monthDisplay = _formatMonth(monthValue);
+      months.add({'value': monthValue, 'display': monthDisplay});
+    }
+
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF667EEA).withOpacity(0.2),
+          width: 1.5,
         ),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
-          color: Colors.grey[50],
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.warning,
-                size: isSmallScreen ? 16 : 18,
-                color: Colors.orange
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: provider.selectedMonth.isNotEmpty ? provider.selectedMonth : null,
+          isExpanded: true,
+          icon: Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Iconsax.arrow_down_1,
+              size: 16,
+              color: const Color(0xFF667EEA),
             ),
-            SizedBox(width: isSmallScreen ? 8 : 12),
-            Expanded(
-              child: Text(
-                'No employees found. Click refresh to load.',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: isSmallScreen ? 12 : 14,
-                ),
+          ),
+          elevation: 2,
+          style: TextStyle(
+            fontSize: isSmallScreen ? 12 : 13,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'Select Month',
+              style: TextStyle(
+                fontSize: isSmallScreen ? 12 : 13,
+                color: Colors.grey,
               ),
             ),
-            TextButton(
-              onPressed: () => provider.loadEmployeesForAdmin(),
-              child: const Text('Refresh'),
-            ),
+          ),
+          onChanged: (String? value) {
+            if (value != null) {
+              provider.setSelectedMonth(value);
+            }
+          },
+          items: [
+            ...months.map((month) {
+              return DropdownMenuItem<String>(
+                value: month['value'],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    month['display']!,
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 12 : 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              );
+            }).toList(),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Employee Filter Dropdown (for Admin) - Sorted Alphabetically
+  Widget _buildEmployeeFilter(SalarySlipProvider provider, bool isSmallScreen) {
+    if (provider.isLoadingEmployees) {
+      return Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
         ),
       );
     }
 
-    // Check if selected employee exists
-    final isValidSelection = provider.selectedEmployeeId == null ||
-        provider.employees.any((emp) => emp.id == provider.selectedEmployeeId);
-
-    if (!isValidSelection) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        provider.setSelectedEmployee(null);
-      });
-    }
+    // Sort employees alphabetically by name
+    final sortedEmployees = List.from(provider.employees)
+      ..sort((a, b) => a.name.compareTo(b.name));
 
     return Container(
+      height: 50,
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF667EEA).withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
         color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: provider.employees.isEmpty
+              ? Colors.grey[300]!
+              : const Color(0xFF667EEA).withOpacity(0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int?>(
-          value: isValidSelection ? provider.selectedEmployeeId : null,
+          value: provider.selectedEmployeeId,
           isExpanded: true,
+          icon: Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Iconsax.arrow_down_1,
+              size: 16,
+              color: provider.employees.isEmpty
+                  ? Colors.grey[400]
+                  : const Color(0xFF667EEA),
+            ),
+          ),
           elevation: 2,
           style: TextStyle(
-            fontSize: isSmallScreen ? 13 : 14,
+            fontSize: isSmallScreen ? 12 : 13,
             color: Colors.black87,
+            fontWeight: FontWeight.w500,
           ),
           dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
-          icon: Container(
-            margin: EdgeInsets.only(right: isSmallScreen ? 6 : 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF667EEA).withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.arrow_drop_down,
-              size: isSmallScreen ? 18 : 20,
-              color: const Color(0xFF667EEA),
-            ),
-          ),
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
           hint: Padding(
-            padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
-                '-- Select Employee --',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: isSmallScreen ? 13 : 14,
-                )
-            ),
-          ),
-          items: [
-            const DropdownMenuItem<int?>(
-              value: null,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  '-- Select Employee --',
-                  style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-                ),
+              provider.employees.isEmpty ? 'No Employees' : 'Select Employee',
+              style: TextStyle(
+                fontSize: isSmallScreen ? 12 : 13,
+                color: provider.employees.isEmpty ? Colors.grey[500] : Colors.grey,
               ),
             ),
-            ...provider.employees.map((employee) {
-              final isCurrentUser = employee.id == provider.currentEmployeeId;
-
+          ),
+          onChanged: provider.employees.isEmpty
+              ? null
+              : (int? value) {
+            if (value != null) {
+              provider.setSelectedEmployee(value);
+            }
+          },
+          items: provider.employees.isEmpty
+              ? []
+              : [
+            ...sortedEmployees.map((employee) {
               return DropdownMenuItem<int?>(
                 value: employee.id,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 12 : 16,
-                    vertical: isSmallScreen ? 10 : 12,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Colors.grey[200]!,
-                        width: 1,
-                      ),
-                    ),
-                  ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
-                      Container(
-                        width: isSmallScreen ? 32 : 40,
-                        height: isSmallScreen ? 32 : 40,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: isCurrentUser
-                                ? [Colors.blue, Colors.green]
-                                : [const Color(0xFF667EEA), const Color(0xFF764BA2)],
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: isSmallScreen ? 14 : 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: isSmallScreen ? 8 : 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              employee.name,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: isCurrentUser ? Colors.blue : Colors.black87,
-                                fontSize: isSmallScreen ? 13 : 14,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            SizedBox(height: isSmallScreen ? 2 : 4),
-                            Row(
-                              children: [
-                                // if (employee.empId.isNotEmpty)
-                                //   Text(
-                                //     'ID: ${employee.empId}',
-                                //     style: TextStyle(
-                                //         fontSize: isSmallScreen ? 10 : 12,
-                                //         color: Colors.grey
-                                //     ),
-                                //   ),
-                                // if (employee.empId.isNotEmpty && employee.departmentName.isNotEmpty)
-                                //   Padding(
-                                //     padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 2 : 4),
-                                //     child: Text('•',
-                                //         style: TextStyle(
-                                //           color: Colors.grey,
-                                //           fontSize: isSmallScreen ? 10 : 12,
-                                //         )
-                                //     ),
-                                //   ),
-                                if (employee.departmentName.isNotEmpty)
-                                  Expanded(
-                                    child: Text(
-                                      employee.departmentName,
-                                      style: TextStyle(
-                                          fontSize: isSmallScreen ? 8 : 10,
-                                          color: Colors.grey
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
+                        child: Text(
+                          employee.name,
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 12 : 13,
+                            fontWeight: employee.id == provider.currentEmployeeId
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: employee.id == provider.currentEmployeeId
+                                ? const Color(0xFF667EEA)
+                                : Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isCurrentUser)
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isSmallScreen ? 6 : 8,
-                            vertical: isSmallScreen ? 2 : 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(isSmallScreen ? 3 : 4),
-                          ),
-                          child: Text(
-                            'You',
-                            style: TextStyle(
-                                fontSize: isSmallScreen ? 9 : 10,
-                                color: Colors.blue,
-                                fontWeight: FontWeight.bold
-                            ),
+                      if (employee.id == provider.currentEmployeeId)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Icon(
+                            Iconsax.tick_circle,
+                            size: 14,
+                            color: Colors.green,
                           ),
                         ),
                     ],
@@ -729,10 +538,6 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
               );
             }).toList(),
           ],
-          onChanged: (value) {
-            debugPrint('👤 Selected employee: $value');
-            provider.setSelectedEmployee(value);
-          },
         ),
       ),
     );
@@ -860,51 +665,6 @@ class _SalarySlipScreenState extends State<SalarySlipScreen> {
 
     if (provider.selectedEmployeeId != null || !provider.isAdmin) {
       await provider.fetchSalarySlip();
-    }
-  }
-
-  Future<void> _showMonthPicker(BuildContext context, SalarySlipProvider provider) async {
-    final now = DateTime.now();
-    DateTime initialDate;
-
-    try {
-      if (provider.selectedMonth.isNotEmpty) {
-        final parts = provider.selectedMonth.split('-');
-        if (parts.length == 2) {
-          initialDate = DateTime(int.parse(parts[0]), int.parse(parts[1]));
-        } else {
-          initialDate = now;
-        }
-      } else {
-        initialDate = now;
-      }
-    } catch (e) {
-      initialDate = now;
-    }
-
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      initialEntryMode: DatePickerEntryMode.calendarOnly,
-      initialDatePickerMode: DatePickerMode.year,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF667EEA),
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      final month = '${picked.year}-${picked.month.toString().padLeft(2, '0')}';
-      provider.setSelectedMonth(month);
     }
   }
 

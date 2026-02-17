@@ -254,6 +254,7 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   // FETCH ALL DATA - Main method to load everything
+  // FETCH ALL DATA - Main method to load everything
   Future<void> fetchAllData() async {
     try {
       _isLoading = true;
@@ -272,6 +273,18 @@ class AttendanceProvider extends ChangeNotifier {
           fetchDepartments(),
           fetchDutyShifts(),
         ]);
+
+        // 🔴 FIX: Ensure filters are properly set after all data is loaded
+        _selectedDepartmentFilter = 'All';
+        _selectedEmployeeFilter = '';
+        _selectedMonthFilter = 'All';
+        _searchQuery = '';
+
+        // Force extract filters again
+        _extractFilters();
+        _extractMonthsFromData();
+        _applyFilters();
+
       } else {
         // For staff: fetch only their own attendance and basic info
         await Future.wait([
@@ -288,7 +301,7 @@ class AttendanceProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-
+  // GET - Fetch all attendance (handles both admin and staff)
   // GET - Fetch all attendance (handles both admin and staff)
   Future<void> fetchAttendance() async {
     try {
@@ -337,23 +350,27 @@ class AttendanceProvider extends ChangeNotifier {
         // Merge employee images with attendance records
         _mergeEmployeeImagesWithAttendance();
 
-        // Extract unique months for filtering
-        _extractMonthsFromData();
-
         // If user is not admin, filter to show only their own attendance
         if (!isAdmin) {
           await _filterStaffAttendance();
         }
 
-        // Extract unique departments and employees
-        _extractFilters();
+        // 🔴 FIX: Always extract filters for admin
+        if (isAdmin) {
+          _extractFilters();
+        }
+
+        // Extract unique months for filtering (for both admin and staff)
+        _extractMonthsFromData();
 
         // Apply current filters
         _applyFilters();
 
         print('=== ATTENDANCE FETCH COMPLETE ===');
         print('Total attendance records: ${_attendance.length}');
-        print('Records with images after merge: ${_attendance.where((a) => a.imageUrl != null && a.imageUrl!.isNotEmpty).length}');
+        print('Is Admin: $isAdmin');
+        print('Department names: $_departmentNames');
+        print('Available months: $_availableMonths');
 
       } else if (response.statusCode == 401) {
         throw Exception('Unauthorized - Please login again');
@@ -373,7 +390,6 @@ class AttendanceProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-
 // Add this new method to merge employee images
   void _mergeEmployeeImagesWithAttendance() {
     // Create a lookup map for employees by multiple identifiers
@@ -718,36 +734,64 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   // Method to extract months from attendance data
+  // Method to extract months from attendance data
   void _extractMonthsFromData() {
     try {
       final monthsSet = <String>{};
 
-      for (final attendance in _attendance) {
-        final monthName = _formatMonthForFilter(attendance.date);
-        if (monthName.isNotEmpty) {
-          monthsSet.add(monthName);
+      if (_attendance.isNotEmpty) {
+        for (final attendance in _attendance) {
+          try {
+            final monthName = DateFormat('MMMM yyyy').format(attendance.date);
+            monthsSet.add(monthName);
+          } catch (e) {
+            print('Error formatting month: $e');
+          }
         }
       }
 
-      // Sort months chronologically (most recent first)
-      final sortedMonths = monthsSet.toList()
-        ..sort((a, b) {
-          try {
-            final dateA = _parseMonthFromFilter(a);
-            final dateB = _parseMonthFromFilter(b);
-            return dateB.compareTo(dateA); // Most recent first
-          } catch (e) {
-            return 0;
-          }
-        });
+      if (monthsSet.isNotEmpty) {
+        // Sort months chronologically (most recent first)
+        final sortedMonths = monthsSet.toList()
+          ..sort((a, b) {
+            try {
+              final dateA = DateFormat('MMMM yyyy').parse(a);
+              final dateB = DateFormat('MMMM yyyy').parse(b);
+              return dateB.compareTo(dateA); // Most recent first
+            } catch (e) {
+              return 0;
+            }
+          });
 
-      _availableMonths = ['All', ...sortedMonths];
+        _availableMonths = ['All', ...sortedMonths];
+      } else {
+        // Add current month as default
+        final currentMonth = DateFormat('MMMM yyyy').format(DateTime.now());
+        _availableMonths = ['All', currentMonth];
+      }
+
+      print('=== MONTHS EXTRACTED ===');
+      print('Available months: $_availableMonths');
 
     } catch (e) {
-      _availableMonths = ['All'];
+      print('Error extracting months: $e');
+      final currentMonth = DateFormat('MMMM yyyy').format(DateTime.now());
+      _availableMonths = ['All', currentMonth];
     }
   }
-
+  // Add this method to force UI refresh
+  void refreshFilters() {
+    print('=== REFRESHING FILTERS ===');
+    _extractFilters();
+    _extractMonthsFromData();
+    _applyFilters();
+    notifyListeners();
+  }
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    _applyFilters();
+    notifyListeners();
+  }
   // Helper method to format date for month filter
   String _formatMonthForFilter(DateTime date) {
     try {
@@ -1381,39 +1425,47 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   // Helper methods for filtering
+  // Helper methods for filtering
   void _extractFilters() {
     if (isAdmin) {
-      // Extract unique departments from attendance
-      final departmentSet = _attendance
-          .map((attendance) => attendance.departmentName.trim())
-          .where((dept) => dept.isNotEmpty)
-          .toSet();
+      try {
+        // Extract unique departments from attendance
+        final attendanceDepartments = _attendance
+            .map((attendance) => attendance.departmentName.trim())
+            .where((dept) => dept.isNotEmpty && dept != 'Unknown Department')
+            .toSet();
 
-      // Combine with department list from API
-      final allDepartments = {...departmentSet, ..._departments.map((d) => d.name.trim())};
-      _departmentNames = ['All', ...allDepartments];
+        // Extract departments from department list
+        final departmentListNames = _departments
+            .map((d) => d.name.trim())
+            .where((name) => name.isNotEmpty)
+            .toSet();
+
+        // Combine both sources
+        final allDepartments = {...attendanceDepartments, ...departmentListNames};
+
+        if (allDepartments.isNotEmpty) {
+          // Sort departments alphabetically
+          final sortedDepartments = allDepartments.toList()..sort();
+          _departmentNames = ['All', ...sortedDepartments];
+        } else {
+          // Provide default departments if none found
+          _departmentNames = ['All', 'IT', 'HR', 'Finance', 'Operations', 'Marketing'];
+        }
+
+        print('=== FILTERS EXTRACTED ===');
+        print('Attendance departments: $attendanceDepartments');
+        print('Department list names: $departmentListNames');
+        print('Final department names: $_departmentNames');
+
+      } catch (e) {
+        print('Error extracting filters: $e');
+        _departmentNames = ['All', 'IT', 'HR', 'Finance', 'Operations', 'Marketing'];
+      }
     } else {
       _departmentNames = ['All'];
     }
   }
-
-  void setSearchQuery(String query) {
-    _searchQuery = query;
-    _applyFilters();
-    notifyListeners();
-  }
-
-  void clearFilters() {
-    _searchQuery = '';
-    if (isAdmin) {
-      _selectedDepartmentFilter = 'All';
-      _selectedEmployeeFilter = '';
-      _selectedMonthFilter = 'All';
-    }
-    _applyFilters();
-    notifyListeners();
-  }
-
   // Get attendance for specific date
   List<Attendance> getAttendanceByDate(DateTime date) {
     return _attendance.where((attendance) {

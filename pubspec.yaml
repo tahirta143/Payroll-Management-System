@@ -46,6 +46,7 @@ dependencies:
   permission_handler:
   cached_network_image: ^3.3.0
   flutter_secure_storage: ^10.0.0
+  pull_to_refresh: ^2.0.0
   syncfusion_flutter_charts:
   fl_chart:
   shimmer: ^3.0.0
