@@ -398,20 +398,30 @@ class _SalaryScreenState extends State<SalaryScreen> {
                 const SizedBox(height: 16),
 
                 Expanded(
-                  child: filteredSalaries.isEmpty
-                      ? _buildEmptyState(isSmallScreen)
-                      : ListView.builder(
-                    itemCount: filteredSalaries.length,
-                    itemBuilder: (context, index) {
-                      return _buildSalaryCard(
-                        filteredSalaries[index],
-                        provider,
-                        mediaQuery,
-                        isSmallScreen,
-                      );
-                    },
+                  child: RefreshIndicator(
+                    onRefresh: _loadData,
+                    color: const Color(0xFF667EEA),
+                    child: filteredSalaries.isEmpty
+                        ? ListView(
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.4,
+                          child: _buildEmptyState(isSmallScreen),
+                        ),
+                      ],
+                    )
+                        : ListView.builder(
+                      itemCount: filteredSalaries.length,
+                      itemBuilder: (context, index) {
+                        return _buildSalaryCard(
+                          filteredSalaries[index],
+                          provider,
+                          mediaQuery,
+                          isSmallScreen,
+                        );
+                      },
+                    ),
                   ),
-
                 ),
               ],
             ),
