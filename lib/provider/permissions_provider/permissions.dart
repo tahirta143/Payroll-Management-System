@@ -125,6 +125,10 @@ class PermissionProvider with ChangeNotifier {
   }
 
   bool hasPermission(String permission) {
+    // Handle 'none' which means no permission required
+    if (permission == 'none') {
+      return true;
+    }
     // Admin can do everything
     if (_userRole.toLowerCase().contains('admin')) {
       return true;

@@ -268,6 +268,7 @@ class SidebarMenu extends StatelessWidget {
       {'title': 'Dashboard', 'icon': Iconsax.home, 'permission': 'can-view-dashboard'},
       {'title': 'Approve Leave', 'icon': Iconsax.tick_circle, 'permission': 'can-approve-leave'},
       {'title': 'Staff Attendance', 'icon': Iconsax.finger_cricle, 'permission': 'can-view-attendance'},
+      {'title': 'Short Leaves', 'icon': Iconsax.clock, 'permission': 'none'},
       {'title': 'Salary', 'icon': Iconsax.wallet_money, 'permission': 'can-view-salary'},
       {'title': 'Attendance Report', 'icon': Iconsax.chart, 'permission': 'can-view-reports'},
       {'title': 'Leave Balance', 'icon': Iconsax.calendar_tick, 'permission': 'can-view-leave-balance'},
@@ -353,7 +354,12 @@ class SidebarMenu extends StatelessWidget {
                 physics: const BouncingScrollPhysics(),
                 children: [
                   ...menuItems.map((item) {
-                    if (!p.hasPermission(item['permission'])) return const SizedBox.shrink();
+                    // Always show Dashboard and Staff Attendance
+                    bool isAlwaysVisible = item['title'] == 'Dashboard' || item['title'] == 'Staff Attendance';
+                    
+                    if (!isAlwaysVisible && !p.hasPermission(item['permission']) && item['permission'] != 'none') {
+                      return const SizedBox.shrink();
+                    }
 
                     return _buildMenuItem(
                       title: item['title'],

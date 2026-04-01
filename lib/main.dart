@@ -81,6 +81,7 @@ import 'package:payroll_app/provider/regular_user_provider/regular_user.dart';
 import 'package:payroll_app/provider/salary_sheet_provider/salary_sheet_provider.dart';
 import 'package:payroll_app/provider/salary_slip_provider/salary_slip_provider.dart';
 import 'package:payroll_app/provider/settings/settings-provider.dart';
+import 'package:payroll_app/provider/short_leaves_provider/short_leaves_provider.dart';
 import 'package:payroll_app/screen/Auth/login_screen.dart';
 import 'package:payroll_app/screen/Dashboard_screen/dashboard_screen.dart';
 import 'package:provider/provider.dart';
@@ -144,6 +145,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NonAdminDashboardProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceChartProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceSettingsProvider()),
+        ChangeNotifierProvider(create: (_) => ShortLeavesProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

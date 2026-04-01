@@ -92,23 +92,35 @@ class AuthProvider with ChangeNotifier {
           // Department ID baad mein employee API se fetch karenge
         }
 
-        // ── Employee ID fetch karo ───────────────────────────────
-        print('🔍 Fetching employee ID for user: $userName (ID: $userId)');
+        // ── Employee ID resolution ────────────────────────────
+        print('🔍 Fetching employee ID for user: $userName (User ID: $userId)');
         final empResult = await _fetchEmployeeData(token!, userId, userName);
 
-        final employeeIdStr = empResult['id'] ?? userId.toString();
-        final employeeIdInt = int.tryParse(employeeIdStr) ?? userId;
-        final employeeDeptId = empResult['department_id'] ?? 0;
+        String employeeIdStr = empResult['id']?.toString() ?? '';
+        int employeeIdInt = int.tryParse(employeeIdStr) ?? 0;
+
+        // Fallback: If search failed but user object has an ID, try it
+        if (employeeIdInt == 0 && data['user']['employee_id'] != null) {
+          employeeIdStr = data['user']['employee_id'].toString();
+          employeeIdInt = int.tryParse(employeeIdStr) ?? 0;
+          print('⚠️ Search failed, falling back to login response ID: $employeeIdStr');
+        } else if (employeeIdInt == 0) {
+          // Absolute fallback
+          employeeIdStr = userId.toString();
+          employeeIdInt = userId;
+          print('⚠️ No employee ID found, using User ID as fallback: $employeeIdStr');
+        }
 
         await prefs.setString('employee_id', employeeIdStr);
         await prefs.setInt('employee_id_int', employeeIdInt);
+        print('💾 Saved employee identity: ID=$employeeIdStr, Int=$employeeIdInt');
 
         // Agar department ID abhi bhi 0 hai to employee data se lo
-        if (deptId == 0 && employeeDeptId > 0) {
-          deptId = employeeDeptId;
-          await prefs.setInt('department_id', deptId);
-          print('✅ Department ID from employee data: $deptId');
-        }
+        // if (deptId == 0 && employeeDeptId > 0) {
+        //   deptId = employeeDeptId;
+        //   await prefs.setInt('department_id', deptId);
+        //   print('✅ Department ID from employee data: $deptId');
+        // }
 
         // ── Verification log ─────────────────────────────────────
         print('==========================================');
@@ -118,7 +130,7 @@ class AuthProvider with ChangeNotifier {
         print('  employee_name   = "$userName"');
         print('  user_role       = "$userRole"');
         print('  employee_id     = "$employeeIdStr"');
-        print('  employee_id_int = $employeeIdInt');
+        // print('  employee_id_int = $employeeIdInt');
         print('  department_id   = $deptId');
         print('==========================================');
 
@@ -204,26 +216,36 @@ class AuthProvider with ChangeNotifier {
 
         print('📋 Employees fetched: ${list.length}');
 
-        // user_id se match — sabse reliable
+        // Priority 1: match by user_id — most reliable
         for (var emp in list) {
           if (emp['user_id']?.toString() == userId.toString()) {
             final empId   = emp['id']?.toString() ?? '';
-            final deptId  = int.tryParse(
-                emp['department_id']?.toString() ?? '0') ?? 0;
-            print('✅ Found by user_id: emp_id=$empId, dept_id=$deptId');
+            final deptId  = int.tryParse(emp['department_id']?.toString() ?? '0') ?? 0;
+            print('✅ High-precision match found by user_id: ID=$empId, Dept=$deptId');
             return {'id': empId, 'department_id': deptId};
           }
         }
 
-        // Name se match — fallback
+        // Priority 2: EXACT Name match (Case insensitive)
+        final normalizedUserName = userName.toLowerCase().trim();
+        for (var emp in list) {
+          final empName = emp['name']?.toString().toLowerCase().trim() ?? '';
+          if (empName == normalizedUserName) {
+            final empId   = emp['id']?.toString() ?? '';
+            final deptId  = int.tryParse(emp['department_id']?.toString() ?? '0') ?? 0;
+            print('✅ Exact name match found: ID=$empId, Name="$empName"');
+            return {'id': empId, 'department_id': deptId};
+          }
+        }
+
+        // Priority 3: Fuzzy Name match (Case insensitive)
         final firstName = userName.split(' ').first.toLowerCase();
         for (var emp in list) {
           final empName = emp['name']?.toString().toLowerCase() ?? '';
           if (empName.contains(firstName)) {
             final empId  = emp['id']?.toString() ?? '';
-            final deptId = int.tryParse(
-                emp['department_id']?.toString() ?? '0') ?? 0;
-            print('✅ Found by name: emp_id=$empId, dept_id=$deptId');
+            final deptId = int.tryParse(emp['department_id']?.toString() ?? '0') ?? 0;
+            print('⚠️ Fuzzy name match found: ID=$empId, Name="$empName"');
             return {'id': empId, 'department_id': deptId};
           }
         }

@@ -16,6 +16,7 @@ import '../../provider/dashboard_provider/dashboard_summary_provider.dart';
 import '../../provider/employee_chart_data/employee_chart_data.dart';
 import '../../provider/permissions_provider/permissions.dart';
 import '../../provider/regular_user_provider/regular_user.dart';
+import '../../provider/short_leaves_provider/short_leaves_provider.dart';
 import '../../widget/dashboard_chart/dashborad_chart.dart';
 import '../../widget/emp_dash_chart/empl_dash_chart.dart';
 import '../Approve_Leave/ApproveLeaveScreen.dart';
@@ -24,6 +25,7 @@ import '../salary_sheet/salary_sheet.dart';
 import '../salary_slip/salary_slip.dart';
 import 'absents_screen/absents_screen.dart';
 import 'on_leave/on_leave.dart';
+import '../ShortLeaves/short_leaves_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -86,14 +88,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           chartProvider.fetchAttendanceData();
         } else {
           final nonAdminProvider = context.read<NonAdminDashboardProvider>();
-
-          // Set the auth token from AuthProvider
-          if (authProvider.token != null) {
-            nonAdminProvider.setAuthToken(authProvider.token!);
-          }
-
           final currentMonth = DateFormat('MM-yyyy').format(DateTime.now());
           nonAdminProvider.fetchDashboardSummary(month: currentMonth);
+
+          // Fetch Short Leaves for the non-admin user
+          final shortLeavesProvider = context.read<ShortLeavesProvider>();
+          shortLeavesProvider.initializeUser().then((_) {
+            shortLeavesProvider.fetchShortLeaves();
+          });
         }
       }
     });
@@ -176,6 +178,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final p = context.watch<PermissionProvider>();
+    final auth = context.watch<AuthProvider>();
+    final dashboardSummaryProvider = context.watch<DashboardSummaryProvider>();
+    final nonAdminProvider = context.watch<NonAdminDashboardProvider>();
+    final attendanceChartProvider = context.watch<AttendanceChartProvider>();
+    final chartProvider = context.watch<ChartProvider>();
+
     final Size size = MediaQuery.of(context).size;
     final screens = _getScreens(p);
 
@@ -351,6 +359,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       }
+      if (screen is ShortLeavesScreen) {
+        return const Text(
+          'Short Leaves',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        );
+      }
       if (screen is SalaryScreen) {
         return const Text(
           'Salary',
@@ -398,16 +416,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     screens.add(_buildHomeScreen());
 
-    if (p.hasPermission('can-view-attendence')) {
-      // Add a unique key to force rebuild when needed
-      screens.add(
-          AttendanceScreen(
-            key: ValueKey('attendance_screen_${DateTime.now().millisecondsSinceEpoch}'),
-          )
-      );
-    }
+    // Attendance is now visible for all users
+    screens.add(
+        AttendanceScreen(
+          key: ValueKey('attendance_screen_${DateTime.now().millisecondsSinceEpoch}'),
+        )
+    );
 
     screens.add(const ApproveLeaveScreen());
+    screens.add(const ShortLeavesScreen());
 
     screens.add(const SalarySlipScreen());
 
@@ -441,6 +458,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         titleToIndex['Staff Attendance'] = i;
       } else if (screens[i] is ApproveLeaveScreen) {
         titleToIndex['Leave'] = i;
+      } else if (screens[i] is ShortLeavesScreen) {
+        titleToIndex['Short Leaves'] = i;
       } else if (screens[i] is SalarySlipScreen) {
         titleToIndex['Salary Slip'] = i;
       } else if (screens[i] is SalarySheetScreen) {
@@ -458,70 +477,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   int _getBottomNavIndex(int screenIndex, PermissionProvider p) {
-    if (screenIndex == 0) return 0;
+    final screens = _getScreens(p);
+    if (screenIndex < 0 || screenIndex >= screens.length) return 0;
 
-    int bottomNavIndex = 1;
-    int currentScreenIndex = 1;
+    Widget selectedScreen = screens[screenIndex];
 
-    if (p.hasPermission('can-view-attendence')) {
-      if (currentScreenIndex == screenIndex) return bottomNavIndex;
-      currentScreenIndex++;
-      bottomNavIndex++;
+    if (selectedScreen is AttendanceScreen) {
+      return 1;
     }
 
-    if (currentScreenIndex == screenIndex) return bottomNavIndex;
-    currentScreenIndex++;
-    bottomNavIndex++;
-
-    if (currentScreenIndex == screenIndex) return 0;
-    currentScreenIndex++;
-
-    if (currentScreenIndex == screenIndex) return 0;
-    currentScreenIndex++;
-
-    if (p.hasPermission('can-view-salary')) {
-      if (currentScreenIndex == screenIndex) return bottomNavIndex;
-      currentScreenIndex++;
-      bottomNavIndex++;
+    if (selectedScreen is ApproveLeaveScreen) {
+      // Leave is index 2 since Attendance is always at index 1
+      return 2;
     }
 
-    if (currentScreenIndex == screenIndex) return 0;
-    currentScreenIndex++;
+    if (selectedScreen is SalaryScreen) {
+      int index = 2; // After Home and Attendance
+      index++; // For Leave
+      return index;
+    }
 
-    if (currentScreenIndex == screenIndex) return bottomNavIndex;
+    if (selectedScreen is SettingsScreen) {
+      int index = 2; // After Home and Attendance
+      index++; // For Leave
+      if (p.hasPermission('can-view-salary')) index++;
+      return index;
+    }
 
-    return 0;
+    return 0; // Default to Home
   }
 
   int _getScreenIndex(int bottomNavIndex, PermissionProvider p) {
     if (bottomNavIndex == 0) return 0;
 
-    int screenIndex = 1;
-    int currentBottomNavIndex = 1;
+    final screens = _getScreens(p);
+    int currentNavIndex = 0;
 
-    if (p.hasPermission('can-view-attendence')) {
-      if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
-      screenIndex++;
-      currentBottomNavIndex++;
+    for (int i = 0; i < screens.length; i++) {
+      Widget screen = screens[i];
+
+      int? navIndex;
+      if (i == 0) navIndex = 0;
+      else if (screen is AttendanceScreen) navIndex = 1;
+      else if (screen is ApproveLeaveScreen) {
+        navIndex = 2; // Since Attendance is always index 1
+      }
+      else if (screen is SalaryScreen) {
+        int idx = 2; // Home + Attendance
+        idx++; // Leave
+        navIndex = idx;
+      }
+      else if (screen is SettingsScreen) {
+        int idx = 2; // Home + Attendance
+        idx++; // Leave
+        if (p.hasPermission('can-view-salary')) idx++;
+        navIndex = idx;
+      }
+
+      if (navIndex == bottomNavIndex) return i;
     }
-
-    if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
-    screenIndex++;
-    currentBottomNavIndex++;
-
-    screenIndex++;
-
-    screenIndex++;
-
-    if (p.hasPermission('can-view-salary')) {
-      if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
-      screenIndex++;
-      currentBottomNavIndex++;
-    }
-
-    screenIndex++;
-
-    if (currentBottomNavIndex == bottomNavIndex) return screenIndex;
 
     return 0;
   }
@@ -534,14 +548,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     ];
 
-    if (p.hasPermission('can-view-attendence')) {
-      items.add(
-        const BottomNavigationBarItem(
-          icon: Icon(Iconsax.finger_cricle, size: 22),
-          label: 'Attendance',
-        ),
-      );
-    }
+    // Attendance is now visible for all users
+    items.add(
+      const BottomNavigationBarItem(
+        icon: Icon(Iconsax.finger_cricle, size: 22),
+        label: 'Attendance',
+      ),
+    );
 
     items.add(
       const BottomNavigationBarItem(
@@ -616,10 +629,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildAdminHomeScreen() {
     final Size size = MediaQuery.of(context).size;
-    final dashboardProvider = context.watch<DashboardSummaryProvider>();
-    final chartProvider = context.watch<ChartProvider>();
-    final auth = context.watch<AuthProvider>();
-    final p = context.watch<PermissionProvider>();
+    final dashboardProvider = context.read<DashboardSummaryProvider>();
+    final chartProvider = context.read<ChartProvider>();
+    final auth = context.read<AuthProvider>();
+    final p = context.read<PermissionProvider>();
 
     final isAdmin = p.hasPermission('can-view-salary-sheet') ||
         p.userRole.toLowerCase().contains('admin');
@@ -760,9 +773,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildNonAdminHomeScreen() {
     final size = MediaQuery.of(context).size;
-    final auth = context.watch<AuthProvider>();
-    final provider = context.watch<NonAdminDashboardProvider>();
-    final chartProvider = context.watch<AttendanceChartProvider>();
+    final auth = context.read<AuthProvider>();
+    final provider = context.read<NonAdminDashboardProvider>();
+    final chartProvider = context.read<AttendanceChartProvider>();
     final currentMonth = provider.currentMonth ?? DateFormat('MM-yyyy').format(DateTime.now());
 
     String formattedMonth = _formatMonthForDisplay(currentMonth);
@@ -770,7 +783,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Load employee ID only once
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_isLoadingEmployeeId && _cachedEmployeeId.isEmpty) {
-        _isLoadingEmployeeId = true;
+        if (mounted) {
+          setState(() {
+            _isLoadingEmployeeId = true;
+          });
+        }
 
         // Get directly from SharedPreferences
         final prefs = await SharedPreferences.getInstance();
@@ -786,7 +803,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
 
           // Update cached ID
-          _cachedEmployeeId = savedId;
+          if (mounted) {
+            setState(() {
+              _cachedEmployeeId = savedId;
+            });
+          }
 
           // Now fetch chart data with correct ID
           if (!chartProvider.isLoading && chartProvider.chartData == null && mounted) {
@@ -799,10 +820,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
         } else {
           print('⚠️ No valid employee_id found in SharedPreferences');
-          _cachedEmployeeId = auth.employeeId; // Fallback to auth getter
+          if (mounted) {
+            setState(() {
+              _cachedEmployeeId = auth.employeeId; // Fallback to auth getter
+            });
+          }
         }
 
-        _isLoadingEmployeeId = false;
+        if (mounted) {
+          setState(() {
+            _isLoadingEmployeeId = false;
+          });
+        }
       }
     });
 
@@ -813,7 +842,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Get fresh ID from SharedPreferences on refresh
         final prefs = await SharedPreferences.getInstance();
         final refreshedId = prefs.getString('employee_id');
-
         if (refreshedId != null && refreshedId.isNotEmpty && refreshedId != '15') {
           _cachedEmployeeId = refreshedId;
           await chartProvider.refreshData(
@@ -821,6 +849,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             context: context,
           );
         }
+
+        // Refresh Short Leaves
+        final shortLeavesProvider = context.read<ShortLeavesProvider>();
+        await shortLeavesProvider.fetchShortLeaves();
       },
       color: const Color(0xFF667EEA),
       child: SingleChildScrollView(
@@ -1022,7 +1054,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
   Widget _buildNonAdminWelcomeHeader(AuthProvider auth) {
-    final p = context.watch<PermissionProvider>();
+    final p = context.read<PermissionProvider>();
 
     final isAdmin = p.hasPermission('can-view-salary-sheet') ||
         p.userRole.toLowerCase().contains('admin');
@@ -1353,11 +1385,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: const Color(0xFFFF9800),
             ),
             _buildNonAdminStatCard(
-              icon: Iconsax.timer_1,
-              title: 'Late / Short',
-              value: '${summary.lateCount} / ${summary.shortLeaveCount}',
-              subtitle: 'Late / Short Leave',
+              icon: Iconsax.clock,
+              title: 'Late Count',
+              value: '${summary.lateCount}',
+              subtitle: 'Late Arrivals',
               color: const Color(0xFF2196F3),
+            ),
+            Consumer<ShortLeavesProvider>(
+              builder: (context, slProvider, child) {
+                return _buildNonAdminStatCard(
+                  icon: Iconsax.timer_1,
+                  title: 'Short Leave',
+                  value: '${slProvider.shortLeaves.length}',
+                  subtitle: 'Short Leaves',
+                  color: const Color(0xFF9C27B0),
+                );
+              },
             ),
           ],
         ),
@@ -2309,6 +2352,13 @@ class SidebarDrawer extends StatelessWidget {
         'permission': 'can-edit-leave-application',
         'requiresPermission': false,
         'description': 'View and manage leaves',
+      },
+      {
+        'icon': Iconsax.clock,
+        'title': 'Short Leaves',
+        'permission': 'none',
+        'requiresPermission': false,
+        'description': 'View and manage short leaves',
       },
       {
         'icon': Iconsax.document_text,
