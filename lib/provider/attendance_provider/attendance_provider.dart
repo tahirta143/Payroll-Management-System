@@ -34,6 +34,7 @@ class AttendanceProvider extends ChangeNotifier {
   String _selectedDepartmentFilter = 'All';
   String _selectedEmployeeFilter = '';
   String _selectedMonthFilter = 'All';
+  DateTime? _selectedDateFilter;
   List<String> _departmentNames = ['All'];
   List<String> _availableMonths = ['All'];
 
@@ -59,6 +60,7 @@ class AttendanceProvider extends ChangeNotifier {
   String get selectedDepartmentFilter => _selectedDepartmentFilter;
   String get selectedEmployeeFilter => _selectedEmployeeFilter;
   String get selectedMonthFilter => _selectedMonthFilter;
+  DateTime? get selectedDateFilter => _selectedDateFilter;
   List<String> get departmentNames => _departmentNames;
   List<String> get availableMonths => _availableMonths;
 
@@ -339,8 +341,8 @@ class AttendanceProvider extends ChangeNotifier {
             .map((json) => Attendance.fromJson(json))
             .toList();
 
-        // SORT attendance by date ASCENDING (oldest first)
-        _attendance.sort((a, b) => a.date.compareTo(b.date));
+        // SORT attendance by date DESCENDING (newest first)
+        _attendance.sort((a, b) => b.date.compareTo(a.date));
 
         // CRITICAL: Fetch employees if not already loaded
         if (_employees.isEmpty) {
@@ -625,8 +627,8 @@ class AttendanceProvider extends ChangeNotifier {
               .map((json) => Attendance.fromJson(json))
               .toList();
 
-          // SORT attendance by date ASCENDING (oldest first)
-          _attendance.sort((a, b) => a.date.compareTo(b.date));
+          // SORT attendance by date DESCENDING (newest first)
+          _attendance.sort((a, b) => b.date.compareTo(a.date));
 
           // Extract unique months for filtering
           _extractMonthsFromData();
@@ -706,8 +708,8 @@ class AttendanceProvider extends ChangeNotifier {
                 .map((json) => Attendance.fromJson(json))
                 .toList();
 
-            // SORT attendance by date ASCENDING (oldest first)
-            _attendance.sort((a, b) => a.date.compareTo(b.date));
+            // SORT attendance by date DESCENDING (newest first)
+            _attendance.sort((a, b) => b.date.compareTo(a.date));
 
             // Extract unique months for filtering
             _extractMonthsFromData();
@@ -819,6 +821,13 @@ class AttendanceProvider extends ChangeNotifier {
 
   }
 
+  // Date Filter Setter
+  void setSelectedDate(DateTime? date) {
+    _selectedDateFilter = date;
+    _applyFilters();
+    notifyListeners();
+  }
+
   // Update the _applyFilters method
   // Update the _applyFilters method to ensure admin sees all data when no filters are selected
   void _applyFilters() {
@@ -854,7 +863,15 @@ class AttendanceProvider extends ChangeNotifier {
         matchesMonth = recordMonth == _selectedMonthFilter;
       }
 
-      return matchesSearch && matchesDepartment && matchesEmployee && matchesMonth;
+      // Date filter
+      bool matchesDate = true;
+      if (_selectedDateFilter != null) {
+        matchesDate = attendance.date.year == _selectedDateFilter!.year &&
+            attendance.date.month == _selectedDateFilter!.month &&
+            attendance.date.day == _selectedDateFilter!.day;
+      }
+
+      return matchesSearch && matchesMonth && matchesDate && matchesDepartment && matchesEmployee;
     }).toList();
 
     // Debug: Print filter results
@@ -866,6 +883,7 @@ class AttendanceProvider extends ChangeNotifier {
     print('Department filter: $_selectedDepartmentFilter');
     print('Employee filter: $_selectedEmployeeFilter');
     print('Month filter: $_selectedMonthFilter');
+    print('Date filter: $_selectedDateFilter');
   }
   // Department filter setter
   void setDepartmentFilter(String department) {
@@ -1309,7 +1327,8 @@ class AttendanceProvider extends ChangeNotifier {
         final newAttendance = Attendance.fromJson(
           responseData['attendance'] ?? responseData['data'] ?? {},
         );
-        _attendance.insert(0, newAttendance);
+        _attendance.add(newAttendance);
+        _attendance.sort((a, b) => b.date.compareTo(a.date));
         _extractMonthsFromData();
         _applyFilters();
 
@@ -1361,6 +1380,7 @@ class AttendanceProvider extends ChangeNotifier {
             responseData['attendance'] ?? responseData['data'] ?? {},
           );
           _attendance[index] = updatedAttendance;
+          _attendance.sort((a, b) => b.date.compareTo(a.date));
           _extractMonthsFromData();
           _applyFilters();
         }

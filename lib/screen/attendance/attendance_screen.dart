@@ -269,7 +269,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> with WidgetsBinding
 
               // Filter Row
               if (isStaff)
-                _buildMonthFilter(provider)
+                Row(
+                  children: [
+                    Expanded(child: _buildMonthFilter(provider)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildDateFilter(provider)),
+                  ],
+                )
               else
                 _buildFilterRow(provider),
             ],
@@ -280,17 +286,111 @@ class _AttendanceScreenState extends State<AttendanceScreen> with WidgetsBinding
   }
 
   Widget _buildFilterRow(AttendanceProvider provider) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
-
-    return Row(
+    return Column(
       children: [
-        Expanded(child: _buildDepartmentFilter(provider)),
-        SizedBox(width: isSmallScreen ? 6 : 8),
-        Expanded(child: _buildEmployeeFilter(provider)),
-        SizedBox(width: isSmallScreen ? 6 : 8),
-        Expanded(child: _buildMonthFilter(provider)),
+        Row(
+          children: [
+            Expanded(child: _buildDepartmentFilter(provider)),
+            const SizedBox(width: 8),
+            Expanded(child: _buildEmployeeFilter(provider)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: _buildMonthFilter(provider)),
+            const SizedBox(width: 8),
+            Expanded(child: _buildDateFilter(provider)),
+          ],
+        ),
       ],
+    );
+  }
+
+  void _selectDate(BuildContext context, AttendanceProvider provider) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: provider.selectedDateFilter ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF667EEA),
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      provider.setSelectedDate(picked);
+    }
+  }
+
+  Widget _buildDateFilter(AttendanceProvider provider) {
+    final hasDate = provider.selectedDateFilter != null;
+    return GestureDetector(
+      onTap: () => _selectDate(context, provider),
+      child: Container(
+        height: 45,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFF667EEA).withOpacity(hasDate ? 0.5 : 0.2),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Iconsax.calendar_1,
+              size: 16,
+              color: const Color(0xFF667EEA),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                hasDate
+                    ? DateFormat('d MMM yyyy').format(provider.selectedDateFilter!)
+                    : 'Select Date',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: hasDate ? Colors.black87 : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (hasDate)
+              GestureDetector(
+                onTap: () {
+                  provider.setSelectedDate(null);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Iconsax.close_circle,
+                    size: 16,
+                    color: Colors.grey[400],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
